@@ -14,7 +14,7 @@ import {
   IonSegmentButton,
 } from '@ionic/react';
 import { cloudUploadOutline, closeCircleOutline } from 'ionicons/icons';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -39,8 +39,24 @@ const Upload = () => {
   const [error, setError] = useState('');
   const [uploadMode, setUploadMode] = useState<'file' | 'record'>('file');
   const { user } = useAuth();
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      // Cleanup any existing preview URL
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Cleanup any existing preview URL
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       // Check if file is a video
@@ -50,6 +66,10 @@ const Upload = () => {
       }
       setFile(selectedFile);
       setError('');
+      
+      // Create preview URL
+      const url = URL.createObjectURL(selectedFile);
+      setPreviewUrl(url);
     }
   };
 
@@ -302,21 +322,92 @@ const Upload = () => {
 
           {(uploadMode === 'file' || Capacitor.isNativePlatform()) ? (
             <div className="ion-padding-vertical">
+              {previewUrl && (
+                <div style={{ 
+                  width: '100%', 
+                  aspectRatio: '16/9',
+                  backgroundColor: '#000',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  marginBottom: '1rem'
+                }}>
+                  <video
+                    src={previewUrl}
+                    controls
+                    playsInline
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'contain'
+                    }}
+                  />
+                </div>
+              )}
+              
+              {/* Input for camera recording */}
               <input
                 type="file"
                 accept="video/*"
-                capture={Capacitor.isNativePlatform() ? "environment" : undefined}
+                capture="environment"
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
-                id="video-upload"
+                id="video-record"
               />
-              <IonButton
-                expand="block"
-                onClick={() => document.getElementById('video-upload')?.click()}
-                color="medium"
-              >
-                {file ? file.name : (Capacitor.isNativePlatform() ? 'Record or Select Video' : 'Select Video')}
-              </IonButton>
+              
+              {/* Input for file selection */}
+              <input
+                type="file"
+                accept="video/*"
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+                id="video-select"
+              />
+
+              {Capacitor.isNativePlatform() ? (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <IonButton
+                    expand="block"
+                    onClick={() => document.getElementById('video-record')?.click()}
+                    color="medium"
+                    style={{ flex: 1 }}
+                  >
+                    Record Video
+                  </IonButton>
+                  <IonButton
+                    expand="block"
+                    onClick={() => document.getElementById('video-select')?.click()}
+                    color="medium"
+                    style={{ flex: 1 }}
+                  >
+                    Choose Video
+                  </IonButton>
+                </div>
+              ) : (
+                <IonButton
+                  expand="block"
+                  onClick={() => document.getElementById('video-select')?.click()}
+                  color="medium"
+                >
+                  {file ? 'Change Video' : 'Select Video'}
+                </IonButton>
+              )}
+
+              {file && Capacitor.isNativePlatform() && (
+                <IonButton
+                  expand="block"
+                  onClick={() => {
+                    setFile(null);
+                    if (previewUrl) {
+                      URL.revokeObjectURL(previewUrl);
+                      setPreviewUrl(null);
+                    }
+                  }}
+                  color="medium"
+                  className="ion-margin-top"
+                >
+                  Remove Video
+                </IonButton>
+              )}
             </div>
           ) : (
             <VideoRecorder
