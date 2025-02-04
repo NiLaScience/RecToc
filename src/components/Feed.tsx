@@ -12,11 +12,14 @@ import {
   IonRefresher,
   IonRefresherContent,
   RefresherEventDetail,
+  IonFab,
+  IonFabButton,
 } from '@ionic/react';
 import { useState, useEffect } from 'react';
-import { notificationsOutline } from 'ionicons/icons';
+import { notificationsOutline, gridOutline, videocamOutline } from 'ionicons/icons';
 import Notifications from './Notifications';
 import FeedCard from './FeedCard';
+import VideoPlayer from './VideoPlayer';
 import { getFirestore, collection, query, orderBy, onSnapshot, DocumentData } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
@@ -60,10 +63,20 @@ const emptyStateStyle: React.CSSProperties = {
   height: '100%'
 };
 
+const fullscreenVideoStyle: React.CSSProperties = {
+  height: '100%',
+  width: '100%',
+  backgroundColor: '#000'
+};
+
+type FeedMode = 'grid' | 'fullscreen';
+
 const Feed = () => {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [feedMode, setFeedMode] = useState<FeedMode>('grid');
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
 
   useEffect(() => {
     let unsubscribe: () => void;
@@ -129,6 +142,18 @@ const Feed = () => {
     event.detail.complete();
   };
 
+  const handleVideoSwipe = (direction: 'up' | 'down') => {
+    if (direction === 'up' && currentVideoIndex < videos.length - 1) {
+      setCurrentVideoIndex(prev => prev + 1);
+    } else if (direction === 'down' && currentVideoIndex > 0) {
+      setCurrentVideoIndex(prev => prev - 1);
+    }
+  };
+
+  const toggleFeedMode = () => {
+    setFeedMode(prev => prev === 'grid' ? 'fullscreen' : 'grid');
+  };
+
   if (loading) {
     return (
       <IonPage>
@@ -165,34 +190,53 @@ const Feed = () => {
   
   return (
     <IonPage>
-      <IonHeader className="ion-no-border">
-        <IonToolbar>
-          <IonTitle>Feed</IonTitle>
-          <IonButtons slot="end">
-            <IonButton onClick={() => setShowNotifications(true)}>
-              <IonIcon icon={notificationsOutline} />
-            </IonButton>
-          </IonButtons>
-        </IonToolbar>
-      </IonHeader>
-      <IonContent>
-        <IonRefresher slot="fixed" onIonRefresh={handleRefresh}>
-          <IonRefresherContent />
-        </IonRefresher>
-        <IonHeader collapse="condense" className="ion-no-border">
+      {feedMode === 'grid' && (
+        <IonHeader className="ion-no-border">
           <IonToolbar>
-            <IonTitle size="large">Feed</IonTitle>
+            <IonTitle>Feed</IonTitle>
+            <IonButtons slot="end">
+              <IonButton onClick={() => setShowNotifications(true)}>
+                <IonIcon icon={notificationsOutline} />
+              </IonButton>
+            </IonButtons>
           </IonToolbar>
         </IonHeader>
+      )}
+      <IonContent fullscreen={feedMode === 'fullscreen'}>
+        {feedMode === 'grid' ? (
+          <>
+            <IonRefresher slot="fixed" onIonRefresh={handleRefresh}>
+              <IonRefresherContent />
+            </IonRefresher>
+            <IonHeader collapse="condense" className="ion-no-border">
+              <IonToolbar>
+                <IonTitle size="large">Feed</IonTitle>
+              </IonToolbar>
+            </IonHeader>
+            <div style={feedContainerStyle}>
+              {videos.map((video) => (
+                <FeedCard key={video.id} video={video} />
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={fullscreenVideoStyle}>
+            <VideoPlayer
+              video={videos[currentVideoIndex]}
+              onSwipe={handleVideoSwipe}
+              autoPlay
+            />
+          </div>
+        )}
+        <IonFab vertical="bottom" horizontal="center" slot="fixed" style={{ marginBottom: '16px' }}>
+          <IonFabButton onClick={toggleFeedMode} color={feedMode === 'grid' ? 'primary' : 'light'}>
+            <IonIcon icon={feedMode === 'grid' ? videocamOutline : gridOutline} />
+          </IonFabButton>
+        </IonFab>
         <Notifications
           open={showNotifications}
           onDidDismiss={() => setShowNotifications(false)}
         />
-        <div style={feedContainerStyle}>
-          {videos.map((video) => (
-            <FeedCard key={video.id} video={video} />
-          ))}
-        </div>
       </IonContent>
     </IonPage>
   );
