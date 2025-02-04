@@ -33,25 +33,25 @@
 - [x] **Develop the Video Upload Page**
   - [x] Create an upload page accessible only to authenticated users.
   - [x] Add a file input for selecting video files on the web.
-  - [ ] Integrate Capacitor's camera or file chooser plugin for capturing/choosing video on mobile.
+  - [x] Integrate Capacitor's camera or file chooser plugin for capturing/choosing video on mobile.
 - [ ] **Handle Video Upload Process**
   - [x] Configure functionality to upload video files to Firebase Cloud Storage.
   - [x] Create a corresponding Firestore document for each video with basic metadata (e.g., user ID, description).
 - [ ] **Testing**
   - [x] Verify authentication flows.
-  - [ ] Test video upload functionality on both web and Android.
+  - [x] Test video upload functionality on both web and Android.
 
 ## Phase 3: Tagging, Video Metadata, and Feed Creation
 
-- [ ] **Enhance Video Upload Functionality**
-  - [ ] Add input fields for video title/description.
-  - [ ] Add a tagging system (e.g., comma-separated input or chips) for keywords.
-  - [ ] Update Firestore video documents to store tags as an array along with video URL.
-- [ ] **Create the Video Feed Page**
-  - [ ] Build a feed page that queries Firestore for video entries.
-  - [ ] Display basic video information (thumbnail, title, tags) using Ionic components.
-- [ ] **Testing**
-  - [ ] Ensure that video metadata (tags, title, URL) is correctly saved and displayed in the feed.
+- [x] **Enhance Video Upload Functionality**
+  - [x] Add input fields for video title/description.
+  - [x] Add a tagging system (e.g., comma-separated input or chips) for keywords.
+  - [x] Update Firestore video documents to store tags as an array along with video URL.
+- [x] **Create the Video Feed Page**
+  - [x] Build a feed page that queries Firestore for video entries.
+  - [x] Display basic video information (thumbnail, title, tags) using Ionic components.
+- [x] **Testing**
+  - [x] Ensure that video metadata (tags, title, URL) is correctly saved and displayed in the feed.
 
 ## Phase 4: Basic Transcription (Text Caption) Pipeline
 
@@ -79,19 +79,3 @@
   - [x] Update Firebase security rules to allow only authenticated users to interact (upload, like, comment).
 - [ ] **Testing**
   - [ ] Test interactivity and ensure data updates (likes, comments) are reflected in real time on both web and mobile.
-
-## Phase 6: Final Testing, Feedback, and Refinements
-
-- [ ] **Cross-Platform Testing**
-  - [ ] Test the complete application on the web.
-  - [ ] Test the complete application on an Android device via Capacitor.
-- [ ] **Identify and Fix Issues**
-  - [ ] Resolve platform-specific issues (layout, permissions, performance).
-  - [ ] Refine UI components and responsiveness.
-- [ ] **Deploy a Preview Version**
-  - [ ] Prepare the Next.js app for production build.
-  - [ ] Deploy the web version (e.g., Firebase Hosting, Vercel, or Netlify).
-  - [ ] Generate and test an Android APK/IPA using Capacitor.
-- [ ] **Gather Feedback**
-  - [ ] Conduct user testing sessions.
-  - [ ] Document feedback and make final adjustments to meet the Week 1 MVP criteria.

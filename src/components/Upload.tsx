@@ -301,16 +301,33 @@ const Upload = () => {
 
           <IonItem>
             <IonLabel position="stacked">Tags</IonLabel>
-            <IonInput
-              value={currentTag}
-              onIonChange={e => setCurrentTag(e.detail.value!)}
-              onKeyPress={handleAddTag}
-              placeholder="Type tag and press Enter"
-            />
+            <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+              <IonInput
+                value={currentTag}
+                onIonInput={e => setCurrentTag(e.detail.value!)}
+                onKeyPress={handleAddTag}
+                placeholder="Type tag and press Enter"
+                style={{ flex: 1 }}
+              />
+              <IonButton
+                size="small"
+                onClick={() => {
+                  if (currentTag.trim()) {
+                    if (!tags.includes(currentTag.trim())) {
+                      setTags([...tags, currentTag.trim()]);
+                    }
+                    setCurrentTag('');
+                  }
+                }}
+                disabled={!currentTag.trim()}
+              >
+                +
+              </IonButton>
+            </div>
           </IonItem>
 
           {tags.length > 0 && (
-            <div className="ion-padding-vertical">
+            <div className="ion-padding-vertical" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               {tags.map(tag => (
                 <IonChip key={tag} onClick={() => removeTag(tag)}>
                   <IonLabel>{tag}</IonLabel>
