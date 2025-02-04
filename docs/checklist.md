@@ -28,13 +28,15 @@
   - [x] Integrate Firebase Authentication flows (signup, login, logout).
   - [x] Add proper error handling and loading states.
   - [x] Implement platform-specific auth (web vs mobile).
-- [ ] **Develop the Video Upload Page**
-  - [ ] Create an upload page accessible only to authenticated users.
-  - [ ] Add a file input for selecting video files on the web.
+  - [x] Add secure routing and protected pages.
+  - [x] Implement persistent auth state management.
+- [x] **Develop the Video Upload Page**
+  - [x] Create an upload page accessible only to authenticated users.
+  - [x] Add a file input for selecting video files on the web.
   - [ ] Integrate Capacitor's camera or file chooser plugin for capturing/choosing video on mobile.
 - [ ] **Handle Video Upload Process**
-  - [ ] Configure functionality to upload video files to Firebase Cloud Storage.
-  - [ ] Create a corresponding Firestore document for each video with basic metadata (e.g., user ID, description).
+  - [x] Configure functionality to upload video files to Firebase Cloud Storage.
+  - [x] Create a corresponding Firestore document for each video with basic metadata (e.g., user ID, description).
 - [ ] **Testing**
   - [x] Verify authentication flows.
   - [ ] Test video upload functionality on both web and Android.

@@ -1,0 +1,14 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /videos/{userId}/{allPaths=**} {
+      // Allow read access to all users
+      allow read: if true;
+      
+      // Allow write access only to authenticated users for their own directory
+      // During development, we'll be more permissive with CORS
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+} 

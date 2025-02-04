@@ -1,11 +1,11 @@
 'use client';
 
 import { IonTabs, IonTabBar, IonTabButton, IonIcon, IonLabel, IonRouterOutlet } from '@ionic/react';
-import { homeOutline, listOutline, settingsOutline } from 'ionicons/icons';
+import { homeOutline, addOutline, settingsOutline } from 'ionicons/icons';
 import { Route, Redirect } from 'react-router-dom';
 import { IonReactRouter } from '@ionic/react-router';
 import Feed from './Feed';
-import List from './List';
+import Upload from './Upload';
 import Settings from './Settings';
 
 const TabBar = () => {
@@ -14,7 +14,7 @@ const TabBar = () => {
       <IonTabs>
         <IonRouterOutlet>
           <Route exact path="/feed" component={Feed} />
-          <Route exact path="/list" component={List} />
+          <Route exact path="/upload" component={Upload} />
           <Route exact path="/settings" component={Settings} />
           <Route exact path="/">
             <Redirect to="/feed" />
@@ -26,9 +26,9 @@ const TabBar = () => {
             <IonIcon icon={homeOutline} />
             <IonLabel>Feed</IonLabel>
           </IonTabButton>
-          <IonTabButton tab="list" href="/list">
-            <IonIcon icon={listOutline} />
-            <IonLabel>List</IonLabel>
+          <IonTabButton tab="upload" href="/upload">
+            <IonIcon icon={addOutline} />
+            <IonLabel>Upload</IonLabel>
           </IonTabButton>
           <IonTabButton tab="settings" href="/settings">
             <IonIcon icon={settingsOutline} />
