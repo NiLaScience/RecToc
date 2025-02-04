@@ -16,9 +16,19 @@ import {
 import { useState, useEffect } from 'react';
 import { notificationsOutline } from 'ionicons/icons';
 import Notifications from './Notifications';
-import useStore from '@/store';
 import FeedCard from './FeedCard';
-import { FeedItem } from '@/store';
+import { getFirestore, collection, getDocs, query, orderBy } from 'firebase/firestore';
+
+export interface VideoItem {
+  id: string;
+  title: string;
+  videoUrl: string;
+  tags: string[];
+  userId: string;
+  createdAt: string;
+  views: number;
+  likes: number;
+}
 
 const feedContainerStyle: React.CSSProperties = {
   display: 'flex',
@@ -35,33 +45,76 @@ const emptyStateStyle: React.CSSProperties = {
 };
 
 const Feed = () => {
-  const { homeItems } = useStore();
+  const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  useEffect(() => {
-    console.log('Feed component mounted');
-    console.log('homeItems:', homeItems);
-    if (homeItems && homeItems.length > 0) {
-      console.log('First item:', homeItems[0]);
+  const fetchVideos = async () => {
+    try {
+      setLoading(true);
+      const db = getFirestore();
+      const videosRef = collection(db, 'videos');
+      const q = query(videosRef, orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      
+      const fetchedVideos: VideoItem[] = [];
+      querySnapshot.forEach((doc) => {
+        fetchedVideos.push({
+          id: doc.id,
+          ...doc.data()
+        } as VideoItem);
+      });
+      
+      setVideos(fetchedVideos);
+    } catch (error) {
+      console.error('Error fetching videos:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [homeItems]);
-
-  const handleRefresh = (event: CustomEvent<RefresherEventDetail>) => {
-    setTimeout(() => {
-      event.detail.complete();
-    }, 1500);
   };
 
-  if (!homeItems || homeItems.length === 0) {
-    console.log('No items in feed');
+  useEffect(() => {
+    fetchVideos();
+  }, []);
+
+  const handleRefresh = async (event: CustomEvent<RefresherEventDetail>) => {
+    await fetchVideos();
+    event.detail.complete();
+  };
+
+  if (loading) {
     return (
-      <div style={emptyStateStyle}>
-        <p style={{ color: '#6b7280' }}>No items in feed</p>
-      </div>
+      <IonPage>
+        <IonHeader className="ion-no-border">
+          <IonToolbar>
+            <IonTitle>Feed</IonTitle>
+          </IonToolbar>
+        </IonHeader>
+        <IonContent>
+          <div style={emptyStateStyle}>
+            <p style={{ color: '#6b7280' }}>Loading videos...</p>
+          </div>
+        </IonContent>
+      </IonPage>
     );
   }
 
-  console.log('Rendering feed with', homeItems.length, 'items');
+  if (!videos || videos.length === 0) {
+    return (
+      <IonPage>
+        <IonHeader className="ion-no-border">
+          <IonToolbar>
+            <IonTitle>Feed</IonTitle>
+          </IonToolbar>
+        </IonHeader>
+        <IonContent>
+          <div style={emptyStateStyle}>
+            <p style={{ color: '#6b7280' }}>No videos available</p>
+          </div>
+        </IonContent>
+      </IonPage>
+    );
+  }
   
   return (
     <IonPage>
@@ -89,14 +142,13 @@ const Feed = () => {
           onDidDismiss={() => setShowNotifications(false)}
         />
         <div style={feedContainerStyle}>
-          {homeItems.map((item: FeedItem) => {
-            console.log('Rendering item:', item.title);
-            return <FeedCard key={item.title} item={item} />;
-          })}
+          {videos.map((video) => (
+            <FeedCard key={video.id} video={video} />
+          ))}
         </div>
       </IonContent>
     </IonPage>
   );
-};
+}
 
 export default Feed; 
