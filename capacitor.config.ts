@@ -7,8 +7,9 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'http',
     cleartext: true,
-    url: 'http://10.0.2.2:3000',
-    allowNavigation: ['*']
+    url: process.env.NODE_ENV === 'development' ? 'http://10.0.2.2:3000' : undefined,
+    allowNavigation: ['*'],
+    errorPath: 'index.html'
   },
   plugins: {
     FirebaseAuthentication: {

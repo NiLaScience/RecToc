@@ -16,6 +16,15 @@ import { useState } from 'react';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { FirebaseFirestore } from '@capacitor-firebase/firestore';
+import type { User } from 'firebase/auth';
+
+interface FirebaseUser {
+  uid: string;
+  email: string | null;
+}
 
 const Upload = () => {
   const [title, setTitle] = useState('');
@@ -54,8 +63,30 @@ const Upload = () => {
   };
 
   const handleUpload = async () => {
-    if (!file || !title.trim() || !user) {
+    if (!file || !title.trim()) {
       setError('Please fill in all fields and select a video');
+      return;
+    }
+
+    // Verify authentication state
+    let currentUser: FirebaseUser | null = user;
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const result = await FirebaseAuthentication.getCurrentUser();
+        if (!result.user) {
+          setError('Authentication required. Please sign in again.');
+          return;
+        }
+        currentUser = result.user;
+      } catch (err) {
+        console.error('Error getting current user:', err);
+        setError('Failed to verify authentication. Please sign in again.');
+        return;
+      }
+    }
+
+    if (!currentUser) {
+      setError('Authentication required. Please sign in.');
       return;
     }
 
@@ -67,14 +98,14 @@ const Upload = () => {
         fileName: file.name,
         fileType: file.type,
         fileSize: file.size,
-        userId: user.uid
+        userId: currentUser.uid
       });
 
       // Create metadata
       const metadata = {
         contentType: file.type,
         customMetadata: {
-          userId: user.uid,
+          userId: currentUser.uid,
           title: title,
           tags: JSON.stringify(tags)
         }
@@ -86,7 +117,7 @@ const Upload = () => {
       const storage = getStorage();
       console.log('Got storage reference');
       
-      const filePath = `videos/${user.uid}/${Date.now()}-${file.name}`;
+      const filePath = `videos/${currentUser.uid}/${Date.now()}-${file.name}`;
       console.log('File will be uploaded to:', filePath);
       
       const storageRef = ref(storage, filePath);
@@ -111,38 +142,53 @@ const Upload = () => {
           });
         },
         (error) => {
-          console.error('Upload error:', {
-            code: error.code,
-            message: error.message,
-            name: error.name,
-            stack: error.stack,
-            serverResponse: error.serverResponse
-          });
+          console.error('Upload error:', error);
           setError(`Upload failed: ${error.message} (${error.code})`);
           setUploading(false);
         },
         async () => {
           try {
+            // Verify authentication state again before Firestore operation
+            if (Capacitor.isNativePlatform()) {
+              const result = await FirebaseAuthentication.getCurrentUser();
+              if (!result.user) {
+                throw new Error('Authentication lost during upload');
+              }
+              currentUser = result.user;
+            }
+
+            if (!currentUser) {
+              throw new Error('Authentication required');
+            }
+
             console.log('Upload completed, getting download URL...');
-            // Get the download URL
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
             console.log('Got download URL:', downloadURL);
             
             // Save video metadata to Firestore
             console.log('Saving to Firestore...');
-            const db = getFirestore();
             const videoData = {
               title,
               videoUrl: downloadURL,
               tags,
-              userId: user.uid,
+              userId: currentUser.uid,
               createdAt: new Date().toISOString(),
               views: 0,
               likes: 0
             };
             console.log('Video data:', videoData);
             
-            await addDoc(collection(db, 'videos'), videoData);
+            if (Capacitor.isNativePlatform()) {
+              // Use native Firestore plugin
+              await FirebaseFirestore.addDocument({
+                reference: '/videos',
+                data: videoData
+              });
+            } else {
+              // Use web SDK
+              const db = getFirestore();
+              await addDoc(collection(db, 'videos'), videoData);
+            }
             console.log('Saved to Firestore successfully');
 
             // Reset form
@@ -151,24 +197,14 @@ const Upload = () => {
             setTags([]);
             setUploading(false);
           } catch (err: any) {
-            console.error('Post-upload error:', {
-              code: err.code,
-              message: err.message,
-              name: err.name,
-              stack: err.stack
-            });
+            console.error('Post-upload error:', err);
             setError(`Failed to save video metadata: ${err.message}`);
             setUploading(false);
           }
         }
       );
     } catch (err: any) {
-      console.error('Pre-upload error:', {
-        code: err.code,
-        message: err.message,
-        name: err.name,
-        stack: err.stack
-      });
+      console.error('Pre-upload error:', err);
       setError(`Upload failed: ${err.message}`);
       setUploading(false);
     }

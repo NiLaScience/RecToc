@@ -1,12 +1,13 @@
 'use client';
 
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { getAuth, connectAuthEmulator, Auth } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { Analytics, getAnalytics, isSupported } from "firebase/analytics";
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { initializeAuth, indexedDBLocalPersistence } from 'firebase/auth';
 
 // Your Firebase configuration
 const firebaseConfig = {
@@ -22,8 +23,19 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase services
-export const auth = getAuth(app);
+// Initialize Firebase services with platform-specific configuration
+let auth: Auth;
+if (Capacitor.isNativePlatform()) {
+  // Use IndexedDB persistence for mobile platforms
+  auth = initializeAuth(app, {
+    persistence: indexedDBLocalPersistence
+  });
+} else {
+  // Use default persistence for web
+  auth = getAuth(app);
+}
+
+export { auth };
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
@@ -54,7 +66,6 @@ export const initializeFirebaseAuth = async () => {
     // Initialize sign in with current user
     const result = await FirebaseAuthentication.getCurrentUser();
     console.log('Current user:', result.user);
-    
     return result.user;
   } catch (error) {
     console.error('Error initializing Firebase Authentication:', error);

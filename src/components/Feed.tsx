@@ -17,7 +17,10 @@ import { useState, useEffect } from 'react';
 import { notificationsOutline } from 'ionicons/icons';
 import Notifications from './Notifications';
 import FeedCard from './FeedCard';
-import { getFirestore, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { getFirestore, collection, query, orderBy, onSnapshot, DocumentData } from 'firebase/firestore';
+import { Capacitor } from '@capacitor/core';
+import { FirebaseFirestore } from '@capacitor-firebase/firestore';
+import type { AddCollectionSnapshotListenerCallbackEvent } from '@capacitor-firebase/firestore';
 
 export interface VideoItem {
   id: string;
@@ -28,6 +31,19 @@ export interface VideoItem {
   createdAt: string;
   views: number;
   likes: number;
+}
+
+interface FirestoreDoc {
+  id: string;
+  data: {
+    title: string;
+    videoUrl: string;
+    tags: string[];
+    userId: string;
+    createdAt: string;
+    views: number;
+    likes: number;
+  };
 }
 
 const feedContainerStyle: React.CSSProperties = {
@@ -49,36 +65,67 @@ const Feed = () => {
   const [loading, setLoading] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  const fetchVideos = async () => {
-    try {
-      setLoading(true);
-      const db = getFirestore();
-      const videosRef = collection(db, 'videos');
-      const q = query(videosRef, orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-      
-      const fetchedVideos: VideoItem[] = [];
-      querySnapshot.forEach((doc) => {
-        fetchedVideos.push({
-          id: doc.id,
-          ...doc.data()
-        } as VideoItem);
-      });
-      
-      setVideos(fetchedVideos);
-    } catch (error) {
-      console.error('Error fetching videos:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchVideos();
+    let unsubscribe: () => void;
+
+    const setupFeedListener = async () => {
+      try {
+        setLoading(true);
+        
+        if (Capacitor.isNativePlatform()) {
+          // Use native Firestore plugin
+          await FirebaseFirestore.addCollectionSnapshotListener({
+            reference: '/videos'
+          }, (event: AddCollectionSnapshotListenerCallbackEvent<DocumentData> | null) => {
+            if (event?.snapshots) {
+              const fetchedVideos = event.snapshots
+                .map(doc => ({
+                  ...doc.data as Omit<VideoItem, 'id'>,
+                  id: doc.id
+                }))
+                .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+              setVideos(fetchedVideos);
+            }
+            setLoading(false);
+          });
+        } else {
+          // Use web SDK
+          const db = getFirestore();
+          const videosRef = collection(db, 'videos');
+          const q = query(videosRef, orderBy('createdAt', 'desc'));
+          
+          unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const fetchedVideos: VideoItem[] = [];
+            querySnapshot.forEach((doc) => {
+              fetchedVideos.push({
+                ...doc.data(),
+                id: doc.id
+              } as VideoItem);
+            });
+            setVideos(fetchedVideos);
+            setLoading(false);
+          });
+        }
+      } catch (error) {
+        console.error('Error setting up feed listener:', error);
+        setLoading(false);
+      }
+    };
+
+    setupFeedListener();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+      if (Capacitor.isNativePlatform()) {
+        FirebaseFirestore.removeAllListeners();
+      }
+    };
   }, []);
 
   const handleRefresh = async (event: CustomEvent<RefresherEventDetail>) => {
-    await fetchVideos();
+    // No need to manually refresh with real-time updates
     event.detail.complete();
   };
 
@@ -149,6 +196,6 @@ const Feed = () => {
       </IonContent>
     </IonPage>
   );
-}
+};
 
 export default Feed; 

@@ -49,6 +49,8 @@ const nextConfig = {
     '@firebase/analytics',
     'undici'
   ],
+  // Add trailing slash to handle static export routing
+  trailingSlash: true
 }
 
 module.exports = nextConfig 
