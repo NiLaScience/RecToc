@@ -19,3 +19,38 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep Kotlin Metadata
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.SerializationKt
+-keep,includedescriptorclasses class com.google.firebase.**$$serializer { *; }
+-keepclassmembers class com.google.firebase.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.google.firebase.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Keep Kotlin Metadata annotations
+-keep class kotlin.Metadata { *; }
+-keepclassmembers class kotlin.Metadata {
+    public <methods>;
+}
+
+# Keep Kotlin serialization
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault
+
+# Keep Firebase Auth Kotlin extensions
+-keep class com.google.firebase.auth.ktx.** { *; }
+-keep class com.google.firebase.ktx.** { *; }
+
+# Keep Facebook SDK
+-keep class com.facebook.** { *; }
+-keepclassmembers class com.facebook.** { *; }
+-keep class com.facebook.login.** { *; }
+-keep class com.facebook.android.** { *; }
+
+# Keep Facebook SDK Callbacks
+-keepclassmembers class * implements com.facebook.FacebookCallback {
+    <methods>;
+}

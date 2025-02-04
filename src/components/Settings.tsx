@@ -15,16 +15,20 @@ import {
   IonAvatar,
   useIonToast,
 } from '@ionic/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, onSnapshot, setDoc, getDoc, DocumentData } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { useRouter } from 'next/navigation';
 import type { UserProfile, UserProfileUpdate } from '../types/user';
+import type { AddDocumentSnapshotListenerCallbackEvent } from '@capacitor-firebase/firestore';
 
 const Settings = () => {
   const { user } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -34,64 +38,123 @@ const Settings = () => {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>('');
   const [presentToast] = useIonToast();
+  const pendingChangesRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (user) {
-      loadUserProfile();
+  // Helper function to update all profile-related state
+  const updateProfileState = (profileData: UserProfile, isLocalUpdate = false) => {
+    setProfile(profileData);
+    
+    // Only update fields that don't have pending changes
+    if (!pendingChangesRef.current.has('displayName')) {
+      setDisplayName(profileData.displayName || '');
     }
-  }, [user]);
-
-  const loadUserProfile = async () => {
-    if (!user) return;
-
-    try {
-      let profileData: UserProfile | null = null;
-
-      if (Capacitor.isNativePlatform()) {
-        const result = await FirebaseFirestore.getDocument({
-          reference: `/users/${user.uid}`
-        });
-        if (result && 'data' in result) {
-          profileData = result.data as UserProfile;
-        }
-      } else {
-        const db = getFirestore();
-        const docRef = doc(db, 'users', user.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          profileData = docSnap.data() as UserProfile;
-        }
-      }
-
-      if (profileData) {
-        setProfile(profileData);
-        setDisplayName(profileData.displayName || '');
-        setUsername(profileData.username || '');
-        setDescription(profileData.description || '');
-        setPhotoPreview(profileData.photoURL || '');
-      }
-      setLoading(false);
-    } catch (error) {
-      console.error('Error loading profile:', error);
-      presentToast({
-        message: 'Failed to load profile',
-        duration: 3000,
-        color: 'danger'
-      });
-      setLoading(false);
+    if (!pendingChangesRef.current.has('username')) {
+      setUsername(profileData.username || '');
+    }
+    if (!pendingChangesRef.current.has('description')) {
+      setDescription(profileData.description || '');
+    }
+    if (!pendingChangesRef.current.has('photoURL')) {
+      setPhotoPreview(profileData.photoURL || '');
     }
   };
 
+  // Track field changes
+  const handleFieldChange = (field: string, value: string) => {
+    pendingChangesRef.current.add(field);
+    switch (field) {
+      case 'displayName':
+        setDisplayName(value);
+        break;
+      case 'username':
+        setUsername(value);
+        break;
+      case 'description':
+        setDescription(value);
+        break;
+    }
+  };
+
+  // Track photo changes
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      pendingChangesRef.current.add('photoURL');
       setPhotoFile(file);
       setPhotoPreview(URL.createObjectURL(file));
     }
   };
 
+  useEffect(() => {
+    if (!user) {
+      router.push('/');
+      return;
+    }
+
+    let unsubscribe: (() => void) | undefined;
+
+    const setupProfileListener = async () => {
+      try {
+        if (Capacitor.isNativePlatform()) {
+          await FirebaseFirestore.addDocumentSnapshotListener({
+            reference: `/users/${user.uid}`,
+          }, (event: AddDocumentSnapshotListenerCallbackEvent<DocumentData> | null) => {
+            if (event?.snapshot?.data) {
+              const profileData = event.snapshot.data as UserProfile;
+              updateProfileState(profileData);
+            }
+            setLoading(false);
+          });
+        } else {
+          const db = getFirestore();
+          const docRef = doc(db, 'users', user.uid);
+          unsubscribe = onSnapshot(docRef, (doc) => {
+            if (doc.exists()) {
+              const profileData = doc.data() as UserProfile;
+              updateProfileState(profileData);
+            }
+            setLoading(false);
+          }, (error) => {
+            console.error('Error listening to profile updates:', error);
+            presentToast({
+              message: 'Failed to listen to profile updates',
+              duration: 3000,
+              color: 'danger'
+            });
+            setLoading(false);
+          });
+        }
+      } catch (error) {
+        console.error('Error setting up profile listener:', error);
+        presentToast({
+          message: 'Failed to set up profile updates',
+          duration: 3000,
+          color: 'danger'
+        });
+        setLoading(false);
+      }
+    };
+
+    setupProfileListener();
+
+    return () => {
+      if (Capacitor.isNativePlatform()) {
+        FirebaseFirestore.removeAllListeners();
+      } else if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [user, router]);
+
   const handleSave = async () => {
-    if (!user) return;
+    if (!user) {
+      presentToast({
+        message: 'You must be logged in to save profile',
+        duration: 3000,
+        color: 'warning'
+      });
+      return;
+    }
 
     // Validate required fields
     if (!displayName.trim() || !username.trim()) {
@@ -104,62 +167,96 @@ const Settings = () => {
     }
 
     setSaving(true);
-    try {
-      let photoURL = profile?.photoURL || '';
 
-      if (photoFile) {
-        const storage = getStorage();
-        const photoRef = ref(storage, `users/${user.uid}/profile.jpg`);
-        await uploadBytes(photoRef, photoFile);
-        photoURL = await getDownloadURL(photoRef);
+    try {
+      const timestamp = new Date().toISOString();
+      const updates: Partial<UserProfile> = {};
+      let hasChanges = false;
+
+      // Only include fields that have actually changed
+      if (displayName.trim() !== profile?.displayName) {
+        updates.displayName = displayName.trim();
+        hasChanges = true;
+      }
+      
+      if (username.trim() !== profile?.username) {
+        updates.username = username.trim();
+        hasChanges = true;
+      }
+      
+      if (description.trim() !== profile?.description) {
+        updates.description = description.trim();
+        hasChanges = true;
       }
 
-      const timestamp = new Date().toISOString();
-      
-      if (!profile) {
-        // Create new profile
-        const newProfile: UserProfile = {
-          uid: user.uid,
-          displayName: displayName.trim(),
-          username: username.trim(),
-          description: description.trim(),
-          photoURL,
-          createdAt: timestamp,
-          updatedAt: timestamp
-        };
+      // Handle photo upload separately
+      if (photoFile) {
+        try {
+          const storage = getStorage();
+          const photoRef = ref(storage, `users/${user.uid}/profile.jpg`);
+          await uploadBytes(photoRef, photoFile);
+          const photoURL = await getDownloadURL(photoRef);
+          updates.photoURL = photoURL;
+          hasChanges = true;
+        } catch (error) {
+          console.error('Error uploading photo:', error);
+          presentToast({
+            message: 'Failed to upload photo',
+            duration: 3000,
+            color: 'warning'
+          });
+        }
+      }
 
-        if (Capacitor.isNativePlatform()) {
+      if (!hasChanges) {
+        presentToast({
+          message: 'No changes to save',
+          duration: 3000,
+          color: 'success'
+        });
+        setSaving(false);
+        return;
+      }
+
+      // Add metadata
+      updates.updatedAt = timestamp;
+
+      if (Capacitor.isNativePlatform()) {
+        console.log('Saving profile updates on native platform:', updates);
+        
+        // Update fields atomically one at a time
+        for (const [field, value] of Object.entries(updates)) {
           await FirebaseFirestore.setDocument({
             reference: `/users/${user.uid}`,
-            data: newProfile
+            data: { [field]: value },
+            merge: true
           });
-        } else {
-          const db = getFirestore();
-          await setDoc(doc(db, 'users', user.uid), newProfile);
+          
+          // Small delay between updates to prevent race conditions
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       } else {
-        // Update existing profile
-        const updateData: UserProfileUpdate = {
-          displayName: displayName.trim(),
-          username: username.trim(),
-          description: description.trim(),
-          photoURL,
-          updatedAt: timestamp
-        };
-
-        if (Capacitor.isNativePlatform()) {
-          await FirebaseFirestore.updateDocument({
-            reference: `/users/${user.uid}`,
-            data: updateData
-          });
-        } else {
-          const db = getFirestore();
-          await setDoc(doc(db, 'users', user.uid), updateData, { merge: true });
-        }
+        const db = getFirestore();
+        const docRef = doc(db, 'users', user.uid);
+        
+        // For web, we can use a single atomic update
+        await setDoc(docRef, updates, { merge: true });
       }
 
-      // Reload profile after save
-      await loadUserProfile();
+      // Fetch the latest state after all updates
+      if (Capacitor.isNativePlatform()) {
+        const updatedDoc = await FirebaseFirestore.getDocument({ 
+          reference: `/users/${user.uid}` 
+        });
+        if (updatedDoc?.snapshot?.data) {
+          updateProfileState(updatedDoc.snapshot.data as UserProfile);
+        }
+      } else {
+        const updatedDoc = await getDoc(doc(getFirestore(), 'users', user.uid));
+        if (updatedDoc.exists()) {
+          updateProfileState(updatedDoc.data() as UserProfile);
+        }
+      }
 
       presentToast({
         message: 'Profile saved successfully',
@@ -175,6 +272,26 @@ const Settings = () => {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await FirebaseAuthentication.signOut();
+      } else {
+        const { getAuth } = await import('firebase/auth');
+        const auth = getAuth();
+        await auth.signOut();
+      }
+      router.push('/');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      presentToast({
+        message: 'Failed to sign out',
+        duration: 3000,
+        color: 'danger'
+      });
     }
   };
 
@@ -227,10 +344,20 @@ const Settings = () => {
         </div>
 
         <IonItem>
+          <IonLabel position="stacked" color="medium">Email</IonLabel>
+          <IonInput
+            value={user?.email || 'No email provided'}
+            readonly
+            className="ion-margin-top"
+            style={{ opacity: 0.7 }}
+          />
+        </IonItem>
+
+        <IonItem>
           <IonLabel position="stacked">Display Name</IonLabel>
           <IonInput
             value={displayName}
-            onIonChange={e => setDisplayName(e.detail.value!)}
+            onIonChange={e => handleFieldChange('displayName', e.detail.value!)}
             placeholder="Enter your display name"
           />
         </IonItem>
@@ -239,7 +366,7 @@ const Settings = () => {
           <IonLabel position="stacked">Username</IonLabel>
           <IonInput
             value={username}
-            onIonChange={e => setUsername(e.detail.value!)}
+            onIonChange={e => handleFieldChange('username', e.detail.value!)}
             placeholder="Enter your username"
           />
         </IonItem>
@@ -248,7 +375,7 @@ const Settings = () => {
           <IonLabel position="stacked">Description</IonLabel>
           <IonTextarea
             value={description}
-            onIonChange={e => setDescription(e.detail.value!)}
+            onIonChange={e => handleFieldChange('description', e.detail.value!)}
             placeholder="Tell us about yourself"
             rows={4}
           />
@@ -261,6 +388,15 @@ const Settings = () => {
             disabled={saving}
           >
             {saving ? <IonSpinner name="crescent" /> : 'Save Profile'}
+          </IonButton>
+
+          <IonButton
+            expand="block"
+            color="danger"
+            className="ion-margin-top"
+            onClick={handleSignOut}
+          >
+            Sign Out
           </IonButton>
         </div>
       </IonContent>

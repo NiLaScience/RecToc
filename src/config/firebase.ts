@@ -1,13 +1,26 @@
 'use client';
 
-import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator, Auth } from 'firebase/auth';
+import { initializeApp, getApps } from 'firebase/app';
+import { getAuth, connectAuthEmulator, Auth, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { Analytics, getAnalytics, isSupported } from "firebase/analytics";
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { initializeAuth, indexedDBLocalPersistence } from 'firebase/auth';
+
+// Add type for auth state change
+interface AuthStateChange {
+  user: {
+    displayName: string | null;
+    email: string | null;
+    emailVerified: boolean;
+    isAnonymous: boolean;
+    phoneNumber: string | null;
+    photoURL: string | null;
+    uid: string;
+  } | null;
+}
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
@@ -20,32 +33,52 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase only if it hasn't been initialized
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
 // Initialize Firebase services with platform-specific configuration
 let auth: Auth;
-if (Capacitor.isNativePlatform()) {
-  // Use IndexedDB persistence for mobile platforms
-  auth = initializeAuth(app, {
-    persistence: indexedDBLocalPersistence
-  });
-} else {
-  // Use default persistence for web
-  auth = getAuth(app);
-}
-
-// Initialize other Firebase services
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-// Initialize Analytics if supported
+let db;
+let storage;
 let analytics: Analytics | null = null;
-isSupported().then(supported => {
-  if (supported) {
-    analytics = getAnalytics(app);
+
+// Only initialize services if we're in the browser
+if (typeof window !== 'undefined') {
+  if (Capacitor.isNativePlatform()) {
+    // Use IndexedDB persistence for mobile platforms
+    auth = initializeAuth(app, {
+      persistence: indexedDBLocalPersistence
+    });
+    
+    // Initialize Capacitor Firebase Authentication and sync state
+    FirebaseAuthentication.addListener('authStateChange', async () => {
+      try {
+        const result = await FirebaseAuthentication.getCurrentUser();
+        if (result.user) {
+          console.log('Native auth state changed:', result.user);
+        } else {
+          console.log('User signed out on native platform');
+        }
+      } catch (error) {
+        console.error('Error handling native auth state change:', error);
+      }
+    });
+  } else {
+    // Use default persistence for web
+    auth = getAuth(app);
   }
-});
+
+  // Initialize other Firebase services
+  db = getFirestore(app);
+  storage = getStorage(app);
+
+  // Initialize Analytics if supported
+  isSupported().then(supported => {
+    if (supported) {
+      analytics = getAnalytics(app);
+    }
+  }).catch(console.error);
+}
 
 export { app, auth, db, storage, analytics };
 
@@ -56,15 +89,10 @@ export const initializeFirebaseAuth = async () => {
     return;
   }
 
-  if (!Capacitor.isPluginAvailable('FirebaseAuthentication')) {
-    console.warn('FirebaseAuthentication plugin is not available on this platform.');
-    return;
-  }
-
   try {
-    // Initialize sign in with current user
+    // Get current user from Capacitor Firebase Authentication
     const result = await FirebaseAuthentication.getCurrentUser();
-    console.log('Current user:', result.user);
+    console.log('Current native user:', result.user);
     return result.user;
   } catch (error) {
     console.error('Error initializing Firebase Authentication:', error);
@@ -72,5 +100,7 @@ export const initializeFirebaseAuth = async () => {
   }
 };
 
-// Call initialization
-initializeFirebaseAuth().catch(console.error);
+// Only call initialization on the client side
+if (typeof window !== 'undefined') {
+  initializeFirebaseAuth().catch(console.error);
+}

@@ -1,11 +1,12 @@
 import { VideoItem } from './Feed';
 import { IonCard, IonCardHeader, IonCardContent, IonChip, IonLabel, IonAvatar, IonButton, IonIcon } from '@ionic/react';
 import { useState, useEffect } from 'react';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, onSnapshot, DocumentData } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import { informationCircleOutline } from 'ionicons/icons';
 import type { UserProfile } from '../types/user';
+import type { AddDocumentSnapshotListenerCallbackEvent } from '@capacitor-firebase/firestore';
 
 interface FeedCardProps {
   video: VideoItem;
@@ -64,30 +65,42 @@ export default function FeedCard({ video }: FeedCardProps) {
   const [showDescription, setShowDescription] = useState(false);
 
   useEffect(() => {
-    loadUserProfile();
-  }, [video.userId]);
+    let unsubscribe: (() => void) | undefined;
 
-  const loadUserProfile = async () => {
-    try {
-      if (Capacitor.isNativePlatform()) {
-        const result = await FirebaseFirestore.getDocument({
-          reference: `/users/${video.userId}`
-        });
-        if (result && 'data' in result) {
-          setUserProfile(result.data as UserProfile);
+    const setupProfileListener = async () => {
+      try {
+        if (Capacitor.isNativePlatform()) {
+          await FirebaseFirestore.addDocumentSnapshotListener({
+            reference: `/users/${video.userId}`,
+          }, (event: AddDocumentSnapshotListenerCallbackEvent<DocumentData> | null) => {
+            if (event?.snapshot?.data) {
+              setUserProfile(event.snapshot.data as UserProfile);
+            }
+          });
+        } else {
+          const db = getFirestore();
+          const docRef = doc(db, 'users', video.userId);
+          unsubscribe = onSnapshot(docRef, (doc) => {
+            if (doc.exists()) {
+              setUserProfile(doc.data() as UserProfile);
+            }
+          });
         }
-      } else {
-        const db = getFirestore();
-        const docRef = doc(db, 'users', video.userId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setUserProfile(docSnap.data() as UserProfile);
-        }
+      } catch (error) {
+        console.error('Error setting up profile listener:', error);
       }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-    }
-  };
+    };
+
+    setupProfileListener();
+
+    return () => {
+      if (Capacitor.isNativePlatform()) {
+        FirebaseFirestore.removeAllListeners();
+      } else if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [video.userId]);
 
   return (
     <IonCard style={cardStyle}>

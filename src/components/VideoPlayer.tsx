@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { IonIcon, IonButton, IonAvatar } from '@ionic/react';
 import { heart, chatbubble, share, informationCircleOutline } from 'ionicons/icons';
 import { VideoItem } from './Feed';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, onSnapshot, DocumentData } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import type { UserProfile } from '../types/user';
+import type { AddDocumentSnapshotListenerCallbackEvent } from '@capacitor-firebase/firestore';
 
 interface VideoPlayerProps {
   video: VideoItem;
@@ -65,7 +66,41 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
-    loadUserProfile();
+    let unsubscribe: (() => void) | undefined;
+
+    const setupProfileListener = async () => {
+      try {
+        if (Capacitor.isNativePlatform()) {
+          await FirebaseFirestore.addDocumentSnapshotListener({
+            reference: `/users/${video.userId}`,
+          }, (event: AddDocumentSnapshotListenerCallbackEvent<DocumentData> | null) => {
+            if (event?.snapshot?.data) {
+              setUserProfile(event.snapshot.data as UserProfile);
+            }
+          });
+        } else {
+          const db = getFirestore();
+          const docRef = doc(db, 'users', video.userId);
+          unsubscribe = onSnapshot(docRef, (doc) => {
+            if (doc.exists()) {
+              setUserProfile(doc.data() as UserProfile);
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error setting up profile listener:', error);
+      }
+    };
+
+    setupProfileListener();
+
+    return () => {
+      if (Capacitor.isNativePlatform()) {
+        FirebaseFirestore.removeAllListeners();
+      } else if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [video.userId]);
 
   useEffect(() => {
@@ -77,28 +112,6 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
       }
     }
   }, [isPlaying]);
-
-  const loadUserProfile = async () => {
-    try {
-      if (Capacitor.isNativePlatform()) {
-        const result = await FirebaseFirestore.getDocument({
-          reference: `/users/${video.userId}`
-        });
-        if (result && 'data' in result) {
-          setUserProfile(result.data as UserProfile);
-        }
-      } else {
-        const db = getFirestore();
-        const docRef = doc(db, 'users', video.userId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setUserProfile(docSnap.data() as UserProfile);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-    }
-  };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStart(e.touches[0].clientY);
