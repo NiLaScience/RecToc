@@ -10,8 +10,6 @@ import {
   IonButton,
   IonChip,
   IonIcon,
-  IonSegment,
-  IonSegmentButton,
 } from '@ionic/react';
 import { cloudUploadOutline, closeCircleOutline } from 'ionicons/icons';
 import { useState, useEffect } from 'react';
@@ -89,6 +87,12 @@ const Upload = () => {
 
   const handleRecordedVideo = async (uri: string, format: string) => {
     try {
+      // Cleanup any existing preview URL
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
+
       if (Capacitor.isNativePlatform()) {
         // For native platforms, read the file using Filesystem
         const fileContents = await Filesystem.readFile({
@@ -102,13 +106,23 @@ const Upload = () => {
         
         // Create a File object
         const fileName = uri.split('/').pop() || `recorded_video_${Date.now()}.${format}`;
-        setFile(new File([blob], fileName, { type: `video/${format}` }));
+        const newFile = new File([blob], fileName, { type: `video/${format}` });
+        setFile(newFile);
+        
+        // Create and set preview URL
+        const previewUrl = URL.createObjectURL(newFile);
+        setPreviewUrl(previewUrl);
       } else {
-        // For web, uri is a blob URL
+        // For web, uri is already a blob URL
         const response = await fetch(uri);
         const blob = await response.blob();
         const fileName = `recorded_video_${Date.now()}.${format}`;
-        setFile(new File([blob], fileName, { type: `video/${format}` }));
+        const newFile = new File([blob], fileName, { type: `video/${format}` });
+        setFile(newFile);
+        
+        // Create and set preview URL
+        const previewUrl = URL.createObjectURL(newFile);
+        setPreviewUrl(previewUrl);
       }
     } catch (error) {
       console.error('Error handling recorded video:', error);
@@ -279,17 +293,6 @@ const Upload = () => {
         </IonHeader>
 
         <div className="ion-padding">
-          {!Capacitor.isNativePlatform() && (
-            <IonSegment value={uploadMode} onIonChange={e => setUploadMode(e.detail.value as 'file' | 'record')}>
-              <IonSegmentButton value="file">
-                <IonLabel>Choose File</IonLabel>
-              </IonSegmentButton>
-              <IonSegmentButton value="record">
-                <IonLabel>Record Video</IonLabel>
-              </IonSegmentButton>
-            </IonSegment>
-          )}
-
           <IonItem>
             <IonLabel position="stacked">Title</IonLabel>
             <IonInput
@@ -320,101 +323,110 @@ const Upload = () => {
             </div>
           )}
 
-          {(uploadMode === 'file' || Capacitor.isNativePlatform()) ? (
-            <div className="ion-padding-vertical">
-              {previewUrl && (
-                <div style={{ 
-                  width: '100%', 
-                  aspectRatio: '16/9',
-                  backgroundColor: '#000',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  marginBottom: '1rem'
-                }}>
-                  <video
-                    src={previewUrl}
-                    controls
-                    playsInline
-                    style={{ 
-                      width: '100%', 
-                      height: '100%', 
-                      objectFit: 'contain'
-                    }}
-                  />
-                </div>
-              )}
-              
-              {/* Input for camera recording */}
-              <input
-                type="file"
-                accept="video/*"
-                capture="environment"
-                onChange={handleFileChange}
-                style={{ display: 'none' }}
-                id="video-record"
-              />
-              
-              {/* Input for file selection */}
-              <input
-                type="file"
-                accept="video/*"
-                onChange={handleFileChange}
-                style={{ display: 'none' }}
-                id="video-select"
-              />
-
-              {Capacitor.isNativePlatform() ? (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <IonButton
-                    expand="block"
-                    onClick={() => document.getElementById('video-record')?.click()}
-                    color="medium"
-                    style={{ flex: 1 }}
-                  >
-                    Record Video
-                  </IonButton>
-                  <IonButton
-                    expand="block"
-                    onClick={() => document.getElementById('video-select')?.click()}
-                    color="medium"
-                    style={{ flex: 1 }}
-                  >
-                    Choose Video
-                  </IonButton>
-                </div>
-              ) : (
-                <IonButton
-                  expand="block"
-                  onClick={() => document.getElementById('video-select')?.click()}
-                  color="medium"
-                >
-                  {file ? 'Change Video' : 'Select Video'}
-                </IonButton>
-              )}
-
-              {file && Capacitor.isNativePlatform() && (
-                <IonButton
-                  expand="block"
-                  onClick={() => {
-                    setFile(null);
-                    if (previewUrl) {
-                      URL.revokeObjectURL(previewUrl);
-                      setPreviewUrl(null);
-                    }
+          <div className="ion-padding-vertical">
+            {uploadMode === 'record' ? (
+              <>
+                <VideoRecorder
+                  onVideoRecorded={(uri, format) => {
+                    handleRecordedVideo(uri, format);
+                    setUploadMode('file');
                   }}
+                  onError={setError}
+                />
+                <IonButton
+                  expand="block"
+                  onClick={() => setUploadMode('file')}
                   color="medium"
                   className="ion-margin-top"
                 >
-                  Remove Video
+                  Cancel Recording
                 </IonButton>
-              )}
-            </div>
-          ) : (
-            <VideoRecorder
-              onVideoRecorded={handleRecordedVideo}
-              onError={setError}
-            />
-          )}
+              </>
+            ) : (
+              <>
+                {previewUrl && (
+                  <div style={{ 
+                    width: '100%', 
+                    aspectRatio: '16/9',
+                    backgroundColor: '#000',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    marginBottom: '1rem'
+                  }}>
+                    <video
+                      src={previewUrl}
+                      controls
+                      playsInline
+                      style={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        objectFit: 'contain'
+                      }}
+                    />
+                  </div>
+                )}
+                
+                {/* Input for camera recording */}
+                <input
+                  type="file"
+                  accept="video/*"
+                  capture="environment"
+                  onChange={handleFileChange}
+                  style={{ display: 'none' }}
+                  id="video-record"
+                />
+                
+                {/* Input for file selection */}
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={handleFileChange}
+                  style={{ display: 'none' }}
+                  id="video-select"
+                />
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {!file && (
+                    <>
+                      <IonButton
+                        expand="block"
+                        onClick={() => setUploadMode('record')}
+                        color="medium"
+                        style={{ flex: 1 }}
+                      >
+                        Record Video
+                      </IonButton>
+                      <IonButton
+                        expand="block"
+                        onClick={() => document.getElementById('video-select')?.click()}
+                        color="medium"
+                        style={{ flex: 1 }}
+                      >
+                        Choose Video
+                      </IonButton>
+                    </>
+                  )}
+                </div>
+
+                {file && (
+                  <IonButton
+                    expand="block"
+                    onClick={() => {
+                      setFile(null);
+                      if (previewUrl) {
+                        URL.revokeObjectURL(previewUrl);
+                        setPreviewUrl(null);
+                      }
+                    }}
+                    color="medium"
+                    className="ion-margin-top"
+                  >
+                    Remove Video
+                  </IonButton>
+                )}
+              </>
+            )}
+          </div>
 
           {error && (
             <div className="ion-padding-vertical ion-text-center">
