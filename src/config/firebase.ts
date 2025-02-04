@@ -9,15 +9,15 @@ import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { initializeAuth, indexedDBLocalPersistence } from 'firebase/auth';
 
-// Your Firebase configuration
+// Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyCDPqC9jG5cymkwQptrCoS4ph3EZvbtaZA",
-  authDomain: "rec-toc-56a25.firebaseapp.com",
-  projectId: "rec-toc-56a25",
-  storageBucket: "rec-toc-56a25.firebasestorage.app",
-  messagingSenderId: "558786439803",
-  appId: "1:558786439803:web:e909f5099dc59a1c84d0de",
-  measurementId: "G-H1SFBCCE5T"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase
@@ -35,20 +35,19 @@ if (Capacitor.isNativePlatform()) {
   auth = getAuth(app);
 }
 
-export { auth };
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+// Initialize other Firebase services
+const db = getFirestore(app);
+const storage = getStorage(app);
 
-// Initialize analytics only in browser environment
-export let analytics: Analytics | null = null;
-if (typeof window !== 'undefined' && !Capacitor.isNativePlatform()) {
-  // Check if analytics is supported before initializing
-  isSupported().then(supported => {
-    if (supported) {
-      analytics = getAnalytics(app);
-    }
-  });
-}
+// Initialize Analytics if supported
+let analytics: Analytics | null = null;
+isSupported().then(supported => {
+  if (supported) {
+    analytics = getAnalytics(app);
+  }
+});
+
+export { app, auth, db, storage, analytics };
 
 // Initialize Capacitor Firebase Authentication if on native platform
 export const initializeFirebaseAuth = async () => {
@@ -75,5 +74,3 @@ export const initializeFirebaseAuth = async () => {
 
 // Call initialization
 initializeFirebaseAuth().catch(console.error);
-
-export default app;
