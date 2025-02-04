@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "558786439803",
+    "project_id": "rec-toc-56a25",
+    "storage_bucket": "rec-toc-56a25.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:558786439803:android:1a6cd8d57dc530b684d0de",
+        "android_client_info": {
+          "package_name": "com.nexus.rectoc"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "558786439803-33an2k58hn0f68716iccibsijgdfcnq3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUwB9JJzsxFD5xp7sEFAPXGUK3bAGnICw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "558786439803-33an2k58hn0f68716iccibsijgdfcnq3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

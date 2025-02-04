@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 8.1.0">
+    <issue
+        id="RestrictedApi"
+        message="WebViewFeature.DOCUMENT_START_SCRIPT can only be accessed from within the same library group (referenced groupId=androidx.webkit from groupId=android)"
+        errorLine1="        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {"
+        errorLine2="                                                             ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/getcapacitor/Bridge.java"
+            line="264"
+            column="62"/>
+    </issue>
+    <issue
+        id="RestrictedApi"
+        message="WebViewCompat.addDocumentStartJavaScript can only be called from within the same library group (referenced groupId=androidx.webkit from groupId=android)"
+        errorLine1="                WebViewCompat.addDocumentStartJavaScript(webView, injector.getScriptString(), Collections.singleton(allowedOrigin));"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/getcapacitor/Bridge.java"
+            line="267"
+            column="31"/>
+    </issue>
+</issues> 
