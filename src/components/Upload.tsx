@@ -10,6 +10,8 @@ import {
   IonButton,
   IonChip,
   IonIcon,
+  IonSegment,
+  IonSegmentButton,
 } from '@ionic/react';
 import { cloudUploadOutline, closeCircleOutline } from 'ionicons/icons';
 import { useState } from 'react';
@@ -19,7 +21,9 @@ import { useAuth } from '../context/AuthContext';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
+import VideoRecorder from './VideoRecorder';
 import type { User } from 'firebase/auth';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 
 interface FirebaseUser {
   uid: string;
@@ -33,6 +37,7 @@ const Upload = () => {
   const [currentTag, setCurrentTag] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [uploadMode, setUploadMode] = useState<'file' | 'record'>('file');
   const { user } = useAuth();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,6 +65,35 @@ const Upload = () => {
 
   const removeTag = (tagToRemove: string) => {
     setTags(tags.filter(tag => tag !== tagToRemove));
+  };
+
+  const handleRecordedVideo = async (uri: string, format: string) => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        // For native platforms, read the file using Filesystem
+        const fileContents = await Filesystem.readFile({
+          path: uri,
+          directory: Directory.Data
+        });
+
+        // Convert base64 to blob
+        const base64Response = await fetch(`data:video/${format};base64,${fileContents.data}`);
+        const blob = await base64Response.blob();
+        
+        // Create a File object
+        const fileName = uri.split('/').pop() || `recorded_video_${Date.now()}.${format}`;
+        setFile(new File([blob], fileName, { type: `video/${format}` }));
+      } else {
+        // For web, uri is a blob URL
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const fileName = `recorded_video_${Date.now()}.${format}`;
+        setFile(new File([blob], fileName, { type: `video/${format}` }));
+      }
+    } catch (error) {
+      console.error('Error handling recorded video:', error);
+      setError('Failed to process recorded video. Please try again.');
+    }
   };
 
   const handleUpload = async () => {
@@ -225,6 +259,17 @@ const Upload = () => {
         </IonHeader>
 
         <div className="ion-padding">
+          {!Capacitor.isNativePlatform() && (
+            <IonSegment value={uploadMode} onIonChange={e => setUploadMode(e.detail.value as 'file' | 'record')}>
+              <IonSegmentButton value="file">
+                <IonLabel>Choose File</IonLabel>
+              </IonSegmentButton>
+              <IonSegmentButton value="record">
+                <IonLabel>Record Video</IonLabel>
+              </IonSegmentButton>
+            </IonSegment>
+          )}
+
           <IonItem>
             <IonLabel position="stacked">Title</IonLabel>
             <IonInput
@@ -255,22 +300,30 @@ const Upload = () => {
             </div>
           )}
 
-          <div className="ion-padding-vertical">
-            <input
-              type="file"
-              accept="video/*"
-              onChange={handleFileChange}
-              style={{ display: 'none' }}
-              id="video-upload"
+          {(uploadMode === 'file' || Capacitor.isNativePlatform()) ? (
+            <div className="ion-padding-vertical">
+              <input
+                type="file"
+                accept="video/*"
+                capture={Capacitor.isNativePlatform() ? "environment" : undefined}
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+                id="video-upload"
+              />
+              <IonButton
+                expand="block"
+                onClick={() => document.getElementById('video-upload')?.click()}
+                color="medium"
+              >
+                {file ? file.name : (Capacitor.isNativePlatform() ? 'Record or Select Video' : 'Select Video')}
+              </IonButton>
+            </div>
+          ) : (
+            <VideoRecorder
+              onVideoRecorded={handleRecordedVideo}
+              onError={setError}
             />
-            <IonButton
-              expand="block"
-              onClick={() => document.getElementById('video-upload')?.click()}
-              color="medium"
-            >
-              {file ? file.name : 'Select Video'}
-            </IonButton>
-          </div>
+          )}
 
           {error && (
             <div className="ion-padding-vertical ion-text-center">
