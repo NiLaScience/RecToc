@@ -17,23 +17,20 @@ import {
 } from '@ionic/react';
 import { cloudUploadOutline, closeCircleOutline, micOutline } from 'ionicons/icons';
 import { useState, useEffect } from 'react';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL, uploadBytes } from 'firebase/storage';
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
-import { FirebaseFirestore } from '@capacitor-firebase/firestore';
-import VideoRecorder from './VideoRecorder';
-import type { User } from 'firebase/auth';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import VideoRecorder from './VideoRecorder';
 import TranscriptionService from '../services/TranscriptionService';
 import { Dialog } from '@capacitor/dialog';
 import { alertController } from '@ionic/core';
 import ThumbnailService from '../services/ThumbnailService';
 import PDFParserService from '../services/PDFParserService';
 import type { JobDescriptionSchema } from '../services/OpenAIService';
+import { uploadFile, addDocument } from '../config/firebase';
 
-interface FirebaseUser {
+interface User {
   uid: string;
   email: string | null;
 }
@@ -251,99 +248,99 @@ const Upload = () => {
     }
 
     // Verify authentication state
-    let currentUser: FirebaseUser | null = user;
-    if (Capacitor.isNativePlatform()) {
-      try {
-        const result = await FirebaseAuthentication.getCurrentUser();
-        if (!result.user) {
-          setError('Authentication required. Please sign in again.');
-          return;
-        }
-        currentUser = result.user;
-      } catch (err) {
-        console.error('Error getting current user:', err);
-        setError('Failed to verify authentication. Please sign in again.');
+    try {
+      const result = await FirebaseAuthentication.getCurrentUser();
+      if (!result.user) {
+        setError('Authentication required. Please sign in again.');
         return;
       }
-    }
+      const currentUser = result.user;
 
-    if (!currentUser) {
-      setError('Authentication required. Please sign in.');
-      return;
-    }
+      setUploading(true);
+      setError('');
 
-    setUploading(true);
-    setError('');
+      try {
+        // Generate thumbnail
+        const thumbnailFile = await ThumbnailService.generateThumbnail(file);
+        
+        // Save files to temporary storage
+        const videoFileName = `${Date.now()}-${file.name}`;
+        const thumbnailFileName = `${Date.now()}-thumbnail.jpg`;
+        
+        // Write files to filesystem
+        await Promise.all([
+          Filesystem.writeFile({
+            path: videoFileName,
+            data: await file.arrayBuffer().then(buffer => Buffer.from(buffer).toString('base64')),
+            directory: Directory.Cache
+          }),
+          Filesystem.writeFile({
+            path: thumbnailFileName,
+            data: await thumbnailFile.arrayBuffer().then(buffer => Buffer.from(buffer).toString('base64')),
+            directory: Directory.Cache
+          })
+        ]);
 
-    try {
-      // Generate thumbnail
-      const thumbnailFile = await ThumbnailService.generateThumbnail(file);
-      
-      // Upload video and thumbnail to Firebase Storage
-      const storage = getStorage();
-      const videoPath = `videos/${currentUser.uid}/${Date.now()}-${file.name}`;
-      const thumbnailPath = `thumbnails/${currentUser.uid}/${Date.now()}-thumbnail.jpg`;
-      
-      const videoRef = ref(storage, videoPath);
-      const thumbnailRef = ref(storage, thumbnailPath);
-      
-      // Upload thumbnail
-      await uploadBytes(thumbnailRef, thumbnailFile);
-      const thumbnailUrl = await getDownloadURL(thumbnailRef);
-      
-      // Upload video
-      const uploadTask = uploadBytesResumable(videoRef, file);
+        // Get file URIs
+        const [videoFileInfo, thumbnailFileInfo] = await Promise.all([
+          Filesystem.getUri({
+            path: videoFileName,
+            directory: Directory.Cache
+          }),
+          Filesystem.getUri({
+            path: thumbnailFileName,
+            directory: Directory.Cache
+          })
+        ]);
 
-      uploadTask.on('state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log('Upload progress:', progress + '%');
-        },
-        (error) => {
-          console.error('Upload error:', error);
-          setError(`Upload failed: ${error.message}`);
-          setUploading(false);
-        },
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            
-            // Save video metadata to Firestore
-            const videoData = {
-              title,
-              videoUrl: downloadURL,
-              thumbnailUrl,
-              jobDescription,
-              tags,
-              userId: currentUser!.uid,
-              createdAt: new Date().toISOString(),
-              views: 0,
-              likes: 0,
-              transcript: transcript || null,
-            };
-            
-            if (Capacitor.isNativePlatform()) {
-              await FirebaseFirestore.addDocument({
-                reference: '/videos',
-                data: videoData
-              });
-            } else {
-              const db = getFirestore();
-              await addDoc(collection(db, 'videos'), videoData);
-            }
+        // Upload paths
+        const videoPath = `videos/${currentUser.uid}/${videoFileName}`;
+        const thumbnailPath = `thumbnails/${currentUser.uid}/${thumbnailFileName}`;
+        
+        // Upload files to Firebase Storage
+        const [videoUrl, thumbnailUrl] = await Promise.all([
+          uploadFile(videoPath, videoFileInfo.uri, { contentType: file.type }),
+          uploadFile(thumbnailPath, thumbnailFileInfo.uri, { contentType: 'image/jpeg' })
+        ]);
 
-            setUploading(false);
-            await showUploadSuccess();
-          } catch (err: any) {
-            console.error('Post-upload error:', err);
-            setError(`Failed to save video metadata: ${err.message}`);
-            setUploading(false);
-          }
-        }
-      );
+        // Clean up temporary files
+        await Promise.all([
+          Filesystem.deleteFile({
+            path: videoFileName,
+            directory: Directory.Cache
+          }),
+          Filesystem.deleteFile({
+            path: thumbnailFileName,
+            directory: Directory.Cache
+          })
+        ]);
+
+        // Save video metadata to Firestore
+        const videoData = {
+          title,
+          videoUrl,
+          thumbnailUrl,
+          jobDescription,
+          tags,
+          userId: currentUser.uid,
+          createdAt: new Date().toISOString(),
+          views: 0,
+          likes: 0,
+          transcript: transcript || null,
+        };
+        
+        await addDocument('videos', videoData);
+
+        setUploading(false);
+        await showUploadSuccess();
+      } catch (err: any) {
+        console.error('Upload error:', err);
+        setError(err.message || 'Failed to upload video');
+        setUploading(false);
+      }
     } catch (error: any) {
-      console.error('Upload error:', error);
-      setError(error.message || 'Failed to upload video');
+      console.error('Authentication error:', error);
+      setError('Failed to verify authentication. Please sign in again.');
       setUploading(false);
     }
   };

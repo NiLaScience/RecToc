@@ -1,13 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { IonIcon, IonButton, IonAvatar } from '@ionic/react';
 import { heart, chatbubble, share, informationCircleOutline } from 'ionicons/icons';
-import { VideoItem } from './Feed';
-import { getFirestore, doc, onSnapshot, DocumentData } from 'firebase/firestore';
-import { Capacitor } from '@capacitor/core';
-import { FirebaseFirestore } from '@capacitor-firebase/firestore';
+import { VideoItem } from '../types/video';
 import type { UserProfile } from '../types/user';
-import type { AddDocumentSnapshotListenerCallbackEvent } from '@capacitor-firebase/firestore';
 import SubtitleService from '../services/SubtitleService';
+import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 
 interface VideoPlayerProps {
   video: VideoItem;
@@ -69,27 +66,13 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
   const [currentSubtitle, setCurrentSubtitle] = useState<string>('');
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
+    let callbackId: string;
 
     const setupProfileListener = async () => {
       try {
-        if (Capacitor.isNativePlatform()) {
-          await FirebaseFirestore.addDocumentSnapshotListener({
-            reference: `/users/${video.userId}`,
-          }, (event: AddDocumentSnapshotListenerCallbackEvent<DocumentData> | null) => {
-            if (event?.snapshot?.data) {
-              setUserProfile(event.snapshot.data as UserProfile);
-            }
-          });
-        } else {
-          const db = getFirestore();
-          const docRef = doc(db, 'users', video.userId);
-          unsubscribe = onSnapshot(docRef, (doc) => {
-            if (doc.exists()) {
-              setUserProfile(doc.data() as UserProfile);
-            }
-          });
-        }
+        callbackId = await addSnapshotListener(`users/${video.userId}`, (profileData) => {
+          setUserProfile(profileData as UserProfile);
+        });
       } catch (error) {
         console.error('Error setting up profile listener:', error);
       }
@@ -98,10 +81,8 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
     setupProfileListener();
 
     return () => {
-      if (Capacitor.isNativePlatform()) {
-        FirebaseFirestore.removeAllListeners();
-      } else if (unsubscribe) {
-        unsubscribe();
+      if (callbackId) {
+        removeSnapshotListener(callbackId).catch(console.error);
       }
     };
   }, [video.userId]);

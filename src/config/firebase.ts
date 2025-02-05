@@ -1,26 +1,14 @@
 'use client';
 
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, connectAuthEmulator, Auth, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
-import { getStorage, connectStorageEmulator } from 'firebase/storage';
-import { Analytics, getAnalytics, isSupported } from "firebase/analytics";
-import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
-import { initializeAuth, indexedDBLocalPersistence } from 'firebase/auth';
-
-// Add type for auth state change
-interface AuthStateChange {
-  user: {
-    displayName: string | null;
-    email: string | null;
-    emailVerified: boolean;
-    isAnonymous: boolean;
-    phoneNumber: string | null;
-    photoURL: string | null;
-    uid: string;
-  } | null;
-}
+import { FirebaseFirestore } from '@capacitor-firebase/firestore';
+import { FirebaseStorage } from '@capacitor-firebase/storage';
+import { FirebaseApp } from '@capacitor-firebase/app';
+import { FirebaseFunctions } from '@capacitor-firebase/functions';
+import { FirebaseRemoteConfig } from '@capacitor-firebase/remote-config';
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
@@ -33,74 +21,316 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase only if it hasn't been initialized
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-
-// Initialize Firebase services with platform-specific configuration
-let auth: Auth;
-let db;
-let storage;
-let analytics: Analytics | null = null;
-
-// Only initialize services if we're in the browser
-if (typeof window !== 'undefined') {
-  if (Capacitor.isNativePlatform()) {
-    // Use IndexedDB persistence for mobile platforms
-    auth = initializeAuth(app, {
-      persistence: indexedDBLocalPersistence
-    });
-    
-    // Initialize Capacitor Firebase Authentication and sync state
-    FirebaseAuthentication.addListener('authStateChange', async () => {
+// Initialize Firebase based on platform
+const initializeFirebase = async () => {
+  try {
+    if (Capacitor.isNativePlatform()) {
+      // For native platforms, Firebase is initialized in the native layer
+      // We just need to verify it's working by getting the app name
       try {
-        const result = await FirebaseAuthentication.getCurrentUser();
-        if (result.user) {
-          console.log('Native auth state changed:', result.user);
-        } else {
-          console.log('User signed out on native platform');
-        }
+        await FirebaseApp.getName();
       } catch (error) {
-        console.error('Error handling native auth state change:', error);
+        console.error('Firebase not initialized in native layer:', error);
+        throw new Error('Firebase must be initialized in the native layer for this platform');
       }
-    });
-  } else {
-    // Use default persistence for web
-    auth = getAuth(app);
-  }
-
-  // Initialize other Firebase services
-  db = getFirestore(app);
-  storage = getStorage(app);
-
-  // Initialize Analytics if supported
-  isSupported().then(supported => {
-    if (supported) {
-      analytics = getAnalytics(app);
+    } else {
+      // For web platform, use Firebase Web SDK
+      try {
+        const app = initializeApp(firebaseConfig);
+        // Initialize Auth for web platform
+        const auth = getAuth(app);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Firebase Web initialized successfully');
+        }
+      } catch (error: any) {
+        if (error.code !== 'app/duplicate-app') {
+          console.error('Error initializing Firebase for web:', error);
+          throw error;
+        }
+        // Firebase already initialized
+      }
     }
-  }).catch(console.error);
+  } catch (error) {
+    console.error('Error initializing Firebase:', error);
+    throw error;
+  }
+};
+
+// Initialize Capacitor plugins if in browser environment
+if (typeof window !== 'undefined') {
+  // Initialize Firebase
+  initializeFirebase();
+
+  // Set up emulators if needed
+  if (process.env.NODE_ENV === 'development') {
+    FirebaseAuthentication.useEmulator({
+      host: 'localhost',
+      port: 9099
+    }).catch(console.error);
+
+    FirebaseFirestore.useEmulator({
+      host: 'localhost',
+      port: 8080
+    }).catch(console.error);
+
+    FirebaseStorage.useEmulator({
+      host: 'localhost',
+      port: 9199
+    }).catch(console.error);
+
+    FirebaseFunctions.useEmulator({
+      host: 'localhost',
+      port: 5001
+    }).catch(console.error);
+  }
 }
 
-export { app, auth, db, storage, analytics };
-
-// Initialize Capacitor Firebase Authentication if on native platform
-export const initializeFirebaseAuth = async () => {
-  if (!Capacitor.isNativePlatform()) {
-    console.log('Not running on a native platform, using web authentication');
-    return;
-  }
-
+// Helper function to get the current user's ID token
+export const getIdToken = async (): Promise<string | null> => {
   try {
-    // Get current user from Capacitor Firebase Authentication
-    const result = await FirebaseAuthentication.getCurrentUser();
-    console.log('Current native user:', result.user);
-    return result.user;
+    const result = await FirebaseAuthentication.getIdToken();
+    return result.token;
   } catch (error) {
-    console.error('Error initializing Firebase Authentication:', error);
+    console.error('Error getting ID token:', error);
     return null;
   }
 };
 
-// Only call initialization on the client side
+// Helper function to get the current user
+export const getCurrentUser = async () => {
+  try {
+    const result = await FirebaseAuthentication.getCurrentUser();
+    return result.user;
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    return null;
+  }
+};
+
+// Helper function to sign out
+export const signOut = async () => {
+  try {
+    await FirebaseAuthentication.signOut();
+  } catch (error) {
+    console.error('Error signing out:', error);
+    throw error;
+  }
+};
+
+// Helper function to upload a file to Firebase Storage
+export const uploadFile = async (path: string, uri: string, metadata?: { contentType?: string }) => {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      FirebaseStorage.uploadFile(
+        {
+          path,
+          uri,
+          metadata
+        },
+        (event, error) => {
+          if (error) {
+            reject(error);
+          } else if (event?.completed) {
+            resolve();
+          }
+        }
+      );
+    });
+
+    const result = await FirebaseStorage.getDownloadUrl({ path });
+    return result.downloadUrl;
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    throw error;
+  }
+};
+
+// Helper function to add a document to Firestore
+export const addDocument = async (collection: string, data: any) => {
+  try {
+    const result = await FirebaseFirestore.addDocument({
+      reference: collection,
+      data
+    });
+    return result.reference;
+  } catch (error) {
+    console.error('Error adding document:', error);
+    throw error;
+  }
+};
+
+// Helper function to update a document in Firestore
+export const updateDocument = async (reference: string, data: any) => {
+  try {
+    await FirebaseFirestore.updateDocument({
+      reference,
+      data
+    });
+  } catch (error) {
+    console.error('Error updating document:', error);
+    throw error;
+  }
+};
+
+// Helper function to get a document from Firestore
+export const getDocument = async (reference: string) => {
+  try {
+    const result = await FirebaseFirestore.getDocument({
+      reference
+    });
+    return result.snapshot.data;
+  } catch (error) {
+    console.error('Error getting document:', error);
+    throw error;
+  }
+};
+
+// Helper function to add a snapshot listener
+export const addSnapshotListener = async (reference: string, callback: (data: any) => void) => {
+  try {
+    const callbackId = await FirebaseFirestore.addDocumentSnapshotListener(
+      { reference },
+      (event, error) => {
+        if (error) {
+          console.error('Snapshot listener error:', error);
+          return;
+        }
+        if (event?.snapshot?.data) {
+          callback(event.snapshot.data);
+        }
+      }
+    );
+    return callbackId;
+  } catch (error) {
+    console.error('Error adding snapshot listener:', error);
+    throw error;
+  }
+};
+
+// Helper function to remove a snapshot listener
+export const removeSnapshotListener = async (callbackId: string) => {
+  try {
+    await FirebaseFirestore.removeSnapshotListener({ callbackId });
+  } catch (error) {
+    console.error('Error removing snapshot listener:', error);
+    throw error;
+  }
+};
+
+// Helper function to call a Firebase Function
+export const callFunction = async (name: string, data?: any) => {
+  try {
+    const result = await FirebaseFunctions.callByName({ 
+      name, 
+      data 
+    });
+    return result.data;
+  } catch (error) {
+    console.error(`Error calling function ${name}:`, error);
+    throw error;
+  }
+};
+
+// Helper function to initialize Remote Config with default settings
+export const initializeRemoteConfig = async () => {
+  try {
+    await FirebaseRemoteConfig.setSettings({
+      fetchTimeoutInSeconds: 10,
+      minimumFetchIntervalInSeconds: process.env.NODE_ENV === 'development' ? 0 : 3600 // 1 hour in production
+    });
+    await FirebaseRemoteConfig.fetchAndActivate();
+  } catch (error) {
+    console.error('Error initializing Remote Config:', error);
+    throw error;
+  }
+};
+
+// Helper function to fetch and activate remote config
+export const fetchAndActivateConfig = async () => {
+  try {
+    await FirebaseRemoteConfig.fetchAndActivate();
+  } catch (error) {
+    console.error('Error fetching and activating config:', error);
+    throw error;
+  }
+};
+
+// Helper function to get a boolean value from Remote Config
+export const getRemoteConfigBoolean = async (key: string): Promise<boolean> => {
+  try {
+    const { value } = await FirebaseRemoteConfig.getBoolean({ key });
+    return value;
+  } catch (error) {
+    console.error(`Error getting boolean config for key ${key}:`, error);
+    throw error;
+  }
+};
+
+// Helper function to get a number value from Remote Config
+export const getRemoteConfigNumber = async (key: string): Promise<number> => {
+  try {
+    const { value } = await FirebaseRemoteConfig.getNumber({ key });
+    return value;
+  } catch (error) {
+    console.error(`Error getting number config for key ${key}:`, error);
+    throw error;
+  }
+};
+
+// Helper function to get a string value from Remote Config
+export const getRemoteConfigString = async (key: string): Promise<string> => {
+  try {
+    const { value } = await FirebaseRemoteConfig.getString({ key });
+    return value;
+  } catch (error) {
+    console.error(`Error getting string config for key ${key}:`, error);
+    throw error;
+  }
+};
+
+// Helper function to add a config update listener
+export const addConfigUpdateListener = async (callback: (event: any) => void) => {
+  try {
+    const callbackId = await FirebaseRemoteConfig.addConfigUpdateListener((event, error) => {
+      if (error) {
+        console.error('Config update error:', error);
+        return;
+      }
+      callback(event);
+    });
+    return callbackId;
+  } catch (error) {
+    console.error('Error adding config update listener:', error);
+    throw error;
+  }
+};
+
+// Helper function to remove a config update listener
+export const removeConfigUpdateListener = async (id: string) => {
+  try {
+    await FirebaseRemoteConfig.removeConfigUpdateListener({ id });
+  } catch (error) {
+    console.error('Error removing config update listener:', error);
+    throw error;
+  }
+};
+
+// Helper function to remove all config update listeners
+export const removeAllConfigListeners = async () => {
+  try {
+    await FirebaseRemoteConfig.removeAllListeners();
+  } catch (error) {
+    console.error('Error removing all config listeners:', error);
+    throw error;
+  }
+};
+
+// Initialize Remote Config when in browser environment
 if (typeof window !== 'undefined') {
-  initializeFirebaseAuth().catch(console.error);
+  // Initialize Firebase and Remote Config
+  initializeFirebase()
+    .then(() => initializeRemoteConfig())
+    .catch(console.error);
+
+  // ... rest of initialization code ...
 }

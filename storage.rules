@@ -7,13 +7,26 @@ service firebase.storage {
       allow read: if true;
       
       // Allow write access only to authenticated users for their own directory
-      // During development, we'll be more permissive with CORS
       allow write: if request.auth != null && request.auth.uid == userId;
     }
     
     match /pdfs-to-parse/{fileName} {
-      // Allow authenticated users to upload PDFs
+      // Allow authenticated users to read and write PDFs
       allow read, write: if request.auth != null;
+      // Allow listing files in this directory
+      allow list: if request.auth != null;
+    }
+
+    match /pdfs-to-parse/{allPaths=**} {
+      // Allow access to all nested files and subdirectories
+      allow read, write: if request.auth != null;
+    }
+
+    match /thumbnails/{userId}/{allPaths=**} {
+      // Allow read access to all users
+      allow read: if true;
+      // Allow write access only to authenticated users for their own directory
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
   }
 } 

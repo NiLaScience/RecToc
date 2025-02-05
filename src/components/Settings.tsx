@@ -17,14 +17,11 @@ import {
 } from '@ionic/react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getFirestore, doc, onSnapshot, setDoc, getDoc, DocumentData } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Capacitor } from '@capacitor/core';
-import { FirebaseFirestore } from '@capacitor-firebase/firestore';
-import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 import { useRouter } from 'next/navigation';
-import type { UserProfile, UserProfileUpdate } from '../types/user';
-import type { AddDocumentSnapshotListenerCallbackEvent } from '@capacitor-firebase/firestore';
+import type { UserProfile } from '../types/user';
+import { uploadFile, addSnapshotListener, updateDocument, removeSnapshotListener } from '../config/firebase';
 
 const Settings = () => {
   const { user } = useAuth();
@@ -41,7 +38,7 @@ const Settings = () => {
   const pendingChangesRef = useRef<Set<string>>(new Set());
 
   // Helper function to update all profile-related state
-  const updateProfileState = (profileData: UserProfile, isLocalUpdate = false) => {
+  const updateProfileState = (profileData: UserProfile) => {
     setProfile(profileData);
     
     // Only update fields that don't have pending changes
@@ -76,7 +73,7 @@ const Settings = () => {
   };
 
   // Track photo changes
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       pendingChangesRef.current.add('photoURL');
@@ -91,39 +88,14 @@ const Settings = () => {
       return;
     }
 
-    let unsubscribe: (() => void) | undefined;
+    let callbackId: string;
 
     const setupProfileListener = async () => {
       try {
-        if (Capacitor.isNativePlatform()) {
-          await FirebaseFirestore.addDocumentSnapshotListener({
-            reference: `/users/${user.uid}`,
-          }, (event: AddDocumentSnapshotListenerCallbackEvent<DocumentData> | null) => {
-            if (event?.snapshot?.data) {
-              const profileData = event.snapshot.data as UserProfile;
-              updateProfileState(profileData);
-            }
-            setLoading(false);
-          });
-        } else {
-          const db = getFirestore();
-          const docRef = doc(db, 'users', user.uid);
-          unsubscribe = onSnapshot(docRef, (doc) => {
-            if (doc.exists()) {
-              const profileData = doc.data() as UserProfile;
-              updateProfileState(profileData);
-            }
-            setLoading(false);
-          }, (error) => {
-            console.error('Error listening to profile updates:', error);
-            presentToast({
-              message: 'Failed to listen to profile updates',
-              duration: 3000,
-              color: 'danger'
-            });
-            setLoading(false);
-          });
-        }
+        callbackId = await addSnapshotListener(`users/${user.uid}`, (profileData) => {
+          updateProfileState(profileData as UserProfile);
+          setLoading(false);
+        });
       } catch (error) {
         console.error('Error setting up profile listener:', error);
         presentToast({
@@ -138,10 +110,8 @@ const Settings = () => {
     setupProfileListener();
 
     return () => {
-      if (Capacitor.isNativePlatform()) {
-        FirebaseFirestore.removeAllListeners();
-      } else if (unsubscribe) {
-        unsubscribe();
+      if (callbackId) {
+        removeSnapshotListener(callbackId).catch(console.error);
       }
     };
   }, [user, router]);
@@ -189,13 +159,40 @@ const Settings = () => {
         hasChanges = true;
       }
 
-      // Handle photo upload separately
+      // Handle photo upload
       if (photoFile) {
         try {
-          const storage = getStorage();
-          const photoRef = ref(storage, `users/${user.uid}/profile.jpg`);
-          await uploadBytes(photoRef, photoFile);
-          const photoURL = await getDownloadURL(photoRef);
+          // Convert File to base64 for filesystem
+          const arrayBuffer = await photoFile.arrayBuffer();
+          const base64Data = Buffer.from(arrayBuffer).toString('base64');
+          
+          // Save to filesystem temporarily
+          const tempFileName = `profile_${Date.now()}.jpg`;
+          await Filesystem.writeFile({
+            path: tempFileName,
+            data: base64Data,
+            directory: Directory.Cache
+          });
+
+          // Get the file URI
+          const fileInfo = await Filesystem.getUri({
+            path: tempFileName,
+            directory: Directory.Cache
+          });
+
+          // Upload to Firebase Storage
+          const photoURL = await uploadFile(
+            `users/${user.uid}/profile.jpg`,
+            fileInfo.uri,
+            { contentType: 'image/jpeg' }
+          );
+
+          // Clean up temp file
+          await Filesystem.deleteFile({
+            path: tempFileName,
+            directory: Directory.Cache
+          });
+
           updates.photoURL = photoURL;
           hasChanges = true;
         } catch (error) {
@@ -221,45 +218,11 @@ const Settings = () => {
       // Add metadata
       updates.updatedAt = timestamp;
 
-      if (Capacitor.isNativePlatform()) {
-        console.log('Saving profile updates on native platform:', updates);
-        
-        // Update fields atomically one at a time
-        for (const [field, value] of Object.entries(updates)) {
-          await FirebaseFirestore.setDocument({
-            reference: `/users/${user.uid}`,
-            data: { [field]: value },
-            merge: true
-          });
-          
-          // Small delay between updates to prevent race conditions
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      } else {
-        const db = getFirestore();
-        const docRef = doc(db, 'users', user.uid);
-        
-        // For web, we can use a single atomic update
-        await setDoc(docRef, updates, { merge: true });
-      }
-
-      // Fetch the latest state after all updates
-      if (Capacitor.isNativePlatform()) {
-        const updatedDoc = await FirebaseFirestore.getDocument({ 
-          reference: `/users/${user.uid}` 
-        });
-        if (updatedDoc?.snapshot?.data) {
-          updateProfileState(updatedDoc.snapshot.data as UserProfile);
-        }
-      } else {
-        const updatedDoc = await getDoc(doc(getFirestore(), 'users', user.uid));
-        if (updatedDoc.exists()) {
-          updateProfileState(updatedDoc.data() as UserProfile);
-        }
-      }
+      // Update document
+      await updateDocument(`users/${user.uid}`, updates);
 
       presentToast({
-        message: 'Profile saved successfully',
+        message: 'Profile updated successfully',
         duration: 3000,
         color: 'success'
       });
@@ -272,39 +235,15 @@ const Settings = () => {
       });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      if (Capacitor.isNativePlatform()) {
-        await FirebaseAuthentication.signOut();
-      } else {
-        const { getAuth } = await import('firebase/auth');
-        const auth = getAuth();
-        await auth.signOut();
-      }
-      router.push('/');
-    } catch (error) {
-      console.error('Error signing out:', error);
-      presentToast({
-        message: 'Failed to sign out',
-        duration: 3000,
-        color: 'danger'
-      });
+      pendingChangesRef.current.clear();
     }
   };
 
   if (loading) {
     return (
       <IonPage>
-        <IonHeader>
-          <IonToolbar>
-            <IonTitle>Settings</IonTitle>
-          </IonToolbar>
-        </IonHeader>
         <IonContent className="ion-padding">
-          <div className="ion-text-center">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
             <IonSpinner />
           </div>
         </IonContent>
@@ -314,89 +253,74 @@ const Settings = () => {
 
   return (
     <IonPage>
-      <IonHeader>
+      <IonHeader className="ion-no-border">
         <IonToolbar>
           <IonTitle>Settings</IonTitle>
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
-        <div className="ion-text-center ion-padding">
-          <IonAvatar style={{ width: '120px', height: '120px', margin: '0 auto' }}>
-            <img
-              src={photoPreview || 'https://ionicframework.com/docs/img/demos/avatar.svg'}
-              alt="Profile"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          </IonAvatar>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handlePhotoChange}
-            style={{ display: 'none' }}
-            id="photo-upload"
-          />
-          <IonButton
-            fill="clear"
-            onClick={() => document.getElementById('photo-upload')?.click()}
-          >
-            Change Photo
-          </IonButton>
-        </div>
-
-        <IonItem>
-          <IonLabel position="stacked" color="medium">Email</IonLabel>
-          <IonInput
-            value={user?.email || 'No email provided'}
-            readonly
-            className="ion-margin-top"
-            style={{ opacity: 0.7 }}
-          />
-        </IonItem>
-
-        <IonItem>
-          <IonLabel position="stacked">Display Name</IonLabel>
-          <IonInput
-            value={displayName}
-            onIonChange={e => handleFieldChange('displayName', e.detail.value!)}
-            placeholder="Enter your display name"
-          />
-        </IonItem>
-
-        <IonItem>
-          <IonLabel position="stacked">Username</IonLabel>
-          <IonInput
-            value={username}
-            onIonChange={e => handleFieldChange('username', e.detail.value!)}
-            placeholder="Enter your username"
-          />
-        </IonItem>
-
-        <IonItem>
-          <IonLabel position="stacked">Description</IonLabel>
-          <IonTextarea
-            value={description}
-            onIonChange={e => handleFieldChange('description', e.detail.value!)}
-            placeholder="Tell us about yourself"
-            rows={4}
-          />
-        </IonItem>
+        <IonHeader collapse="condense" className="ion-no-border">
+          <IonToolbar>
+            <IonTitle size="large">Settings</IonTitle>
+          </IonToolbar>
+        </IonHeader>
 
         <div className="ion-padding">
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
+            <div style={{ position: 'relative' }}>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoChange}
+                style={{ display: 'none' }}
+                id="photo-upload"
+              />
+              <label htmlFor="photo-upload">
+                <IonAvatar style={{ width: '100px', height: '100px', cursor: 'pointer' }}>
+                  <img
+                    src={photoPreview || 'https://ionicframework.com/docs/img/demos/avatar.svg'}
+                    alt={displayName || 'User'}
+                  />
+                </IonAvatar>
+              </label>
+            </div>
+          </div>
+
+          <IonItem>
+            <IonLabel position="stacked">Display Name</IonLabel>
+            <IonInput
+              value={displayName}
+              onIonInput={e => handleFieldChange('displayName', e.detail.value!)}
+              placeholder="Enter your display name"
+            />
+          </IonItem>
+
+          <IonItem>
+            <IonLabel position="stacked">Username</IonLabel>
+            <IonInput
+              value={username}
+              onIonInput={e => handleFieldChange('username', e.detail.value!)}
+              placeholder="Enter your username"
+            />
+          </IonItem>
+
+          <IonItem>
+            <IonLabel position="stacked">Description</IonLabel>
+            <IonTextarea
+              value={description}
+              onIonInput={e => handleFieldChange('description', e.detail.value!)}
+              placeholder="Tell us about yourself"
+              autoGrow
+            />
+          </IonItem>
+
           <IonButton
             expand="block"
             onClick={handleSave}
+            className="ion-margin-top"
             disabled={saving}
           >
-            {saving ? <IonSpinner name="crescent" /> : 'Save Profile'}
-          </IonButton>
-
-          <IonButton
-            expand="block"
-            color="danger"
-            className="ion-margin-top"
-            onClick={handleSignOut}
-          >
-            Sign Out
+            {saving ? <IonSpinner name="crescent" /> : 'Save Changes'}
           </IonButton>
         </div>
       </IonContent>

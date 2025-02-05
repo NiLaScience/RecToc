@@ -1,11 +1,18 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../config/firebase';
 import { usePathname, useRouter } from 'next/navigation';
-import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+
+interface User {
+  displayName: string | null;
+  email: string | null;
+  emailVerified: boolean;
+  isAnonymous: boolean;
+  phoneNumber: string | null;
+  photoURL: string | null;
+  uid: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -24,44 +31,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    let unsubscribe: () => void;
+    let isSubscribed = true;
 
     const setupAuth = async () => {
       try {
-        if (Capacitor.isNativePlatform()) {
-          // Set up Capacitor auth listeners
-          await FirebaseAuthentication.removeAllListeners();
-          await FirebaseAuthentication.addListener('authStateChange', async (change) => {
-            console.log('Auth state changed in Capacitor:', change);
-            setUser(change.user as any);
+        // Remove any existing listeners
+        await FirebaseAuthentication.removeAllListeners();
+        
+        // Set up auth state change listener
+        await FirebaseAuthentication.addListener('authStateChange', async (change) => {
+          console.log('Auth state changed:', change);
+          if (isSubscribed) {
+            setUser(change.user as User | null);
             setLoading(false);
-          });
+          }
+        });
 
-          // Get initial state
-          const result = await FirebaseAuthentication.getCurrentUser();
-          console.log('Initial Capacitor auth state:', result);
-          setUser(result.user as any);
+        // Get initial state
+        const result = await FirebaseAuthentication.getCurrentUser();
+        console.log('Initial auth state:', result);
+        if (isSubscribed) {
+          setUser(result.user as User | null);
           setLoading(false);
-        } else {
-          // Web auth
-          unsubscribe = onAuthStateChanged(auth, (user) => {
-            console.log('Web auth state changed:', user);
-            setUser(user);
-            setLoading(false);
-          });
         }
       } catch (error) {
         console.error('Error setting up auth:', error);
-        setLoading(false);
+        if (isSubscribed) {
+          setLoading(false);
+        }
       }
     };
 
     setupAuth();
 
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
+      isSubscribed = false;
+      FirebaseAuthentication.removeAllListeners();
     };
   }, []);
 

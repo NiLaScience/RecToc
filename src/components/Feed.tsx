@@ -20,54 +20,8 @@ import { notificationsOutline, gridOutline, videocamOutline } from 'ionicons/ico
 import Notifications from './Notifications';
 import FeedCard from './FeedCard';
 import VideoPlayer from './VideoPlayer';
-import { getFirestore, collection, query, orderBy, onSnapshot, DocumentData } from 'firebase/firestore';
-import { Capacitor } from '@capacitor/core';
-import { FirebaseFirestore } from '@capacitor-firebase/firestore';
-import type { AddCollectionSnapshotListenerCallbackEvent } from '@capacitor-firebase/firestore';
-
-export interface VideoItem {
-  id: string;
-  title: string;
-  videoUrl: string;
-  thumbnailUrl?: string;
-  jobDescription?: string;
-  tags: string[];
-  userId: string;
-  createdAt: string;
-  views: number;
-  likes: number;
-  transcript?: {
-    text: string;
-    segments: {
-      id: number;
-      start: number;
-      end: number;
-      text: string;
-    }[];
-  } | null;
-}
-
-interface FirestoreDoc {
-  id: string;
-  data: {
-    title: string;
-    videoUrl: string;
-    tags: string[];
-    userId: string;
-    createdAt: string;
-    views: number;
-    likes: number;
-    transcript?: {
-      text: string;
-      segments: {
-        id: number;
-        start: number;
-        end: number;
-        text: string;
-      }[];
-    } | null;
-  };
-}
+import type { VideoItem } from '../types/video';
+import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 
 const feedContainerStyle: React.CSSProperties = {
   display: 'flex',
@@ -99,46 +53,20 @@ const Feed = () => {
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
 
   useEffect(() => {
-    let unsubscribe: () => void;
+    let callbackId: string;
 
     const setupFeedListener = async () => {
       try {
         setLoading(true);
         
-        if (Capacitor.isNativePlatform()) {
-          // Use native Firestore plugin
-          await FirebaseFirestore.addCollectionSnapshotListener({
-            reference: '/videos'
-          }, (event: AddCollectionSnapshotListenerCallbackEvent<DocumentData> | null) => {
-            if (event?.snapshots) {
-              const fetchedVideos = event.snapshots
-                .map(doc => ({
-                  ...doc.data as Omit<VideoItem, 'id'>,
-                  id: doc.id
-                }))
-                .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-              setVideos(fetchedVideos);
-            }
-            setLoading(false);
-          });
-        } else {
-          // Use web SDK
-          const db = getFirestore();
-          const videosRef = collection(db, 'videos');
-          const q = query(videosRef, orderBy('createdAt', 'desc'));
-          
-          unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const fetchedVideos: VideoItem[] = [];
-            querySnapshot.forEach((doc) => {
-              fetchedVideos.push({
-                ...doc.data(),
-                id: doc.id
-              } as VideoItem);
-            });
-            setVideos(fetchedVideos);
-            setLoading(false);
-          });
-        }
+        callbackId = await addSnapshotListener('videos', (data) => {
+          const fetchedVideos = data.map((doc: any) => ({
+            ...doc.data,
+            id: doc.id
+          }));
+          setVideos(fetchedVideos);
+          setLoading(false);
+        });
       } catch (error) {
         console.error('Error setting up feed listener:', error);
         setLoading(false);
@@ -148,11 +76,8 @@ const Feed = () => {
     setupFeedListener();
 
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-      if (Capacitor.isNativePlatform()) {
-        FirebaseFirestore.removeAllListeners();
+      if (callbackId) {
+        removeSnapshotListener(callbackId).catch(console.error);
       }
     };
   }, []);

@@ -87,4 +87,4 @@ ${text}`;
 }
 
 export type { JobDescriptionSchema };
-export default OpenAIService; 
+export default OpenAIService;

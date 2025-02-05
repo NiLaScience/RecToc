@@ -1,49 +1,116 @@
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import OpenAIService, { JobDescriptionSchema } from './OpenAIService';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { FirebaseStorage } from '@capacitor-firebase/storage';
+import { FirebaseFirestore } from '@capacitor-firebase/firestore';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 
 class PDFParserService {
   static async parsePDF(pdfFile: File): Promise<JobDescriptionSchema> {
     try {
-      const storage = getStorage();
-      const db = getFirestore();
-      
-      // Generate unique ID for this parsing job
+      // Check authentication first
+      const result = await FirebaseAuthentication.getCurrentUser();
+      if (!result.user) {
+        throw new Error('User must be authenticated to parse PDFs');
+      }
+
       const jobId = uuidv4();
+      const storagePath = `pdfs-to-parse/${jobId}.pdf`;
+      let downloadURL: string;
+
+      // Convert File to base64 for filesystem
+      const blob = await pdfFile.arrayBuffer();
+      const tempFileName = `${jobId}.pdf`;
       
-      // Upload PDF to Firebase Storage
-      const pdfRef = ref(storage, `pdfs-to-parse/${jobId}.pdf`);
-      await uploadBytes(pdfRef, pdfFile);
+      // Write to filesystem
+      await Filesystem.writeFile({
+        path: tempFileName,
+        data: Buffer.from(blob).toString('base64'),
+        directory: Directory.Cache
+      });
+
+      // Get the file URI
+      const fileInfo = await Filesystem.getUri({
+        path: tempFileName,
+        directory: Directory.Cache
+      });
+
+      // Upload to Firebase Storage
+      await new Promise<void>((resolve, reject) => {
+        FirebaseStorage.uploadFile(
+          {
+            path: storagePath,
+            uri: fileInfo.uri,
+            metadata: {
+              contentType: 'application/pdf'
+            }
+          },
+          (event, error) => {
+            if (error) {
+              reject(error);
+            } else if (event?.completed) {
+              resolve();
+            }
+          }
+        );
+      });
       
-      // Get the download URL (needed by Cloud Function)
-      await getDownloadURL(pdfRef);
+      // Get download URL
+      const urlResult = await FirebaseStorage.getDownloadUrl({
+        path: storagePath
+      });
+      downloadURL = urlResult.downloadUrl;
+
+      // Clean up temp file
+      await Filesystem.deleteFile({
+        path: tempFileName,
+        directory: Directory.Cache
+      });
 
       // Wait for the parsed result in Firestore
       const rawText = await new Promise<string>((resolve, reject) => {
-        const unsubscribe = onSnapshot(
-          doc(db, 'parsedPDFs', jobId),
-          (snapshot) => {
-            if (snapshot.exists()) {
-              const data = snapshot.data();
+        let callbackId: string;
+
+        FirebaseFirestore.addDocumentSnapshotListener(
+          {
+            reference: `parsedPDFs/${jobId}`
+          },
+          (event, error) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+            
+            if (event?.snapshot?.data) {
+              const data = event.snapshot.data;
               if (data.status === 'completed' && data.text) {
-                unsubscribe();
+                if (callbackId) {
+                  FirebaseFirestore.removeSnapshotListener({
+                    callbackId
+                  }).catch(console.error);
+                }
                 resolve(data.text);
               } else if (data.status === 'error') {
-                unsubscribe();
+                if (callbackId) {
+                  FirebaseFirestore.removeSnapshotListener({
+                    callbackId
+                  }).catch(console.error);
+                }
                 reject(new Error(data.error || 'PDF parsing failed'));
               }
             }
-          },
-          (error) => {
-            unsubscribe();
-            reject(error);
           }
-        );
+        ).then(id => {
+          callbackId = id;
+        }).catch(reject);
 
         // Set a timeout for the parsing
         setTimeout(() => {
-          unsubscribe();
+          if (callbackId) {
+            FirebaseFirestore.removeSnapshotListener({
+              callbackId
+            }).catch(console.error);
+          }
           reject(new Error('PDF parsing timed out. Please try again.'));
         }, 30000); // 30 second timeout
       });
