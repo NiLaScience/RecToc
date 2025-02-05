@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { getFirestore, doc, onSnapshot, DocumentData } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
-import { informationCircleOutline } from 'ionicons/icons';
+import { informationCircleOutline, playCircleOutline } from 'ionicons/icons';
 import type { UserProfile } from '../types/user';
 import type { AddDocumentSnapshotListenerCallbackEvent } from '@capacitor-firebase/firestore';
 import VideoPlayer from './VideoPlayer';
@@ -67,6 +67,7 @@ const userDescriptionStyle: React.CSSProperties = {
 export default function FeedCard({ video }: FeedCardProps) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showDescription, setShowDescription] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -105,6 +106,10 @@ export default function FeedCard({ video }: FeedCardProps) {
       }
     };
   }, [video.userId]);
+
+  const handleVideoClick = () => {
+    setIsPlaying(!isPlaying);
+  };
 
   return (
     <IonCard style={cardStyle}>
@@ -149,11 +154,47 @@ export default function FeedCard({ video }: FeedCardProps) {
       </IonCardHeader>
 
       <IonCardContent style={contentStyle}>
-        <div style={videoContainerStyle}>
-          <VideoPlayer
-            video={video}
-            autoPlay={false}
-          />
+        <div 
+          style={videoContainerStyle}
+          onClick={handleVideoClick}
+        >
+          {isPlaying ? (
+            <VideoPlayer
+              video={video}
+              autoPlay={true}
+            />
+          ) : (
+            <>
+              {/* Show thumbnail with play button overlay */}
+              <img
+                src={video.thumbnailUrl || video.videoUrl}
+                alt={video.title}
+                style={{ 
+                  width: '100%', 
+                  height: '100%', 
+                  objectFit: 'cover'
+                }}
+              />
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                borderRadius: '50%',
+                padding: '1rem',
+                cursor: 'pointer'
+              }}>
+                <IonIcon
+                  icon={playCircleOutline}
+                  style={{
+                    fontSize: '2rem',
+                    color: 'white'
+                  }}
+                />
+              </div>
+            </>
+          )}
         </div>
         <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', color: '#6b7280' }}>
           <span>{video.views} views</span>

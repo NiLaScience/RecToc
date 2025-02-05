@@ -29,6 +29,8 @@ export interface VideoItem {
   id: string;
   title: string;
   videoUrl: string;
+  thumbnailUrl?: string;
+  jobDescription?: string;
   tags: string[];
   userId: string;
   createdAt: string;

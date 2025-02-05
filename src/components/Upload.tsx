@@ -17,7 +17,7 @@ import {
 } from '@ionic/react';
 import { cloudUploadOutline, closeCircleOutline, micOutline } from 'ionicons/icons';
 import { useState, useEffect } from 'react';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, uploadBytes } from 'firebase/storage';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { Capacitor } from '@capacitor/core';
@@ -29,6 +29,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import TranscriptionService from '../services/TranscriptionService';
 import { Dialog } from '@capacitor/dialog';
 import { alertController } from '@ionic/core';
+import ThumbnailService from '../services/ThumbnailService';
 
 interface FirebaseUser {
   uid: string;
@@ -246,109 +247,63 @@ const Upload = () => {
     setError('');
 
     try {
-      console.log('Starting upload process...', {
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
-        userId: currentUser.uid
-      });
-
-      // Create metadata
-      const metadata = {
-        contentType: file.type,
-        customMetadata: {
-          userId: currentUser.uid,
-          title: title,
-          tags: JSON.stringify(tags)
-        }
-      };
-
-      console.log('Created metadata:', metadata);
-
-      // Upload video to Firebase Storage
+      // Generate thumbnail
+      const thumbnailFile = await ThumbnailService.generateThumbnail(file);
+      
+      // Upload video and thumbnail to Firebase Storage
       const storage = getStorage();
-      console.log('Got storage reference');
+      const videoPath = `videos/${currentUser.uid}/${Date.now()}-${file.name}`;
+      const thumbnailPath = `thumbnails/${currentUser.uid}/${Date.now()}-thumbnail.jpg`;
       
-      const filePath = `videos/${currentUser.uid}/${Date.now()}-${file.name}`;
-      console.log('File will be uploaded to:', filePath);
+      const videoRef = ref(storage, videoPath);
+      const thumbnailRef = ref(storage, thumbnailPath);
       
-      const storageRef = ref(storage, filePath);
-      console.log('Created storage reference');
+      // Upload thumbnail
+      await uploadBytes(thumbnailRef, thumbnailFile);
+      const thumbnailUrl = await getDownloadURL(thumbnailRef);
       
-      // Create a Blob from the file
-      const blob = new Blob([file], { type: file.type });
-      console.log('Created blob:', { size: blob.size, type: blob.type });
-      
-      // Upload the blob
-      console.log('Starting upload task...');
-      const uploadTask = uploadBytesResumable(storageRef, blob, metadata);
+      // Upload video
+      const uploadTask = uploadBytesResumable(videoRef, file);
 
       uploadTask.on('state_changed',
         (snapshot) => {
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log('Upload progress:', {
-            progress: `${progress}%`,
-            state: snapshot.state,
-            bytesTransferred: snapshot.bytesTransferred,
-            totalBytes: snapshot.totalBytes
-          });
+          console.log('Upload progress:', progress + '%');
         },
         (error) => {
           console.error('Upload error:', error);
-          setError(`Upload failed: ${error.message} (${error.code})`);
+          setError(`Upload failed: ${error.message}`);
           setUploading(false);
         },
         async () => {
           try {
-            // Verify authentication state again before Firestore operation
-            if (Capacitor.isNativePlatform()) {
-              const result = await FirebaseAuthentication.getCurrentUser();
-              if (!result.user) {
-                throw new Error('Authentication lost during upload');
-              }
-              currentUser = result.user;
-            }
-
-            if (!currentUser) {
-              throw new Error('Authentication required');
-            }
-
-            console.log('Upload completed, getting download URL...');
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            console.log('Got download URL:', downloadURL);
             
             // Save video metadata to Firestore
-            console.log('Saving to Firestore...');
             const videoData = {
               title,
               videoUrl: downloadURL,
+              thumbnailUrl, // Add thumbnail URL
               tags,
-              userId: currentUser.uid,
+              userId: currentUser!.uid,
               createdAt: new Date().toISOString(),
               views: 0,
               likes: 0,
               transcript: transcript || null,
             };
-            console.log('Video data:', videoData);
             
             if (Capacitor.isNativePlatform()) {
-              console.log('Using native Firestore');
-              // Use native Firestore plugin
               await FirebaseFirestore.addDocument({
                 reference: '/videos',
                 data: videoData
               });
             } else {
-              console.log('Using web Firestore');
-              // Use web SDK
               const db = getFirestore();
               await addDoc(collection(db, 'videos'), videoData);
             }
-            console.log('Saved to Firestore successfully, about to show success dialog');
 
             setUploading(false);
             await showUploadSuccess();
-            console.log('showUploadSuccess completed');
           } catch (err: any) {
             console.error('Post-upload error:', err);
             setError(`Failed to save video metadata: ${err.message}`);
@@ -356,9 +311,9 @@ const Upload = () => {
           }
         }
       );
-    } catch (err: any) {
-      console.error('Pre-upload error:', err);
-      setError(`Upload failed: ${err.message}`);
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      setError(error.message || 'Failed to upload video');
       setUploading(false);
     }
   };
