@@ -7,6 +7,7 @@ import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import { informationCircleOutline } from 'ionicons/icons';
 import type { UserProfile } from '../types/user';
 import type { AddDocumentSnapshotListenerCallbackEvent } from '@capacitor-firebase/firestore';
+import VideoPlayer from './VideoPlayer';
 
 interface FeedCardProps {
   video: VideoItem;
@@ -41,7 +42,10 @@ const videoContainerStyle: React.CSSProperties = {
   width: '100%',
   aspectRatio: '16/9',
   backgroundColor: '#f3f4f6',
-  marginTop: '1rem'
+  marginTop: '1rem',
+  borderRadius: '8px',
+  overflow: 'hidden',
+  position: 'relative'
 };
 
 const userInfoStyle: React.CSSProperties = {
@@ -146,10 +150,9 @@ export default function FeedCard({ video }: FeedCardProps) {
 
       <IonCardContent style={contentStyle}>
         <div style={videoContainerStyle}>
-          <video
-            src={video.videoUrl}
-            controls
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          <VideoPlayer
+            video={video}
+            autoPlay={false}
           />
         </div>
         <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', color: '#6b7280' }}>

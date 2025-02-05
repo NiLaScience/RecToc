@@ -34,6 +34,15 @@ export interface VideoItem {
   createdAt: string;
   views: number;
   likes: number;
+  transcript?: {
+    text: string;
+    segments: {
+      id: number;
+      start: number;
+      end: number;
+      text: string;
+    }[];
+  } | null;
 }
 
 interface FirestoreDoc {
@@ -46,6 +55,15 @@ interface FirestoreDoc {
     createdAt: string;
     views: number;
     likes: number;
+    transcript?: {
+      text: string;
+      segments: {
+        id: number;
+        start: number;
+        end: number;
+        text: string;
+      }[];
+    } | null;
   };
 }
 

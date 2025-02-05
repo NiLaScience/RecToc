@@ -7,6 +7,7 @@ import { Capacitor } from '@capacitor/core';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import type { UserProfile } from '../types/user';
 import type { AddDocumentSnapshotListenerCallbackEvent } from '@capacitor-firebase/firestore';
+import SubtitleService from '../services/SubtitleService';
 
 interface VideoPlayerProps {
   video: VideoItem;
@@ -64,6 +65,8 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [showDescription, setShowDescription] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
+  const [currentSubtitle, setCurrentSubtitle] = useState<string>('');
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -102,6 +105,27 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
       }
     };
   }, [video.userId]);
+
+  useEffect(() => {
+    if (videoRef.current && video.transcript?.segments) {
+      const updateSubtitles = () => {
+        const currentTime = videoRef.current?.currentTime || 0;
+        const segment = video.transcript?.segments.find(
+          seg => currentTime >= seg.start && currentTime <= seg.end
+        );
+        setCurrentSubtitle(segment?.text || '');
+      };
+
+      // Update subtitles every 100ms
+      const intervalId = setInterval(updateSubtitles, 100);
+      videoRef.current.addEventListener('seeking', updateSubtitles);
+
+      return () => {
+        clearInterval(intervalId);
+        videoRef.current?.removeEventListener('seeking', updateSubtitles);
+      };
+    }
+  }, [video.transcript]);
 
   useEffect(() => {
     if (videoRef.current) {
@@ -161,6 +185,26 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
         playsInline
         muted={autoPlay}
       />
+
+      {subtitlesEnabled && currentSubtitle && (
+        <div style={{
+          position: 'absolute',
+          bottom: '80px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          color: 'white',
+          padding: '8px 16px',
+          borderRadius: '4px',
+          maxWidth: '80%',
+          textAlign: 'center',
+          fontSize: '1rem',
+          fontWeight: '500',
+          zIndex: 10
+        }}>
+          {currentSubtitle}
+        </div>
+      )}
 
       <div style={overlayStyle}>
         <div style={userInfoStyle}>
@@ -227,7 +271,36 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
         >
           <IonIcon icon={informationCircleOutline} style={{ fontSize: '1.5rem' }} />
         </IonButton>
+        {video.transcript && (
+          <IonButton
+            fill="clear"
+            color="light"
+            onClick={() => setSubtitlesEnabled(!subtitlesEnabled)}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <span style={{ 
+                fontSize: '1.2rem', 
+                fontWeight: 'bold',
+                opacity: subtitlesEnabled ? 1 : 0.5 
+              }}>
+                CC
+              </span>
+            </div>
+          </IonButton>
+        )}
       </div>
+
+      <style>{`
+        video::cue {
+          background-color: rgba(0, 0, 0, 0.7);
+          color: white;
+          font-family: system-ui, -apple-system, sans-serif;
+          font-size: 1.2rem;
+          line-height: 1.4;
+          padding: 0.2em 0.5em;
+          border-radius: 4px;
+        }
+      `}</style>
     </div>
   );
 } 
