@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "static": "next build"
+    "static": "next build",
+    "predeploy": "npm run build && cp -r public/install out/",
+    "deploy": "firebase deploy"
   },
   "dependencies": {
     "@capacitor-firebase/app": "^7.0.0",

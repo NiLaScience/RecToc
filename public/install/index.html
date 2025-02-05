@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rectoc - Install App</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            text-align: center;
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 2rem;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+        .install-button {
+            background-color: #4285f4;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 24px;
+            text-decoration: none;
+            font-weight: 500;
+            display: inline-block;
+            transition: background-color 0.2s;
+            margin-bottom: 1rem;
+        }
+        .install-button:hover {
+            background-color: #3367d6;
+        }
+        .platform-note {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #888;
+        }
+        .instructions {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 1rem;
+            text-align: left;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .instructions ol {
+            margin: 0;
+            padding-left: 1.2rem;
+        }
+        .instructions li {
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Rectoc</h1>
+        <p>Experience the full potential of Rectoc by installing our Android app. Get instant access to all features and a seamless mobile experience.</p>
+        <a href="/app-debug.apk" class="install-button" id="installButton" download>Download Rectoc APK</a>
+        <div class="instructions">
+            <p><strong>Installation Instructions:</strong></p>
+            <ol>
+                <li>Click the "Download Rectoc APK" button above</li>
+                <li>When the download completes, tap on the downloaded file</li>
+                <li>If prompted, allow installation from unknown sources</li>
+                <li>Follow the Android installation prompts</li>
+                <li>Once installed, open Rectoc from your app drawer</li>
+            </ol>
+        </div>
+        <p class="platform-note">Currently available for Android devices</p>
+    </div>
+
+    <script>
+        // Check if the user is on Android
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        const installButton = document.getElementById('installButton');
+        
+        if (!isAndroid) {
+            installButton.style.opacity = '0.5';
+            installButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                alert('Rectoc is currently only available for Android devices.');
+            });
+        }
+    </script>
+</body>
+</html> 

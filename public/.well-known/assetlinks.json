@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.nexus.rectoc",
+    "sha256_cert_fingerprints": [
+      "3B:14:05:F9:DD:7A:2C:56:10:0D:85:14:34:4F:A5:6C:13:78:BA:FA:13:05:F0:08:85:C5:FE:67:88:8C:4A:2A"
+    ]
+  }
+}] 
