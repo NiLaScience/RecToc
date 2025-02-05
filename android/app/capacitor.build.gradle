@@ -12,6 +12,7 @@ dependencies {
     implementation project(':capacitor-firebase-authentication')
     implementation project(':capacitor-firebase-firestore')
     implementation project(':capacitor-camera')
+    implementation project(':capacitor-dialog')
     implementation project(':capacitor-filesystem')
 
 }

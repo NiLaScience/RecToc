@@ -12,8 +12,10 @@ import {
   IonIcon,
   IonSegment,
   IonSegmentButton,
+  IonSpinner,
+  IonAlert,
 } from '@ionic/react';
-import { cloudUploadOutline, closeCircleOutline } from 'ionicons/icons';
+import { cloudUploadOutline, closeCircleOutline, micOutline } from 'ionicons/icons';
 import { useState, useEffect } from 'react';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
@@ -24,6 +26,9 @@ import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import VideoRecorder from './VideoRecorder';
 import type { User } from 'firebase/auth';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import TranscriptionService from '../services/TranscriptionService';
+import { Dialog } from '@capacitor/dialog';
+import { alertController } from '@ionic/core';
 
 interface FirebaseUser {
   uid: string;
@@ -40,6 +45,13 @@ const Upload = () => {
   const [uploadMode, setUploadMode] = useState<'file' | 'record'>('file');
   const { user } = useAuth();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcript, setTranscript] = useState<{
+    text: string;
+    segments: { id: number; start: number; end: number; text: string; }[];
+  } | null>(null);
+  const [showAlert, setShowAlert] = useState(false);
+  const [webSuccess, setWebSuccess] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -90,6 +102,9 @@ const Upload = () => {
   const handleRecordedVideo = async (uri: string, format: string) => {
     try {
       if (Capacitor.isNativePlatform()) {
+        // Store the original URI for transcription
+        setPreviewUrl(uri);
+        
         // For native platforms, read the file using Filesystem
         const fileContents = await Filesystem.readFile({
           path: uri,
@@ -105,6 +120,7 @@ const Upload = () => {
         setFile(new File([blob], fileName, { type: `video/${format}` }));
       } else {
         // For web, uri is a blob URL
+        setPreviewUrl(uri);
         const response = await fetch(uri);
         const blob = await response.blob();
         const fileName = `recorded_video_${Date.now()}.${format}`;
@@ -113,6 +129,88 @@ const Upload = () => {
     } catch (error) {
       console.error('Error handling recorded video:', error);
       setError('Failed to process recorded video. Please try again.');
+    }
+  };
+
+  const handleTranscribe = async () => {
+    if (!file && !previewUrl) {
+      setError('Please record or select a video first');
+      return;
+    }
+
+    setTranscribing(true);
+    setError('');
+
+    try {
+      let videoSource: string | File;
+      
+      if (Capacitor.isNativePlatform()) {
+        if (previewUrl?.startsWith('file://')) {
+          // For recorded videos on native platform, use the original file path
+          videoSource = previewUrl.replace('file://', '');
+        } else {
+          // For selected files, use the File object
+          videoSource = file!;
+        }
+      } else {
+        // For web platform, always use the File object as it's already processed
+        videoSource = file!;
+      }
+
+      const transcriptionResult = await TranscriptionService.transcribeVideo(videoSource);
+      setTranscript(transcriptionResult);
+    } catch (error) {
+      console.error('Transcription error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to transcribe video');
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const resetForm = () => {
+    console.log('resetForm called');
+    setTitle('');
+    setFile(null);
+    setTags([]);
+    setCurrentTag('');
+    setError('');
+    setTranscript(null);
+    setWebSuccess(false);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+    // Reset to default upload mode if on web
+    if (!Capacitor.isNativePlatform()) {
+      setUploadMode('file');
+    }
+    console.log('resetForm completed');
+  };
+
+  const showUploadSuccess = async () => {
+    try {
+      console.log('showUploadSuccess called, platform:', Capacitor.isNativePlatform() ? 'native' : 'web');
+      
+      if (Capacitor.isNativePlatform()) {
+        console.log('Showing native dialog');
+        await Dialog.alert({
+          title: 'Upload Complete',
+          message: 'Your video has been successfully uploaded!',
+          buttonTitle: 'OK'
+        });
+        console.log('Native dialog closed');
+        resetForm();
+      } else {
+        console.log('Showing web success message');
+        setWebSuccess(true);
+        // Auto clear after 2 seconds
+        setTimeout(() => {
+          resetForm();
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error in showUploadSuccess:', error);
+      resetForm();
     }
   };
 
@@ -228,28 +326,29 @@ const Upload = () => {
               userId: currentUser.uid,
               createdAt: new Date().toISOString(),
               views: 0,
-              likes: 0
+              likes: 0,
+              transcript: transcript || null,
             };
             console.log('Video data:', videoData);
             
             if (Capacitor.isNativePlatform()) {
+              console.log('Using native Firestore');
               // Use native Firestore plugin
               await FirebaseFirestore.addDocument({
                 reference: '/videos',
                 data: videoData
               });
             } else {
+              console.log('Using web Firestore');
               // Use web SDK
               const db = getFirestore();
               await addDoc(collection(db, 'videos'), videoData);
             }
-            console.log('Saved to Firestore successfully');
+            console.log('Saved to Firestore successfully, about to show success dialog');
 
-            // Reset form
-            setTitle('');
-            setFile(null);
-            setTags([]);
             setUploading(false);
+            await showUploadSuccess();
+            console.log('showUploadSuccess completed');
           } catch (err: any) {
             console.error('Post-upload error:', err);
             setError(`Failed to save video metadata: ${err.message}`);
@@ -425,6 +524,39 @@ const Upload = () => {
                   Remove Video
                 </IonButton>
               )}
+
+              {/* Add transcription button after video selection/recording */}
+              {(file || previewUrl) && !uploading && (
+                <div className="ion-padding-vertical">
+                  <IonButton
+                    expand="block"
+                    onClick={handleTranscribe}
+                    disabled={transcribing}
+                    color={transcript ? 'success' : 'primary'}
+                  >
+                    <IonIcon icon={micOutline} slot="start" />
+                    {transcribing ? (
+                      <>
+                        <IonSpinner name="crescent" />
+                        <span className="ion-padding-start">Transcribing...</span>
+                      </>
+                    ) : transcript ? (
+                      'Transcription Complete'
+                    ) : (
+                      'Transcribe Video'
+                    )}
+                  </IonButton>
+
+                  {transcript && (
+                    <IonItem lines="none" className="ion-margin-top">
+                      <IonLabel>
+                        <h2>Transcript Preview</h2>
+                        <p style={{ whiteSpace: 'pre-wrap' }}>{transcript.text}</p>
+                      </IonLabel>
+                    </IonItem>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <VideoRecorder
@@ -447,8 +579,100 @@ const Upload = () => {
             <IonIcon icon={cloudUploadOutline} slot="start" />
             {uploading ? 'Uploading...' : 'Upload Video'}
           </IonButton>
+
+          {webSuccess && !Capacitor.isNativePlatform() && (
+            <div className="ion-text-center ion-padding">
+              <IonLabel color="success" style={{ fontSize: '1.2em', fontWeight: 'bold' }}>
+                Upload Complete! Clearing form...
+              </IonLabel>
+            </div>
+          )}
         </div>
       </IonContent>
+
+      <IonAlert
+        isOpen={showAlert}
+        onDidDismiss={() => {
+          console.log('Alert dismissed');
+          setShowAlert(false);
+          resetForm();
+        }}
+        header="Upload Complete"
+        message="Your video has been successfully uploaded!"
+        buttons={[
+          {
+            text: 'OK',
+            handler: () => {
+              console.log('OK clicked');
+              setShowAlert(false);
+              resetForm();
+            }
+          }
+        ]}
+        cssClass={['upload-success-alert', 'alert-with-backdrop']}
+        backdropDismiss={false}
+      />
+
+      <style>{`
+        .alert-with-backdrop::part(backdrop) {
+          background: rgba(0, 0, 0, 0.7);
+          opacity: 1;
+          z-index: 100000;
+        }
+
+        .upload-success-alert {
+          --width: 80%;
+          --max-width: 400px;
+          --background: #ffffff;
+          --backdrop-opacity: 1;
+          z-index: 100001;
+          position: relative;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+        }
+
+        .upload-success-alert::part(wrapper) {
+          z-index: 100001;
+          background: #ffffff;
+          border-radius: 8px;
+        }
+
+        .upload-success-alert::part(container) {
+          background: #ffffff;
+        }
+
+        .upload-success-alert::part(header) {
+          background: var(--ion-color-primary);
+          color: white;
+          padding: 20px;
+          font-size: 1.2em;
+          font-weight: bold;
+          border-radius: 8px 8px 0 0;
+        }
+
+        .upload-success-alert::part(message) {
+          padding: 20px;
+          font-size: 1.1em;
+          color: var(--ion-color-dark);
+          background: #ffffff;
+        }
+
+        .upload-success-alert::part(button) {
+          font-size: 1.1em;
+          font-weight: 600;
+          padding: 15px;
+          background: #ffffff;
+        }
+
+        .alert-button-confirm {
+          color: var(--ion-color-primary);
+        }
+
+        @media (max-width: 576px) {
+          .upload-success-alert {
+            --width: 90%;
+          }
+        }
+      `}</style>
     </IonPage>
   );
 };
