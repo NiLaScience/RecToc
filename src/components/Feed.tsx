@@ -57,16 +57,43 @@ const Feed = () => {
 
     const setupFeedListener = async () => {
       try {
+        console.log('Setting up feed listener...');
         setLoading(true);
         
-        callbackId = await addSnapshotListener('videos', (data) => {
-          const fetchedVideos = data.map((doc: any) => ({
-            ...doc.data,
-            id: doc.id
-          }));
-          setVideos(fetchedVideos);
+        callbackId = await addSnapshotListener('videos', (documents) => {
+          console.log('Feed update received:', {
+            documentsCount: documents.length,
+            firstDocId: documents[0]?.id,
+            timestamp: new Date().toISOString()
+          });
+          
+          const fetchedVideos = documents.map((doc: any) => {
+            console.log('Processing document:', {
+              id: doc.id,
+              title: doc.data.title,
+              createdAt: doc.data.createdAt
+            });
+            return {
+              ...doc.data,
+              id: doc.id
+            };
+          });
+          
+          const sortedVideos = fetchedVideos.sort((a: VideoItem, b: VideoItem) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          
+          console.log('Updating feed with sorted videos:', {
+            totalVideos: sortedVideos.length,
+            newestVideo: sortedVideos[0]?.title,
+            newestDate: sortedVideos[0]?.createdAt
+          });
+          
+          setVideos(sortedVideos);
           setLoading(false);
         });
+        
+        console.log('Feed listener setup complete, callbackId:', callbackId);
       } catch (error) {
         console.error('Error setting up feed listener:', error);
         setLoading(false);
@@ -77,6 +104,7 @@ const Feed = () => {
 
     return () => {
       if (callbackId) {
+        console.log('Cleaning up feed listener:', callbackId);
         removeSnapshotListener(callbackId).catch(console.error);
       }
     };

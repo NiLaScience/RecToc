@@ -241,6 +241,25 @@ const Upload = () => {
     }
   };
 
+  const writeFileInChunks = async (path: string, blob: Blob, chunkSize: number = 5 * 1024 * 1024) => {
+    const totalSize = blob.size;
+    let offset = 0;
+    
+    while (offset < totalSize) {
+      const chunk = blob.slice(offset, offset + chunkSize);
+      const chunkArrayBuffer = await chunk.arrayBuffer();
+      const base64chunk = Buffer.from(chunkArrayBuffer).toString('base64');
+      
+      await Filesystem.appendFile({
+        path,
+        data: base64chunk,
+        directory: Directory.Cache
+      });
+      
+      offset += chunkSize;
+    }
+  };
+
   const handleUpload = async () => {
     if (!file || !title.trim()) {
       setError('Please fill in all fields and select a video');
@@ -261,25 +280,64 @@ const Upload = () => {
 
       try {
         // Generate thumbnail
+        console.log('Generating thumbnail for file:', file.name, 'type:', file.type, 'size:', file.size);
         const thumbnailFile = await ThumbnailService.generateThumbnail(file);
+        console.log('Thumbnail generated successfully');
         
         // Save files to temporary storage
         const videoFileName = `${Date.now()}-${file.name}`;
         const thumbnailFileName = `${Date.now()}-thumbnail.jpg`;
         
-        // Write files to filesystem
-        await Promise.all([
-          Filesystem.writeFile({
-            path: videoFileName,
-            data: await file.arrayBuffer().then(buffer => Buffer.from(buffer).toString('base64')),
-            directory: Directory.Cache
-          }),
-          Filesystem.writeFile({
-            path: thumbnailFileName,
-            data: await thumbnailFile.arrayBuffer().then(buffer => Buffer.from(buffer).toString('base64')),
-            directory: Directory.Cache
-          })
-        ]);
+        console.log('Writing files to filesystem...');
+        
+        // For Android, write files directly without base64 conversion
+        if (Capacitor.isNativePlatform()) {
+          if (previewUrl?.startsWith('file://')) {
+            // File is already on the filesystem, just use it directly
+            console.log('Using existing file on filesystem');
+          } else {
+            // Need to write the file to filesystem
+            const response = await fetch(URL.createObjectURL(file));
+            const blob = await response.blob();
+            await writeFileInChunks(videoFileName, blob);
+          }
+          
+          // Write thumbnail
+          const thumbnailResponse = await fetch(URL.createObjectURL(thumbnailFile));
+          const thumbnailBlob = await thumbnailResponse.blob();
+          await writeFileInChunks(thumbnailFileName, thumbnailBlob);
+        } else {
+          // Web platform - use base64
+          const [videoBase64, thumbnailBase64] = await Promise.all([
+            new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            }),
+            new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+              reader.onerror = reject;
+              reader.readAsDataURL(thumbnailFile);
+            })
+          ]);
+
+          await Promise.all([
+            Filesystem.writeFile({
+              path: videoFileName,
+              data: videoBase64,
+              directory: Directory.Cache
+            }),
+            Filesystem.writeFile({
+              path: thumbnailFileName,
+              data: thumbnailBase64,
+              directory: Directory.Cache
+            })
+          ]);
+        }
+
+        console.log('Files written to filesystem');
 
         // Get file URIs
         const [videoFileInfo, thumbnailFileInfo] = await Promise.all([
@@ -297,23 +355,13 @@ const Upload = () => {
         const videoPath = `videos/${currentUser.uid}/${videoFileName}`;
         const thumbnailPath = `thumbnails/${currentUser.uid}/${thumbnailFileName}`;
         
+        console.log('Uploading files to Firebase Storage...');
         // Upload files to Firebase Storage
         const [videoUrl, thumbnailUrl] = await Promise.all([
           uploadFile(videoPath, videoFileInfo.uri, { contentType: file.type }),
           uploadFile(thumbnailPath, thumbnailFileInfo.uri, { contentType: 'image/jpeg' })
         ]);
-
-        // Clean up temporary files
-        await Promise.all([
-          Filesystem.deleteFile({
-            path: videoFileName,
-            directory: Directory.Cache
-          }),
-          Filesystem.deleteFile({
-            path: thumbnailFileName,
-            directory: Directory.Cache
-          })
-        ]);
+        console.log('Files uploaded to Firebase Storage successfully');
 
         // Save video metadata to Firestore
         const videoData = {

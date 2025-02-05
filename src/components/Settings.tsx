@@ -21,7 +21,7 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { useRouter } from 'next/navigation';
 import type { UserProfile } from '../types/user';
-import { uploadFile, addSnapshotListener, updateDocument, removeSnapshotListener } from '../config/firebase';
+import { uploadFile, addSnapshotListener, updateDocument, removeSnapshotListener, signOut } from '../config/firebase';
 
 const Settings = () => {
   const { user } = useAuth();
@@ -300,7 +300,7 @@ const Settings = () => {
             <IonInput
               value={username}
               onIonInput={e => handleFieldChange('username', e.detail.value!)}
-              placeholder="Enter your username"
+              placeholder="Choose a username"
             />
           </IonItem>
 
@@ -317,10 +317,19 @@ const Settings = () => {
           <IonButton
             expand="block"
             onClick={handleSave}
-            className="ion-margin-top"
             disabled={saving}
+            className="ion-margin-top"
           >
-            {saving ? <IonSpinner name="crescent" /> : 'Save Changes'}
+            {saving ? <IonSpinner name="dots" /> : 'Save Changes'}
+          </IonButton>
+
+          <IonButton
+            expand="block"
+            color="danger"
+            className="ion-margin-top"
+            onClick={() => signOut().catch(console.error)}
+          >
+            Sign Out
           </IonButton>
         </div>
       </IonContent>

@@ -22,13 +22,18 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase based on platform
+let isInitialized = false;
+
 const initializeFirebase = async () => {
+  if (isInitialized) return;
+  
   try {
     if (Capacitor.isNativePlatform()) {
       // For native platforms, Firebase is initialized in the native layer
       // We just need to verify it's working by getting the app name
       try {
         await FirebaseApp.getName();
+        isInitialized = true;
       } catch (error) {
         console.error('Firebase not initialized in native layer:', error);
         throw new Error('Firebase must be initialized in the native layer for this platform');
@@ -39,15 +44,17 @@ const initializeFirebase = async () => {
         const app = initializeApp(firebaseConfig);
         // Initialize Auth for web platform
         const auth = getAuth(app);
+        isInitialized = true;
         if (process.env.NODE_ENV === 'development') {
           console.log('Firebase Web initialized successfully');
         }
       } catch (error: any) {
-        if (error.code !== 'app/duplicate-app') {
+        if (error.code === 'app/duplicate-app') {
+          isInitialized = true;
+        } else {
           console.error('Error initializing Firebase for web:', error);
           throw error;
         }
-        // Firebase already initialized
       }
     }
   } catch (error) {
@@ -56,37 +63,21 @@ const initializeFirebase = async () => {
   }
 };
 
-// Initialize Capacitor plugins if in browser environment
+// Initialize immediately in browser environment
 if (typeof window !== 'undefined') {
-  // Initialize Firebase
-  initializeFirebase();
-
-  // Set up emulators if needed
-  if (process.env.NODE_ENV === 'development') {
-    FirebaseAuthentication.useEmulator({
-      host: 'localhost',
-      port: 9099
-    }).catch(console.error);
-
-    FirebaseFirestore.useEmulator({
-      host: 'localhost',
-      port: 8080
-    }).catch(console.error);
-
-    FirebaseStorage.useEmulator({
-      host: 'localhost',
-      port: 9199
-    }).catch(console.error);
-
-    FirebaseFunctions.useEmulator({
-      host: 'localhost',
-      port: 5001
-    }).catch(console.error);
-  }
+  initializeFirebase().catch(console.error);
 }
+
+// Ensure Firebase is initialized before any operation
+const ensureInitialized = async () => {
+  if (!isInitialized) {
+    await initializeFirebase();
+  }
+};
 
 // Helper function to get the current user's ID token
 export const getIdToken = async (): Promise<string | null> => {
+  await ensureInitialized();
   try {
     const result = await FirebaseAuthentication.getIdToken();
     return result.token;
@@ -98,6 +89,7 @@ export const getIdToken = async (): Promise<string | null> => {
 
 // Helper function to get the current user
 export const getCurrentUser = async () => {
+  await ensureInitialized();
   try {
     const result = await FirebaseAuthentication.getCurrentUser();
     return result.user;
@@ -109,6 +101,7 @@ export const getCurrentUser = async () => {
 
 // Helper function to sign out
 export const signOut = async () => {
+  await ensureInitialized();
   try {
     await FirebaseAuthentication.signOut();
   } catch (error) {
@@ -119,6 +112,7 @@ export const signOut = async () => {
 
 // Helper function to upload a file to Firebase Storage
 export const uploadFile = async (path: string, uri: string, metadata?: { contentType?: string }) => {
+  await ensureInitialized();
   try {
     await new Promise<void>((resolve, reject) => {
       FirebaseStorage.uploadFile(
@@ -147,6 +141,7 @@ export const uploadFile = async (path: string, uri: string, metadata?: { content
 
 // Helper function to add a document to Firestore
 export const addDocument = async (collection: string, data: any) => {
+  await ensureInitialized();
   try {
     const result = await FirebaseFirestore.addDocument({
       reference: collection,
@@ -161,6 +156,7 @@ export const addDocument = async (collection: string, data: any) => {
 
 // Helper function to update a document in Firestore
 export const updateDocument = async (reference: string, data: any) => {
+  await ensureInitialized();
   try {
     await FirebaseFirestore.updateDocument({
       reference,
@@ -174,6 +170,7 @@ export const updateDocument = async (reference: string, data: any) => {
 
 // Helper function to get a document from Firestore
 export const getDocument = async (reference: string) => {
+  await ensureInitialized();
   try {
     const result = await FirebaseFirestore.getDocument({
       reference
@@ -187,20 +184,49 @@ export const getDocument = async (reference: string) => {
 
 // Helper function to add a snapshot listener
 export const addSnapshotListener = async (reference: string, callback: (data: any) => void) => {
+  await ensureInitialized();
   try {
-    const callbackId = await FirebaseFirestore.addDocumentSnapshotListener(
-      { reference },
-      (event, error) => {
-        if (error) {
-          console.error('Snapshot listener error:', error);
-          return;
+    // Check if this is a collection reference (odd number of segments)
+    const segments = reference.split('/');
+    console.log('Setting up snapshot listener for:', reference);
+    
+    if (segments.length % 2 === 1) {
+      // Collection reference
+      const callbackId = await FirebaseFirestore.addCollectionSnapshotListener(
+        { reference },
+        (event, error) => {
+          if (error) {
+            console.error('Snapshot listener error:', error);
+            return;
+          }
+          if (event?.snapshots) {
+            console.log('Collection snapshot received:', reference, event.snapshots.length, 'documents');
+            const documents = event.snapshots.map(snapshot => ({
+              id: snapshot.id,
+              data: snapshot.data
+            }));
+            callback(documents);
+          }
         }
-        if (event?.snapshot?.data) {
-          callback(event.snapshot.data);
+      );
+      return callbackId;
+    } else {
+      // Document reference
+      const callbackId = await FirebaseFirestore.addDocumentSnapshotListener(
+        { reference },
+        (event, error) => {
+          if (error) {
+            console.error('Snapshot listener error:', error);
+            return;
+          }
+          if (event?.snapshot?.data) {
+            console.log('Document snapshot received:', reference);
+            callback(event.snapshot.data);
+          }
         }
-      }
-    );
-    return callbackId;
+      );
+      return callbackId;
+    }
   } catch (error) {
     console.error('Error adding snapshot listener:', error);
     throw error;
@@ -209,6 +235,7 @@ export const addSnapshotListener = async (reference: string, callback: (data: an
 
 // Helper function to remove a snapshot listener
 export const removeSnapshotListener = async (callbackId: string) => {
+  await ensureInitialized();
   try {
     await FirebaseFirestore.removeSnapshotListener({ callbackId });
   } catch (error) {
@@ -219,6 +246,7 @@ export const removeSnapshotListener = async (callbackId: string) => {
 
 // Helper function to call a Firebase Function
 export const callFunction = async (name: string, data?: any) => {
+  await ensureInitialized();
   try {
     const result = await FirebaseFunctions.callByName({ 
       name, 
@@ -233,6 +261,7 @@ export const callFunction = async (name: string, data?: any) => {
 
 // Helper function to initialize Remote Config with default settings
 export const initializeRemoteConfig = async () => {
+  await ensureInitialized();
   try {
     await FirebaseRemoteConfig.setSettings({
       fetchTimeoutInSeconds: 10,
@@ -247,6 +276,7 @@ export const initializeRemoteConfig = async () => {
 
 // Helper function to fetch and activate remote config
 export const fetchAndActivateConfig = async () => {
+  await ensureInitialized();
   try {
     await FirebaseRemoteConfig.fetchAndActivate();
   } catch (error) {
@@ -257,6 +287,7 @@ export const fetchAndActivateConfig = async () => {
 
 // Helper function to get a boolean value from Remote Config
 export const getRemoteConfigBoolean = async (key: string): Promise<boolean> => {
+  await ensureInitialized();
   try {
     const { value } = await FirebaseRemoteConfig.getBoolean({ key });
     return value;
@@ -268,6 +299,7 @@ export const getRemoteConfigBoolean = async (key: string): Promise<boolean> => {
 
 // Helper function to get a number value from Remote Config
 export const getRemoteConfigNumber = async (key: string): Promise<number> => {
+  await ensureInitialized();
   try {
     const { value } = await FirebaseRemoteConfig.getNumber({ key });
     return value;
@@ -279,6 +311,7 @@ export const getRemoteConfigNumber = async (key: string): Promise<number> => {
 
 // Helper function to get a string value from Remote Config
 export const getRemoteConfigString = async (key: string): Promise<string> => {
+  await ensureInitialized();
   try {
     const { value } = await FirebaseRemoteConfig.getString({ key });
     return value;
@@ -290,6 +323,7 @@ export const getRemoteConfigString = async (key: string): Promise<string> => {
 
 // Helper function to add a config update listener
 export const addConfigUpdateListener = async (callback: (event: any) => void) => {
+  await ensureInitialized();
   try {
     const callbackId = await FirebaseRemoteConfig.addConfigUpdateListener((event, error) => {
       if (error) {
@@ -307,6 +341,7 @@ export const addConfigUpdateListener = async (callback: (event: any) => void) =>
 
 // Helper function to remove a config update listener
 export const removeConfigUpdateListener = async (id: string) => {
+  await ensureInitialized();
   try {
     await FirebaseRemoteConfig.removeConfigUpdateListener({ id });
   } catch (error) {
@@ -317,6 +352,7 @@ export const removeConfigUpdateListener = async (id: string) => {
 
 // Helper function to remove all config update listeners
 export const removeAllConfigListeners = async () => {
+  await ensureInitialized();
   try {
     await FirebaseRemoteConfig.removeAllListeners();
   } catch (error) {
