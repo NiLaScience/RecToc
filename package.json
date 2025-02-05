@@ -18,6 +18,7 @@
     "@capacitor/core": "^7.0.1",
     "@capacitor/dialog": "^7.0.0",
     "@capacitor/filesystem": "^7.0.0",
+    "@capacitor/http": "^0.0.2",
     "@ionic/react": "^7.7.3",
     "@ionic/react-router": "^7.7.3",
     "firebase": "^11.2.0",
@@ -26,6 +27,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^5.3.4",
+    "uuid": "^11.0.5",
     "zustand": "^4.5.0"
   },
   "devDependencies": {
@@ -39,8 +41,13 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/react-router-dom": "^5.3.3",
+    "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.0.1",
     "babel-loader": "^9.2.1",
+    "concurrently": "^9.1.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "http-proxy-middleware": "^3.0.3",
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
     "typescript": "^5"

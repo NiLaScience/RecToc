@@ -30,6 +30,8 @@ import TranscriptionService from '../services/TranscriptionService';
 import { Dialog } from '@capacitor/dialog';
 import { alertController } from '@ionic/core';
 import ThumbnailService from '../services/ThumbnailService';
+import PDFParserService from '../services/PDFParserService';
+import type { JobDescriptionSchema } from '../services/OpenAIService';
 
 interface FirebaseUser {
   uid: string;
@@ -53,6 +55,8 @@ const Upload = () => {
   } | null>(null);
   const [showAlert, setShowAlert] = useState(false);
   const [webSuccess, setWebSuccess] = useState(false);
+  const [jobDescription, setJobDescription] = useState<JobDescriptionSchema | null>(null);
+  const [parsingPDF, setParsingPDF] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -215,6 +219,31 @@ const Upload = () => {
     }
   };
 
+  const handlePDFChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const pdfFile = e.target.files[0];
+      
+      // Check if file is a PDF
+      if (pdfFile.type !== 'application/pdf') {
+        setError('Please select a PDF file');
+        return;
+      }
+
+      setParsingPDF(true);
+      setError('');
+
+      try {
+        const structuredData = await PDFParserService.parsePDF(pdfFile);
+        setJobDescription(structuredData);
+      } catch (error) {
+        console.error('Error parsing PDF:', error);
+        setError('Failed to parse PDF. Please try again.');
+      } finally {
+        setParsingPDF(false);
+      }
+    }
+  };
+
   const handleUpload = async () => {
     if (!file || !title.trim()) {
       setError('Please fill in all fields and select a video');
@@ -283,7 +312,8 @@ const Upload = () => {
             const videoData = {
               title,
               videoUrl: downloadURL,
-              thumbnailUrl, // Add thumbnail URL
+              thumbnailUrl,
+              jobDescription,
               tags,
               userId: currentUser!.uid,
               createdAt: new Date().toISOString(),
@@ -553,6 +583,100 @@ const Upload = () => {
               )}
             </>
           )}
+
+          <IonItem>
+            <IonLabel position="stacked">Job Description (PDF)</IonLabel>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={handlePDFChange}
+              style={{ display: 'none' }}
+              id="pdf-upload"
+            />
+            <IonButton
+              expand="block"
+              onClick={() => document.getElementById('pdf-upload')?.click()}
+              color="medium"
+              disabled={parsingPDF}
+            >
+              {parsingPDF ? (
+                <>
+                  <IonSpinner name="crescent" />
+                  <span className="ion-padding-start">Parsing PDF...</span>
+                </>
+              ) : jobDescription ? (
+                'Change Job Description'
+              ) : (
+                'Upload Job Description'
+              )}
+            </IonButton>
+
+            {jobDescription && (
+              <IonItem lines="none" className="ion-margin-top">
+                <IonLabel>
+                  <h2>Job Description Preview</h2>
+                  <div style={{ 
+                    whiteSpace: 'pre-wrap',
+                    maxHeight: '400px',
+                    overflowY: 'auto',
+                    backgroundColor: '#f9fafb',
+                    padding: '1rem',
+                    borderRadius: '0.5rem',
+                    marginTop: '0.5rem',
+                    fontSize: '0.875rem'
+                  }}>
+                    <div><strong>Title:</strong> {jobDescription.title}</div>
+                    <div><strong>Company:</strong> {jobDescription.company}</div>
+                    <div><strong>Location:</strong> {jobDescription.location}</div>
+                    <div><strong>Type:</strong> {jobDescription.employmentType}</div>
+                    <div><strong>Level:</strong> {jobDescription.experienceLevel}</div>
+                    
+                    {jobDescription.salary && (
+                      <div>
+                        <strong>Salary:</strong> {jobDescription.salary.min}-{jobDescription.salary.max} {jobDescription.salary.currency} ({jobDescription.salary.period})
+                      </div>
+                    )}
+                    
+                    <div style={{ marginTop: '1rem' }}>
+                      <strong>Skills:</strong>
+                      <ul>
+                        {jobDescription.skills.map((skill, index) => (
+                          <li key={index}>{skill}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    
+                    <div>
+                      <strong>Responsibilities:</strong>
+                      <ul>
+                        {jobDescription.responsibilities.map((resp, index) => (
+                          <li key={index}>{resp}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    
+                    <div>
+                      <strong>Requirements:</strong>
+                      <ul>
+                        {jobDescription.requirements.map((req, index) => (
+                          <li key={index}>{req}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    
+                    <div>
+                      <strong>Benefits:</strong>
+                      <ul>
+                        {jobDescription.benefits.map((benefit, index) => (
+                          <li key={index}>{benefit}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </IonLabel>
+              </IonItem>
+            )}
+          </IonItem>
 
           {error && (
             <div className="ion-padding-vertical ion-text-center">
