@@ -102,29 +102,29 @@ const Upload = () => {
   const handleRecordedVideo = async (uri: string, format: string) => {
     try {
       if (Capacitor.isNativePlatform()) {
-        // Store the original URI for transcription
+        // Keep Android behavior exactly the same
         setPreviewUrl(uri);
         
-        // For native platforms, read the file using Filesystem
         const fileContents = await Filesystem.readFile({
           path: uri,
           directory: Directory.Data
         });
 
-        // Convert base64 to blob
         const base64Response = await fetch(`data:video/${format};base64,${fileContents.data}`);
         const blob = await base64Response.blob();
         
-        // Create a File object
         const fileName = uri.split('/').pop() || `recorded_video_${Date.now()}.${format}`;
         setFile(new File([blob], fileName, { type: `video/${format}` }));
       } else {
-        // For web, uri is a blob URL
+        // For web, ensure we properly handle the recording completion
         setPreviewUrl(uri);
         const response = await fetch(uri);
         const blob = await response.blob();
         const fileName = `recorded_video_${Date.now()}.${format}`;
-        setFile(new File([blob], fileName, { type: `video/${format}` }));
+        const videoFile = new File([blob], fileName, { type: `video/${format}` });
+        setFile(videoFile);
+        // Force switch back to file mode after recording is complete
+        setUploadMode('file');
       }
     } catch (error) {
       console.error('Error handling recorded video:', error);
@@ -379,7 +379,21 @@ const Upload = () => {
 
         <div className="ion-padding">
           {!Capacitor.isNativePlatform() && (
-            <IonSegment value={uploadMode} onIonChange={e => setUploadMode(e.detail.value as 'file' | 'record')}>
+            <IonSegment 
+              value={uploadMode} 
+              onIonChange={e => {
+                const newMode = e.detail.value as 'file' | 'record';
+                setUploadMode(newMode);
+                // Clear existing file and preview when switching modes
+                if (newMode === 'record') {
+                  setFile(null);
+                  if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    setPreviewUrl(null);
+                  }
+                }
+              }}
+            >
               <IonSegmentButton value="file">
                 <IonLabel>Choose File</IonLabel>
               </IonSegmentButton>
@@ -559,10 +573,30 @@ const Upload = () => {
               )}
             </div>
           ) : (
-            <VideoRecorder
-              onVideoRecorded={handleRecordedVideo}
-              onError={setError}
-            />
+            <>
+              <VideoRecorder
+                onVideoRecorded={handleRecordedVideo}
+                onError={setError}
+              />
+              {file && previewUrl && (
+                <div className="ion-padding-vertical">
+                  <IonButton
+                    expand="block"
+                    color="medium"
+                    onClick={() => {
+                      setFile(null);
+                      if (previewUrl) {
+                        URL.revokeObjectURL(previewUrl);
+                        setPreviewUrl(null);
+                      }
+                      setUploadMode('record');
+                    }}
+                  >
+                    Record Again
+                  </IonButton>
+                </div>
+              )}
+            </>
           )}
 
           {error && (

@@ -31,7 +31,20 @@ class VideoRecordingService {
     }
 
     this.recordedChunks = [];
-    this.mediaRecorder = new MediaRecorder(this.stream);
+    
+    // Try to use MP4 format if supported, fallback to WebM
+    const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm';
+    const options = {
+      mimeType: mimeType,
+      videoBitsPerSecond: 2500000 // 2.5 Mbps
+    };
+
+    try {
+      this.mediaRecorder = new MediaRecorder(this.stream, options);
+    } catch (e) {
+      console.warn('Failed to create MediaRecorder with specified options, falling back to defaults');
+      this.mediaRecorder = new MediaRecorder(this.stream);
+    }
 
     this.mediaRecorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
@@ -48,14 +61,35 @@ class VideoRecordingService {
     }
 
     return new Promise((resolve, reject) => {
-      this.mediaRecorder!.onstop = () => {
-        const blob = new Blob(this.recordedChunks, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        resolve({
-          uri: url,
-          format: 'webm',
-          webPath: url,
-        });
+      this.mediaRecorder!.onstop = async () => {
+        try {
+          // Get the MIME type from the recorder
+          const mimeType = this.mediaRecorder!.mimeType;
+          const format = mimeType.split('/')[1];  // Extract format from MIME type
+          
+          const blob = new Blob(this.recordedChunks, { type: mimeType });
+          const url = URL.createObjectURL(blob);
+
+          // For web platform, we'll convert to MP4 if it's not already
+          if (!Capacitor.isNativePlatform() && format !== 'mp4') {
+            try {
+              // Convert to MP4 using FFmpeg.js or similar library
+              // For now, we'll just use the WebM format and handle the conversion
+              // in the TranscriptionService
+              console.log('Recording format:', format);
+            } catch (error) {
+              console.error('Error converting video format:', error);
+            }
+          }
+
+          resolve({
+            uri: url,
+            format: format,
+            webPath: url,
+          });
+        } catch (error) {
+          reject(error);
+        }
       };
 
       this.mediaRecorder!.stop();
