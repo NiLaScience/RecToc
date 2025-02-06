@@ -32,6 +32,7 @@ import type { UserProfile } from '../types/user';
 import ApplicationService from '../services/ApplicationService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import { Capacitor } from '@capacitor/core';
+import AppHeader from './AppHeader';
 
 interface ApplicationModalProps {
   isOpen: boolean;
@@ -204,21 +205,17 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
       style={{ '--height': '100%' }}
     >
       <IonContent scrollY={true} style={{ '--overflow': 'hidden' }}>
+        <AppHeader
+          title="Apply for Position"
+          mode="apply"
+          onClose={onClose}
+        />
+
         <div style={{ 
           height: '100%', 
           overflowY: 'auto',
           WebkitOverflowScrolling: 'touch'
         }}>
-          <IonHeader>
-            <IonToolbar>
-              <IonTitle>Apply for Position</IonTitle>
-              <IonButtons slot="end">
-                <IonButton onClick={onClose}>
-                  <IonIcon icon={closeOutline} />
-                </IonButton>
-              </IonButtons>
-            </IonToolbar>
-          </IonHeader>
           {loading ? (
             <div className="flex items-center justify-center h-full">
               <IonSpinner />

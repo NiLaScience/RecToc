@@ -20,6 +20,7 @@ import { closeOutline, paperPlaneOutline } from 'ionicons/icons';
 import { VideoItem } from '../types/video';
 import { useState } from 'react';
 import ApplicationModal from './ApplicationModal';
+import AppHeader from './AppHeader';
 
 interface VideoDetailsProps {
   video: VideoItem;
@@ -112,6 +113,12 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, onApplicati
         onTouchEnd={handleTouchEnd}
       >
         <IonContent scrollY={true} style={{ '--overflow': 'hidden' }}>
+          <AppHeader
+            title="Job Details"
+            mode="details"
+            onClose={onClose}
+          />
+
           <div style={{ 
             height: '100%', 
             overflowY: 'auto',
@@ -119,17 +126,6 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, onApplicati
             padding: '1rem', 
             paddingBottom: '80px'
           }}>
-            <IonHeader>
-              <IonToolbar>
-                <IonTitle>Video Details</IonTitle>
-                <IonButtons slot="end">
-                  <IonButton onClick={onClose}>
-                    <IonIcon icon={closeOutline} />
-                  </IonButton>
-                </IonButtons>
-              </IonToolbar>
-            </IonHeader>
-
             {/* Job Description Card */}
             {jobDescription && (
               <IonCard>

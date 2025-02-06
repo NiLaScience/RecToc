@@ -24,6 +24,7 @@ import VideoPlayer from './VideoPlayer';
 import ApplicationModal from './ApplicationModal';
 import type { VideoItem } from '../types/video';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
+import AppHeader from './AppHeader';
 
 const feedContainerStyle: React.CSSProperties = {
   display: 'flex',
@@ -43,12 +44,11 @@ const fullscreenVideoStyle: React.CSSProperties = {
   height: '100%',
   width: '100%',
   backgroundColor: '#000',
-  position: 'fixed',
+  position: 'absolute',
   top: 0,
   left: 0,
   right: 0,
   bottom: 0,
-  zIndex: 1000,
   overflow: 'hidden'
 };
 
@@ -62,6 +62,15 @@ const Feed = () => {
   const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
   const [showApplication, setShowApplication] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+
+  const headerStyle: React.CSSProperties = {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+    backgroundColor: mode === 'fullscreen' ? '#000' : undefined,
+  };
 
   useEffect(() => {
     let unsubscribeId: string | null = null;
@@ -126,25 +135,39 @@ const Feed = () => {
 
   return (
     <IonPage>
-      <IonHeader>
-        <IonToolbar>
-          <IonTitle>Feed</IonTitle>
-          <IonButtons slot="end">
-            <IonButton onClick={() => setMode(mode === 'grid' ? 'fullscreen' : 'grid')}>
-              <IonIcon icon={gridOutline} />
-            </IonButton>
-            <IonButton onClick={() => setShowNotifications(true)}>
-              <IonIcon icon={notificationsOutline} />
-            </IonButton>
-          </IonButtons>
-        </IonToolbar>
-      </IonHeader>
+      <AppHeader
+        title="Feed"
+        mode={mode}
+        showFeedButtons
+        onToggleView={() => {
+          if (mode === 'grid') {
+            if (!selectedVideo && videos.length > 0) {
+              setSelectedVideo(videos[0]);
+            }
+            setMode('fullscreen');
+          } else {
+            setMode('grid');
+          }
+        }}
+        onNotifications={() => setShowNotifications(true)}
+      />
 
-      <IonContent scrollY={mode === 'grid'}>
-        <IonRefresher slot="fixed" onIonRefresh={handleRefresh}>
-          <IonRefresherContent />
-        </IonRefresher>
+      <style>{`
+        .dark-toolbar {
+          --background: #000;
+          --color: #fff;
+          --ion-color-primary: #fff;
+          --ion-toolbar-background: #000;
+        }
+        ion-content {
+          --padding-top: 56px;
+        }
+      `}</style>
 
+      <IonContent 
+        scrollY={mode === 'grid'} 
+        fullscreen
+      >
         {loading ? (
           <div style={emptyStateStyle}>
             <IonSpinner />

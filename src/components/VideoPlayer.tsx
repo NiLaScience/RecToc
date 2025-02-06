@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { IonIcon, IonButton, IonAvatar } from '@ionic/react';
+import { IonIcon, IonButton, IonAvatar, IonSpinner } from '@ionic/react';
 import { heart, chatbubble, share, informationCircleOutline, volumeHighOutline, volumeMuteOutline } from 'ionicons/icons';
 import { VideoItem } from '../types/video';
 import type { UserProfile } from '../types/user';
@@ -73,6 +73,8 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
   const [currentSubtitle, setCurrentSubtitle] = useState<string>('');
   const [showDetails, setShowDetails] = useState(false);
   const [showApplication, setShowApplication] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(true);
+  const [thumbnailError, setThumbnailError] = useState(false);
 
   useEffect(() => {
     let callbackId: string;
@@ -167,6 +169,26 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
       });
     }
   }, [video.videoUrl, autoPlay]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      const handleLoadStart = () => setVideoLoading(true);
+      const handleCanPlay = () => setVideoLoading(false);
+      const handleError = () => setVideoLoading(false);
+
+      videoRef.current.addEventListener('loadstart', handleLoadStart);
+      videoRef.current.addEventListener('canplay', handleCanPlay);
+      videoRef.current.addEventListener('error', handleError);
+
+      return () => {
+        if (videoRef.current) {
+          videoRef.current.removeEventListener('loadstart', handleLoadStart);
+          videoRef.current.removeEventListener('canplay', handleCanPlay);
+          videoRef.current.removeEventListener('error', handleError);
+        }
+      };
+    }
+  }, []);
 
   const handleSwipeGesture = (startPos: { x: number; y: number }, endPos: { x: number; y: number }) => {
     // Only allow swipes in feed mode
@@ -281,6 +303,38 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
       onMouseUp={mode === 'feed' ? handleMouseUp : undefined}
       onMouseLeave={mode === 'feed' ? handleMouseLeave : undefined}
     >
+      {/* Show thumbnail while video is loading */}
+      {videoLoading && video.thumbnailUrl && !thumbnailError && (
+        <img
+          src={video.thumbnailUrl}
+          alt={video.title}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            backgroundColor: '#000',
+            zIndex: 1
+          }}
+          onError={() => setThumbnailError(true)}
+        />
+      )}
+
+      {/* Loading spinner */}
+      {videoLoading && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 2
+        }}>
+          <IonSpinner />
+        </div>
+      )}
+
       <video
         ref={videoRef}
         src={video.videoUrl}
@@ -288,12 +342,15 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
           width: '100%',
           height: '100%',
           objectFit: 'contain',
-          touchAction: mode === 'feed' ? 'none' : 'auto'
+          touchAction: mode === 'feed' ? 'none' : 'auto',
+          opacity: videoLoading ? 0 : 1,
+          transition: 'opacity 0.2s ease-in-out'
         }}
         onClick={togglePlay}
         playsInline
         muted={isMuted}
         onEnded={onEnded}
+        poster={video.thumbnailUrl}
       />
 
       {subtitlesEnabled && currentSubtitle && (

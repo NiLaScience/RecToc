@@ -1,8 +1,5 @@
 import {
   IonPage,
-  IonHeader,
-  IonToolbar,
-  IonTitle,
   IonContent,
   IonItem,
   IonLabel,
@@ -29,6 +26,7 @@ import ThumbnailService from '../services/ThumbnailService';
 import PDFParserService from '../services/PDFParserService';
 import type { JobDescriptionSchema } from '../services/OpenAIService';
 import { uploadFile, addDocument } from '../config/firebase';
+import AppHeader from './AppHeader';
 
 interface User {
   uid: string;
@@ -395,19 +393,12 @@ const Upload = () => {
 
   return (
     <IonPage>
-      <IonHeader className="ion-no-border">
-        <IonToolbar>
-          <IonTitle>Upload Video</IonTitle>
-        </IonToolbar>
-      </IonHeader>
-      <IonContent className="ion-padding">
-        <IonHeader collapse="condense" className="ion-no-border">
-          <IonToolbar>
-            <IonTitle size="large">Upload Video</IonTitle>
-          </IonToolbar>
-        </IonHeader>
-
-        <div className="ion-padding">
+      <AppHeader
+        title="Upload Video"
+        mode="upload"
+      />
+      <IonContent>
+        <div style={{ padding: '1rem', paddingTop: '56px' }}>
           {!Capacitor.isNativePlatform() && (
             <IonSegment 
               value={uploadMode} 
@@ -772,6 +763,13 @@ const Upload = () => {
       />
 
       <style>{`
+        ion-content {
+          --padding-top: 0;
+          --padding-bottom: 0;
+          --padding-start: 0;
+          --padding-end: 0;
+        }
+        
         .alert-with-backdrop::part(backdrop) {
           background: rgba(0, 0, 0, 0.7);
           opacity: 1;

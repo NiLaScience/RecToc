@@ -1,7 +1,7 @@
 import { VideoItem } from '../types/video';
-import { IonCard, IonCardHeader, IonCardContent, IonChip, IonLabel, IonAvatar, IonButton, IonIcon } from '@ionic/react';
+import { IonCard, IonCardHeader, IonCardContent, IonChip, IonLabel, IonAvatar, IonButton, IonIcon, IonSpinner } from '@ionic/react';
 import { useState, useEffect } from 'react';
-import { informationCircleOutline, playCircleOutline } from 'ionicons/icons';
+import { informationCircleOutline, playCircleOutline, videocamOutline } from 'ionicons/icons';
 import type { UserProfile } from '../types/user';
 import VideoPlayer from './VideoPlayer';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
@@ -66,6 +66,8 @@ export default function FeedCard({ video, onClick }: FeedCardProps) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showDescription, setShowDescription] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState(false);
+  const [thumbnailLoading, setThumbnailLoading] = useState(true);
 
   useEffect(() => {
     let callbackId: string;
@@ -170,19 +172,54 @@ export default function FeedCard({ video, onClick }: FeedCardProps) {
           ) : (
             <>
               {/* Show thumbnail with play button overlay */}
-              <img
-                src={video.thumbnailUrl || video.videoUrl}
-                alt={video.title}
-                style={{ 
-                  width: '100%', 
-                  height: '100%', 
-                  objectFit: 'cover'
-                }}
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.backgroundColor = '#f3f4f6';
-                }}
-              />
+              {video.thumbnailUrl && !thumbnailError ? (
+                <img
+                  src={video.thumbnailUrl}
+                  alt={video.title}
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    objectFit: 'cover',
+                    opacity: thumbnailLoading ? 0 : 1,
+                    transition: 'opacity 0.2s ease-in-out'
+                  }}
+                  onLoad={() => setThumbnailLoading(false)}
+                  onError={() => {
+                    setThumbnailError(true);
+                    setThumbnailLoading(false);
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#f3f4f6',
+                  color: '#9ca3af'
+                }}>
+                  <IonIcon
+                    icon={videocamOutline}
+                    style={{ fontSize: '3rem' }}
+                  />
+                </div>
+              )}
+              {thumbnailLoading && (
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#f3f4f6'
+                }}>
+                  <IonSpinner />
+                </div>
+              )}
               {video.videoUrl && (
                 <div style={{
                   position: 'absolute',
