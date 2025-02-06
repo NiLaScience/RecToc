@@ -165,6 +165,7 @@ export default function FeedCard({ video, onClick }: FeedCardProps) {
             <VideoPlayer
               video={video}
               autoPlay={true}
+              mode="card"
             />
           ) : (
             <>

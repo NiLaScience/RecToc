@@ -171,6 +171,7 @@ const Feed = () => {
               <VideoPlayer
                 video={selectedVideo}
                 autoPlay
+                mode="feed"
                 onEnded={() => {
                   // Find next video
                   const currentIndex = videos.findIndex(v => v.id === selectedVideo.id);

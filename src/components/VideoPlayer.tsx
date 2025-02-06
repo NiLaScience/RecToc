@@ -12,6 +12,8 @@ interface VideoPlayerProps {
   onSwipe?: (direction: 'up' | 'down') => void;
   autoPlay?: boolean;
   onEnded?: () => void;
+  allowSwipe?: boolean;
+  mode?: 'feed' | 'card' | 'modal' | 'details';
 }
 
 const overlayStyle: React.CSSProperties = {
@@ -58,7 +60,7 @@ const tagsStyle: React.CSSProperties = {
   marginTop: '0.5rem'
 };
 
-export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded }: VideoPlayerProps) {
+export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded, allowSwipe = true, mode = 'feed' }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [isMuted, setIsMuted] = useState(autoPlay);
@@ -166,18 +168,25 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded 
   }, [video.videoUrl, autoPlay]);
 
   const handleSwipeGesture = (startPos: { x: number; y: number }, endPos: { x: number; y: number }) => {
+    // Only allow swipes in feed mode
+    if (mode !== 'feed') return;
+    
     const diffX = startPos.x - endPos.x;
     const diffY = startPos.y - endPos.y;
 
     // Check if the swipe is more horizontal than vertical
     if (Math.abs(diffX) > Math.abs(diffY)) {
-      // Right swipe
+      // Right swipe to open details (swipe left to right)
       if (diffX < -50) {
         setShowDetails(true);
       }
+      // Left swipe to close details (swipe right to left)
+      else if (diffX > 50 && showDetails) {
+        setShowDetails(false);
+      }
     } else {
-      // Vertical swipe
-      if (Math.abs(diffY) > 50 && onSwipe) {
+      // Only allow vertical swipes when details are not shown
+      if (!showDetails && Math.abs(diffY) > 50 && onSwipe) {
         if (diffY > 0) {
           onSwipe('up');
         } else {
@@ -260,15 +269,16 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded 
         width: '100%',
         height: '100%',
         backgroundColor: '#000',
-        cursor: isDragging ? 'grabbing' : 'grab',
-        overflow: 'hidden'
+        cursor: mode === 'feed' ? (isDragging ? 'grabbing' : 'grab') : 'default',
+        overflow: 'hidden',
+        touchAction: mode === 'feed' ? 'none' : 'auto'
       }}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseLeave}
+      onTouchStart={mode === 'feed' ? handleTouchStart : undefined}
+      onTouchEnd={mode === 'feed' ? handleTouchEnd : undefined}
+      onMouseDown={mode === 'feed' ? handleMouseDown : undefined}
+      onMouseMove={mode === 'feed' ? handleMouseMove : undefined}
+      onMouseUp={mode === 'feed' ? handleMouseUp : undefined}
+      onMouseLeave={mode === 'feed' ? handleMouseLeave : undefined}
     >
       <video
         ref={videoRef}
@@ -277,7 +287,7 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded 
           width: '100%',
           height: '100%',
           objectFit: 'contain',
-          touchAction: 'none'
+          touchAction: mode === 'feed' ? 'none' : 'auto'
         }}
         onClick={togglePlay}
         playsInline

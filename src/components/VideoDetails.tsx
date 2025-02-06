@@ -41,7 +41,37 @@ interface JobDescription {
 
 const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose }) => {
   const [showApplication, setShowApplication] = useState(false);
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const jobDescription = video.jobDescription as JobDescription;
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStart({
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY
+    });
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart) return;
+
+    const touchEnd = {
+      x: e.changedTouches[0].clientX,
+      y: e.changedTouches[0].clientY
+    };
+
+    const diffX = touchStart.x - touchEnd.x;
+    const diffY = touchStart.y - touchEnd.y;
+
+    // If horizontal swipe is greater than vertical swipe
+    if (Math.abs(diffX) > Math.abs(diffY)) {
+      // Right to left swipe (close details)
+      if (diffX > 50) {
+        onClose();
+      }
+    }
+
+    setTouchStart(null);
+  };
 
   const handleApply = () => {
     setShowApplication(true);
@@ -59,29 +89,42 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose }) => {
 
   return (
     <>
-      <div className="video-details" style={{
-        position: 'fixed',
-        top: 0,
-        right: 0,
-        bottom: 0,
-        width: '100%',
-        backgroundColor: '#fff',
-        zIndex: 1000,
-        overflowY: 'auto'
-      }}>
-        <IonHeader>
-          <IonToolbar>
-            <IonTitle>Video Details</IonTitle>
-            <IonButtons slot="end">
-              <IonButton onClick={onClose}>
-                <IonIcon icon={closeOutline} />
-              </IonButton>
-            </IonButtons>
-          </IonToolbar>
-        </IonHeader>
+      <div 
+        className="video-details" 
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: '100%',
+          backgroundColor: '#fff',
+          zIndex: 1000,
+          overflowY: 'auto',
+          transform: 'translateX(0)',
+          transition: 'transform 0.3s ease-out'
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <IonContent scrollY={true} style={{ '--overflow': 'hidden' }}>
+          <div style={{ 
+            height: '100%', 
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            padding: '1rem', 
+            paddingBottom: '80px'
+          }}>
+            <IonHeader>
+              <IonToolbar>
+                <IonTitle>Video Details</IonTitle>
+                <IonButtons slot="end">
+                  <IonButton onClick={onClose}>
+                    <IonIcon icon={closeOutline} />
+                  </IonButton>
+                </IonButtons>
+              </IonToolbar>
+            </IonHeader>
 
-        <IonContent>
-          <div style={{ padding: '1rem', paddingBottom: '80px' }}>
             {/* Job Description Card */}
             {jobDescription && (
               <IonCard>

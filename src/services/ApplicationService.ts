@@ -61,55 +61,117 @@ class ApplicationService {
       throw new Error('User must be authenticated to upload application video');
     }
 
-    // Generate video ID and set up paths
+    // Generate video ID and set up paths with user ID included
     const videoId = uuidv4();
+    const userId = result.user.uid;
     const fileName = `${videoId}.mp4`;
-    const storagePath = `${this.STORAGE_PATH}/${fileName}`;
+    const storagePath = `users/${userId}/application-videos/${fileName}`;
     
     try {
-      // Generate thumbnail first
-      const thumbnailFile = await ThumbnailService.generateThumbnail(videoFile);
-      const thumbnailPath = `${this.STORAGE_PATH}/thumbnails/${videoId}.jpg`;
-
-      // Upload thumbnail
+      // Upload video first
       if (Capacitor.isNativePlatform()) {
-        await this.uploadNativeFile(thumbnailFile, thumbnailPath);
+        // For native platforms, we need to write to filesystem first
+        const blob = await videoFile.arrayBuffer();
+        await Filesystem.writeFile({
+          path: fileName,
+          data: Buffer.from(blob).toString('base64'),
+          directory: Directory.Cache
+        });
+
+        // Get the file URI
+        const fileInfo = await Filesystem.getUri({
+          path: fileName,
+          directory: Directory.Cache
+        });
+
+        // Upload to Firebase Storage with progress tracking
+        await new Promise<void>((resolve, reject) => {
+          FirebaseStorage.uploadFile({
+            path: storagePath,
+            uri: fileInfo.uri,
+            metadata: {
+              contentType: videoFile.type
+            }
+          }, (progress, error) => {
+            if (error) {
+              reject(error);
+            } else if (progress?.completed) {
+              resolve();
+            }
+          });
+        });
+
+        // Clean up the temporary file
+        await Filesystem.deleteFile({
+          path: fileName,
+          directory: Directory.Cache
+        });
       } else {
-        await this.uploadWebFile(thumbnailFile, thumbnailPath);
+        // For web, use the blob directly
+        const base64Data = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(videoFile);
+        });
+
+        // Remove data URL prefix
+        const base64Content = base64Data.split(',')[1];
+
+        await FirebaseStorage.uploadFile({
+          path: storagePath,
+          blob: new Blob([Buffer.from(base64Content, 'base64')], { type: videoFile.type }),
+          metadata: {
+            contentType: videoFile.type
+          }
+        }, () => {});
       }
 
-      // Get thumbnail URL
-      const { downloadUrl: thumbnailURL } = await FirebaseStorage.getDownloadUrl({
-        path: thumbnailPath
-      });
+      // Try to get the download URL with retries
+      let videoURL: string | null = null;
+      let attempts = 0;
+      const maxAttempts = 5;
+      const delay = 1000; // 1 second between attempts
 
-      // Upload video
-      if (Capacitor.isNativePlatform()) {
-        await this.uploadNativeFile(videoFile, storagePath);
-      } else {
-        await this.uploadWebFile(videoFile, storagePath);
+      while (!videoURL && attempts < maxAttempts) {
+        try {
+          const result = await FirebaseStorage.getDownloadUrl({
+            path: storagePath
+          });
+          videoURL = result.downloadUrl;
+        } catch (error) {
+          attempts++;
+          if (attempts === maxAttempts) {
+            throw new Error('Failed to get download URL after multiple attempts');
+          }
+          // Wait before next attempt
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
       }
 
-      // Get video URL
-      const { downloadUrl: videoURL } = await FirebaseStorage.getDownloadUrl({
-        path: storagePath
-      });
+      if (!videoURL) {
+        throw new Error('Failed to get download URL');
+      }
 
-      // Generate transcript
-      const transcript = await TranscriptionService.transcribeVideo(videoFile);
-
-      // Update application document
+      // Update application with URL
       await FirebaseFirestore.updateDocument({
         reference: `${this.COLLECTION}/${applicationId}`,
         data: {
           videoURL,
-          videoThumbnailURL: thumbnailURL,
-          transcript: transcript.text,
-          updatedAt: new Date().toISOString()
+          status: 'submitted',
+          updatedAt: new Date().toISOString(),
+          candidateId: result.user.uid
         }
       });
     } catch (error) {
       console.error('Error uploading application video:', error);
+      // If we fail, we should try to clean up the uploaded file
+      try {
+        await FirebaseStorage.deleteFile({
+          path: storagePath
+        });
+      } catch (cleanupError) {
+        console.error('Error cleaning up failed upload:', cleanupError);
+      }
       throw error;
     }
   }
@@ -218,12 +280,10 @@ class ApplicationService {
   }
 
   private static async uploadWebFile(file: File, path: string): Promise<void> {
-    const response = await fetch(URL.createObjectURL(file));
-    const blob = await response.blob();
     const base64Data = await new Promise<string>((resolve) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(blob);
+      reader.readAsDataURL(file);
     });
 
     // Remove data URL prefix (e.g., "data:image/jpeg;base64,")
