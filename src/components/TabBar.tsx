@@ -13,31 +13,42 @@ const TabBarContent = () => {
   const path = location.pathname;
 
   return (
-    <IonTabs>
-      <IonRouterOutlet>
-        <Route exact path="/" component={Feed} />
-        <Route exact path="/upload" component={Upload} />
-        <Route exact path="/profile" component={Profile} />
-        <Route exact path="/settings">
-          <Redirect to="/profile" />
-        </Route>
-      </IonRouterOutlet>
+    <>
+      <style>{`
+        ion-tab-bar {
+          --background: #000;
+        }
+        ion-tab-button {
+          --color: #666;
+          --color-selected: #fff;
+        }
+      `}</style>
+      <IonTabs>
+        <IonRouterOutlet>
+          <Route exact path="/" component={Feed} />
+          <Route exact path="/upload" component={Upload} />
+          <Route exact path="/profile" component={Profile} />
+          <Route exact path="/settings">
+            <Redirect to="/profile" />
+          </Route>
+        </IonRouterOutlet>
 
-      <IonTabBar slot="bottom">
-        <IonTabButton tab="feed" href="/" selected={path === '/'}>
-          <IonIcon icon={homeOutline} />
-          <IonLabel>Feed</IonLabel>
-        </IonTabButton>
-        <IonTabButton tab="upload" href="/upload" selected={path === '/upload'}>
-          <IonIcon icon={addCircleOutline} />
-          <IonLabel>Upload</IonLabel>
-        </IonTabButton>
-        <IonTabButton tab="profile" href="/profile" selected={path === '/profile'}>
-          <IonIcon icon={personOutline} />
-          <IonLabel>Profile</IonLabel>
-        </IonTabButton>
-      </IonTabBar>
-    </IonTabs>
+        <IonTabBar slot="bottom">
+          <IonTabButton tab="feed" href="/" selected={path === '/'}>
+            <IonIcon icon={homeOutline} />
+            <IonLabel>Feed</IonLabel>
+          </IonTabButton>
+          <IonTabButton tab="upload" href="/upload" selected={path === '/upload'}>
+            <IonIcon icon={addCircleOutline} />
+            <IonLabel>Upload</IonLabel>
+          </IonTabButton>
+          <IonTabButton tab="profile" href="/profile" selected={path === '/profile'}>
+            <IonIcon icon={personOutline} />
+            <IonLabel>Profile</IonLabel>
+          </IonTabButton>
+        </IonTabBar>
+      </IonTabs>
+    </>
   );
 };
 
