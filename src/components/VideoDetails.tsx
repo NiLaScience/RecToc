@@ -24,6 +24,7 @@ import ApplicationModal from './ApplicationModal';
 interface VideoDetailsProps {
   video: VideoItem;
   onClose: () => void;
+  onApplicationModalChange?: (isOpen: boolean) => void;
 }
 
 interface JobDescription {
@@ -39,12 +40,13 @@ interface JobDescription {
   applicationUrl?: string;
 }
 
-const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose }) => {
+const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, onApplicationModalChange }) => {
   const [showApplication, setShowApplication] = useState(false);
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const jobDescription = video.jobDescription as JobDescription;
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (showApplication) return; // Disable swipe when application modal is open
     setTouchStart({
       x: e.touches[0].clientX,
       y: e.touches[0].clientY
@@ -52,7 +54,7 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose }) => {
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStart) return;
+    if (!touchStart || showApplication) return; // Disable swipe when application modal is open
 
     const touchEnd = {
       x: e.changedTouches[0].clientX,
@@ -75,10 +77,12 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose }) => {
 
   const handleApply = () => {
     setShowApplication(true);
+    onApplicationModalChange?.(true);
   };
 
   const handleCloseApplication = () => {
     setShowApplication(false);
+    onApplicationModalChange?.(false);
   };
 
   const formatTime = (seconds: number) => {
@@ -98,10 +102,11 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose }) => {
           bottom: 0,
           width: '100%',
           backgroundColor: '#fff',
-          zIndex: 1000,
+          zIndex: showApplication ? 999 : 1000, // Lower z-index when application modal is open
           overflowY: 'auto',
           transform: 'translateX(0)',
-          transition: 'transform 0.3s ease-out'
+          transition: 'transform 0.3s ease-out',
+          pointerEvents: showApplication ? 'none' : 'auto' // Disable interactions when application modal is open
         }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}

@@ -72,6 +72,7 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
   const [currentSubtitle, setCurrentSubtitle] = useState<string>('');
   const [showDetails, setShowDetails] = useState(false);
+  const [showApplication, setShowApplication] = useState(false);
 
   useEffect(() => {
     let callbackId: string;
@@ -177,11 +178,11 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
     // Check if the swipe is more horizontal than vertical
     if (Math.abs(diffX) > Math.abs(diffY)) {
       // Right swipe to open details (swipe left to right)
-      if (diffX < -50) {
+      if (diffX < -50 && !showDetails) {
         setShowDetails(true);
       }
       // Left swipe to close details (swipe right to left)
-      else if (diffX > 50 && showDetails) {
+      else if (diffX > 50 && showDetails && !showApplication) {
         setShowDetails(false);
       }
     } else {
@@ -413,6 +414,7 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
         <VideoDetails
           video={video}
           onClose={() => setShowDetails(false)}
+          onApplicationModalChange={(isOpen) => setShowApplication(isOpen)}
         />
       )}
 
