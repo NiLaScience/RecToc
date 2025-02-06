@@ -19,6 +19,7 @@ import {
   IonCardTitle,
   IonCardContent,
   IonChip,
+  IonAlert,
 } from '@ionic/react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -26,7 +27,15 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { useRouter } from 'next/navigation';
 import type { UserProfile } from '../types/user';
-import { uploadFile, addSnapshotListener, updateDocument, removeSnapshotListener, signOut } from '../config/firebase';
+import { 
+  uploadFile, 
+  addSnapshotListener, 
+  updateDocument, 
+  removeSnapshotListener, 
+  signOut,
+  getRejectedJobs,
+  unrejectJob,
+} from '../config/firebase';
 import CVParserService from '../services/CVParserService';
 
 const Profile = () => {
@@ -44,6 +53,8 @@ const Profile = () => {
   const [cvUploading, setCVUploading] = useState(false);
   const [presentToast] = useIonToast();
   const pendingChangesRef = useRef<Set<string>>(new Set());
+  const [showResetAlert, setShowResetAlert] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Helper function to update all profile-related state
   const updateProfileState = (profileData: UserProfile) => {
@@ -302,6 +313,31 @@ const Profile = () => {
     }
   };
 
+  const handleResetRejections = async () => {
+    if (!user) return;
+    
+    setResetting(true);
+    try {
+      const rejected = await getRejectedJobs();
+      await Promise.all(rejected.map(r => unrejectJob(r.id)));
+      presentToast({
+        message: 'Successfully reset all job rejections',
+        duration: 2000,
+        color: 'success'
+      });
+    } catch (error) {
+      console.error('Error resetting rejections:', error);
+      presentToast({
+        message: 'Failed to reset rejections. Please try again.',
+        duration: 3000,
+        color: 'danger'
+      });
+    } finally {
+      setResetting(false);
+      setShowResetAlert(false);
+    }
+  };
+
   if (loading) {
     return (
       <IonPage>
@@ -525,6 +561,40 @@ const Profile = () => {
               Sign Out
             </IonButton>
           </div>
+
+          <IonCard>
+            <IonCardHeader>
+              <IonCardTitle>Danger Zone</IonCardTitle>
+            </IonCardHeader>
+            <IonCardContent>
+              <IonButton
+                color="danger"
+                expand="block"
+                onClick={() => setShowResetAlert(true)}
+                disabled={resetting}
+              >
+                {resetting ? <IonSpinner /> : 'Reset All Job Rejections'}
+              </IonButton>
+            </IonCardContent>
+          </IonCard>
+
+          <IonAlert
+            isOpen={showResetAlert}
+            onDidDismiss={() => setShowResetAlert(false)}
+            header="Reset Job Rejections"
+            message="Are you sure you want to reset all your job rejections? This action cannot be undone."
+            buttons={[
+              {
+                text: 'Cancel',
+                role: 'cancel',
+              },
+              {
+                text: 'Reset',
+                role: 'destructive',
+                handler: handleResetRejections,
+              },
+            ]}
+          />
         </div>
       </IonContent>
     </IonPage>

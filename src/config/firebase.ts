@@ -475,21 +475,12 @@ export const rejectJob = async (jobId: string): Promise<void> => {
   });
 };
 
-export const unrejectJob = async (jobId: string): Promise<void> => {
+export const unrejectJob = async (rejectedJobId: string): Promise<void> => {
   const user = await getCurrentUser();
   if (!user) throw new Error('User not authenticated');
   
-  // Find and delete the rejection document
-  const querySnapshot = await getCollection<RejectedJob>('rejectedJobs', {
-    where: [
-      ['userId', '==', user.uid],
-      ['jobId', '==', jobId]
-    ]
-  });
-  
-  if (querySnapshot && querySnapshot.length > 0) {
-    await deleteDocument(`rejectedJobs/${querySnapshot[0].id}`);
-  }
+  // Delete the rejection document directly using its ID
+  await deleteDocument(`rejectedJobs/${rejectedJobId}`);
 };
 
 export const getRejectedJobs = async (): Promise<RejectedJob[]> => {
