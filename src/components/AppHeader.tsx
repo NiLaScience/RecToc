@@ -15,6 +15,7 @@ interface AppHeaderProps {
   onClose?: () => void;
   onToggleView?: () => void;
   onNotifications?: () => void;
+  rightContent?: React.ReactNode;
 }
 
 const AppHeader: React.FC<AppHeaderProps> = ({
@@ -24,6 +25,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
   onClose,
   onToggleView,
   onNotifications,
+  rightContent,
 }) => {
   const isDark = mode === 'fullscreen' || mode === 'upload';
 
@@ -41,35 +43,38 @@ const AppHeader: React.FC<AppHeaderProps> = ({
       <IonHeader style={headerStyle}>
         <IonToolbar className={isDark ? 'dark-toolbar' : undefined}>
           <IonTitle style={{ color: isDark ? '#fff' : undefined }}>{title}</IonTitle>
-          <IonButtons slot="end">
-            {showFeedButtons ? (
-              <>
-                {onToggleView && (
-                  <IonButton 
-                    onClick={onToggleView}
-                    style={{ color: isDark ? '#fff' : undefined }}
-                  >
-                    <IonIcon icon={gridOutline} />
-                  </IonButton>
-                )}
-                {onNotifications && (
-                  <IonButton 
-                    onClick={onNotifications}
-                    style={{ color: isDark ? '#fff' : undefined }}
-                  >
-                    <IonIcon icon={notificationsOutline} />
-                  </IonButton>
-                )}
-              </>
-            ) : onClose ? (
-              <IonButton 
-                onClick={onClose}
-                style={{ color: isDark ? '#fff' : undefined }}
-              >
-                <IonIcon icon={closeOutline} />
-              </IonButton>
-            ) : null}
-          </IonButtons>
+          {(showFeedButtons || onClose || rightContent) && (
+            <IonButtons slot="end">
+              {showFeedButtons ? (
+                <>
+                  {onToggleView && (
+                    <IonButton 
+                      onClick={onToggleView}
+                      style={{ color: isDark ? '#fff' : undefined }}
+                    >
+                      <IonIcon icon={gridOutline} />
+                    </IonButton>
+                  )}
+                  {onNotifications && (
+                    <IonButton 
+                      onClick={onNotifications}
+                      style={{ color: isDark ? '#fff' : undefined }}
+                    >
+                      <IonIcon icon={notificationsOutline} />
+                    </IonButton>
+                  )}
+                </>
+              ) : onClose ? (
+                <IonButton 
+                  onClick={onClose}
+                  style={{ color: isDark ? '#fff' : undefined }}
+                >
+                  <IonIcon icon={closeOutline} />
+                </IonButton>
+              ) : null}
+              {rightContent}
+            </IonButtons>
+          )}
         </IonToolbar>
       </IonHeader>
 

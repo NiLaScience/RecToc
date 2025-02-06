@@ -66,9 +66,9 @@
 
 ## Phase 5: Feed Presentation
 
-- [ ] **Enhance Feed UI**
-  - [ ] Refine the feed layout to mimic a TikTok-like experience using Ionic cards or slides.
-  - [ ] Enable smooth scrolling or swiping through video posts.
+- [x] **Enhance Feed UI**
+  - [x] Refine the feed layout to mimic a TikTok-like experience using Ionic cards or slides.
+  - [x] Enable smooth scrolling or swiping through video posts.
 - [x] **Implement Video Playback**
   - [x] Ensure videos are playable within the feed.
   - [x] Configure auto-play (muted) with tap-to-unmute functionality.
@@ -80,12 +80,12 @@
   - [x] Create CV upload component
   - [x] Implement CV parsing using OpenAI API
   - [x] Store structured CV data in Firestore
-  - [ ] Add validation and error handling for CV uploads
-  - [ ] Support multiple file formats (PDF, DOC, DOCX)
+  - [x] Add validation and error handling for CV uploads
+  - [x] Support multiple file formats (PDF, DOC, DOCX)
   
 - [ ] **Video Application System**
-  - [ ] Create video recording interface for job applications
-  - [ ] Allow candidates to review and re-record their videos
+  - [x] Create video recording interface for job applications
+  - [x] Allow candidates to review and re-record their videos
   - [ ] Implement video processing pipeline (compression, thumbnails)
   - [ ] Store application metadata (CV + video) in Firestore
   - [ ] Add progress tracking for video upload and processing

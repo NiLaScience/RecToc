@@ -1,13 +1,11 @@
 'use client';
 
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   IonPage,
   IonHeader,
   IonToolbar,
   IonTitle,
-  IonButtons,
-  IonButton,
-  IonIcon,
   IonContent,
   IonRefresher,
   IonRefresherContent,
@@ -15,16 +13,20 @@ import {
   IonFab,
   IonFabButton,
   IonSpinner,
+  IonButton,
+  IonIcon,
 } from '@ionic/react';
-import { useState, useEffect } from 'react';
-import { notificationsOutline, gridOutline, videocamOutline } from 'ionicons/icons';
+import { notificationsOutline, gridOutline, videocamOutline, filterOutline } from 'ionicons/icons';
 import Notifications from './Notifications';
 import FeedCard from './FeedCard';
 import VideoPlayer from './VideoPlayer';
 import ApplicationModal from './ApplicationModal';
 import type { VideoItem } from '../types/video';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
+import { rejectJob, unrejectJob, getRejectedJobs } from '../config/firebase';
+import type { RejectedJob } from '../config/firebase';
 import AppHeader from './AppHeader';
+import FilterPopover from './FilterHeader';
 
 const feedContainerStyle: React.CSSProperties = {
   display: 'flex',
@@ -62,6 +64,10 @@ const Feed = () => {
   const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
   const [showApplication, setShowApplication] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [rejectedJobIds, setRejectedJobIds] = useState<Set<string>>(new Set());
+  const [showRejected, setShowRejected] = useState(false);
+  const [showFilterPopover, setShowFilterPopover] = useState(false);
+  const filterButtonRef = useRef<HTMLIonButtonElement>(null);
 
   const headerStyle: React.CSSProperties = {
     position: 'fixed',
@@ -111,6 +117,19 @@ const Feed = () => {
     };
   }, []);
 
+  useEffect(() => {
+    loadRejectedJobs();
+  }, []);
+
+  const loadRejectedJobs = async () => {
+    try {
+      const rejected = await getRejectedJobs();
+      setRejectedJobIds(new Set(rejected.map(r => r.jobId)));
+    } catch (error) {
+      console.error('Error loading rejected jobs:', error);
+    }
+  };
+
   const handleRefresh = async (event: CustomEvent<RefresherEventDetail>) => {
     // Refresh will happen automatically through the snapshot listener
     event.detail.complete();
@@ -133,6 +152,58 @@ const Feed = () => {
     setSelectedJobId(null);
   };
 
+  const handleSwipe = async (direction: 'up' | 'down' | 'left' | 'right', video: VideoItem) => {
+    if (direction === 'up') {
+      // Previous video
+      const currentIndex = filteredVideos.findIndex(v => v.id === video.id);
+      if (currentIndex > 0) {
+        setSelectedVideo(filteredVideos[currentIndex - 1]);
+      }
+    } else if (direction === 'down') {
+      // Next video
+      const currentIndex = filteredVideos.findIndex(v => v.id === video.id);
+      if (currentIndex < filteredVideos.length - 1) {
+        setSelectedVideo(filteredVideos[currentIndex + 1]);
+      }
+    } else if (direction === 'left') {
+      // Reject job
+      if (!rejectedJobIds.has(video.id)) {
+        await rejectJob(video.id);
+        setRejectedJobIds(new Set([...Array.from(rejectedJobIds), video.id]));
+        // Move to next video if available
+        const currentIndex = filteredVideos.findIndex(v => v.id === video.id);
+        if (currentIndex < filteredVideos.length - 1) {
+          setSelectedVideo(filteredVideos[currentIndex + 1]);
+        }
+      }
+    } else if (direction === 'right') {
+      // Show details (handled by VideoPlayer)
+    }
+  };
+
+  const handleResetFilters = async () => {
+    try {
+      const rejected = await getRejectedJobs();
+      await Promise.all(rejected.map(r => unrejectJob(r.jobId)));
+      setRejectedJobIds(new Set());
+    } catch (error) {
+      console.error('Error resetting filters:', error);
+    }
+  };
+
+  const onToggleRejected = () => {
+    setShowRejected(!showRejected);
+  };
+
+  // Filter videos based on rejection status
+  const filteredVideos = useMemo(() => {
+    const rejectedIds = Array.from(rejectedJobIds);
+    return videos.filter(video => {
+      const isRejected = rejectedIds.includes(video.id);
+      return showRejected ? isRejected : !isRejected;
+    });
+  }, [videos, rejectedJobIds, showRejected]);
+
   return (
     <IonPage>
       <AppHeader
@@ -150,17 +221,35 @@ const Feed = () => {
           }
         }}
         onNotifications={() => setShowNotifications(true)}
+        rightContent={
+          <IonButton
+            id="filter-trigger"
+            fill="clear"
+            ref={filterButtonRef}
+            onClick={() => setShowFilterPopover(true)}
+          >
+            <IonIcon
+              icon={filterOutline}
+              color={showRejected ? 'primary' : 'medium'}
+              slot="icon-only"
+            />
+          </IonButton>
+        }
+      />
+
+      <FilterPopover
+        isOpen={showFilterPopover}
+        onDismiss={() => setShowFilterPopover(false)}
+        showRejected={showRejected}
+        onToggleRejected={onToggleRejected}
+        onResetFilters={handleResetFilters}
+        triggerRef={filterButtonRef}
       />
 
       <style>{`
         .dark-toolbar {
           --background: #000;
           --color: #fff;
-          --ion-color-primary: #fff;
-          --ion-toolbar-background: #000;
-        }
-        ion-content {
-          --padding-top: 56px;
         }
       `}</style>
 
@@ -174,8 +263,8 @@ const Feed = () => {
           </div>
         ) : mode === 'grid' ? (
           <div style={feedContainerStyle}>
-            {videos.length > 0 ? (
-              videos.map((video) => (
+            {filteredVideos.length > 0 ? (
+              filteredVideos.map((video) => (
                 <FeedCard
                   key={video.id}
                   video={video}
@@ -197,24 +286,15 @@ const Feed = () => {
                 mode="feed"
                 onEnded={() => {
                   // Find next video
-                  const currentIndex = videos.findIndex(v => v.id === selectedVideo.id);
-                  const nextVideo = videos[currentIndex + 1];
+                  const currentIndex = filteredVideos.findIndex(v => v.id === selectedVideo.id);
+                  const nextVideo = filteredVideos[currentIndex + 1];
                   if (nextVideo) {
                     setSelectedVideo(nextVideo);
                   } else {
                     setMode('grid');
                   }
                 }}
-                onSwipe={(direction) => {
-                  const currentIndex = videos.findIndex(v => v.id === selectedVideo.id);
-                  if (direction === 'up' && currentIndex < videos.length - 1) {
-                    setSelectedVideo(videos[currentIndex + 1]);
-                  } else if (direction === 'down' && currentIndex > 0) {
-                    setSelectedVideo(videos[currentIndex - 1]);
-                  } else if (direction === 'down' && currentIndex === 0) {
-                    setMode('grid');
-                  }
-                }}
+                onSwipe={(direction) => handleSwipe(direction, selectedVideo)}
               />
             )}
           </div>

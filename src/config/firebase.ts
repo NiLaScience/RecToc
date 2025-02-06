@@ -365,6 +365,99 @@ export const removeAllConfigListeners = async () => {
   }
 };
 
+export interface RejectedJob {
+  id: string;
+  jobId: string;
+  userId: string;
+  rejectedAt: string;
+}
+
+// Helper function to get a collection from Firestore with proper typing
+export const getCollection = async <T extends { id: string }>(
+  collection: string,
+  options?: { where: [string, string, any][] }
+): Promise<T[]> => {
+  await ensureInitialized();
+  try {
+    const result = await FirebaseFirestore.getCollection({
+      reference: collection,
+      ...(options && {
+        filters: options.where.map(([field, op, value]) => ({
+          fieldPath: field,
+          opStr: op,
+          value
+        }))
+      })
+    });
+    
+    if (!result || !Array.isArray(result.snapshots)) {
+      return [];
+    }
+
+    return result.snapshots.map(snapshot => {
+      const data = typeof snapshot.data === 'object' ? snapshot.data : {};
+      return {
+        ...data,
+        id: snapshot.id,
+      } as T;
+    });
+  } catch (error) {
+    console.error('Error getting collection:', error);
+    throw error;
+  }
+};
+
+// Helper functions for rejected jobs
+export const rejectJob = async (jobId: string): Promise<void> => {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('User not authenticated');
+  
+  await addDocument('rejectedJobs', {
+    userId: user.uid,
+    jobId,
+    rejectedAt: new Date().toISOString()
+  });
+};
+
+export const unrejectJob = async (jobId: string): Promise<void> => {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('User not authenticated');
+  
+  // Find and delete the rejection document
+  const querySnapshot = await getCollection<RejectedJob>('rejectedJobs', {
+    where: [
+      ['userId', '==', user.uid],
+      ['jobId', '==', jobId]
+    ]
+  });
+  
+  if (querySnapshot && querySnapshot.length > 0) {
+    await deleteDocument(`rejectedJobs/${querySnapshot[0].id}`);
+  }
+};
+
+export const getRejectedJobs = async (): Promise<RejectedJob[]> => {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('User not authenticated');
+  
+  return await getCollection<RejectedJob>('rejectedJobs', {
+    where: [['userId', '==', user.uid]]
+  });
+};
+
+// Helper function to delete a document from Firestore
+export const deleteDocument = async (reference: string) => {
+  await ensureInitialized();
+  try {
+    await FirebaseFirestore.deleteDocument({
+      reference
+    });
+  } catch (error) {
+    console.error('Error deleting document:', error);
+    throw error;
+  }
+};
+
 // Initialize Remote Config when in browser environment
 if (typeof window !== 'undefined') {
   // Initialize Firebase and Remote Config

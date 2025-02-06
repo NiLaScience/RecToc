@@ -9,7 +9,7 @@ import VideoDetails from './VideoDetails';
 
 interface VideoPlayerProps {
   video: VideoItem;
-  onSwipe?: (direction: 'up' | 'down') => void;
+  onSwipe?: (direction: 'up' | 'down' | 'left' | 'right') => void;
   autoPlay?: boolean;
   onEnded?: () => void;
   allowSwipe?: boolean;
@@ -196,20 +196,28 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
     
     const diffX = startPos.x - endPos.x;
     const diffY = startPos.y - endPos.y;
+    const SWIPE_THRESHOLD = 50;
 
     // Check if the swipe is more horizontal than vertical
     if (Math.abs(diffX) > Math.abs(diffY)) {
-      // Right swipe to open details (swipe left to right)
-      if (diffX < -50 && !showDetails) {
-        setShowDetails(true);
+      // Right swipe (swipe left to right)
+      if (diffX < -SWIPE_THRESHOLD) {
+        if (!showDetails) {
+          setShowDetails(true);
+          if (onSwipe) onSwipe('right');
+        }
       }
-      // Left swipe to close details (swipe right to left)
-      else if (diffX > 50 && showDetails && !showApplication) {
-        setShowDetails(false);
+      // Left swipe (swipe right to left)
+      else if (diffX > SWIPE_THRESHOLD) {
+        if (showDetails && !showApplication) {
+          setShowDetails(false);
+        } else if (!showDetails && onSwipe) {
+          onSwipe('left');
+        }
       }
     } else {
       // Only allow vertical swipes when details are not shown
-      if (!showDetails && Math.abs(diffY) > 50 && onSwipe) {
+      if (!showDetails && Math.abs(diffY) > SWIPE_THRESHOLD && onSwipe) {
         if (diffY > 0) {
           onSwipe('up');
         } else {
