@@ -6,6 +6,10 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Configure for static export
+  experimental: {
+    optimizePackageImports: ['@firebase/firestore'],
+  },
   // Ensure React is properly loaded in development
   webpack: (config, { isServer }) => {
     if (!isServer) {
@@ -49,7 +53,6 @@ const nextConfig = {
     '@firebase/firestore',
     '@firebase/storage',
     '@firebase/analytics',
-    'undici'
   ]
 };
 
