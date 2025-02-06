@@ -186,27 +186,83 @@ export const getDocument = async (reference: string) => {
 export const addSnapshotListener = async (reference: string, callback: (data: any) => void) => {
   await ensureInitialized();
   try {
-    // Check if this is a collection reference (odd number of segments)
-    const segments = reference.split('/');
+    // Check if this is a collection reference with query params
+    const [path, queryString] = reference.split('?');
+    const segments = path.split('/');
     console.log('Setting up snapshot listener for:', reference);
     
     if (segments.length % 2 === 1) {
       // Collection reference
+      interface FirestoreFilter {
+        fieldPath: string;
+        opStr: string;
+        value: any;
+      }
+      
+      const filters: FirestoreFilter[] = [];
+      
+      // Parse query string if present
+      if (queryString) {
+        const params = new URLSearchParams(queryString);
+        Array.from(params.entries()).forEach(([field, value]) => {
+          // Handle special array-based filters
+          if (field === '__name__-in') {
+            const ids = value.split(',');
+            filters.push({
+              fieldPath: '__name__',
+              opStr: 'in',
+              value: ids.map(id => `${path}/${id}`) // Convert to full document path
+            });
+          } else if (field === '__name__-not-in') {
+            const ids = value.split(',');
+            filters.push({
+              fieldPath: '__name__',
+              opStr: 'not-in',
+              value: ids.map(id => `${path}/${id}`) // Convert to full document path
+            });
+          } else if (field === 'id-in') {
+            const ids = value.split(',');
+            filters.push({
+              fieldPath: 'id',
+              opStr: 'in',
+              value: ids
+            });
+          } else if (field === 'id-not-in') {
+            const ids = value.split(',');
+            filters.push({
+              fieldPath: 'id',
+              opStr: 'not-in',
+              value: ids
+            });
+          } else {
+            filters.push({
+              fieldPath: field,
+              opStr: '==',
+              value
+            });
+          }
+        });
+      }
+
+      console.log('Applying filters:', filters);
+
       const callbackId = await FirebaseFirestore.addCollectionSnapshotListener(
-        { reference },
+        { 
+          reference: path,
+          ...(filters.length > 0 && { filters })
+        },
         (event, error) => {
           if (error) {
             console.error('Snapshot listener error:', error);
             return;
           }
           if (event?.snapshots) {
-            console.log('Collection snapshot received:', reference, event.snapshots.length, 'documents');
+            console.log('Collection snapshot received:', path, event.snapshots.length, 'documents');
             const documents = event.snapshots.map(snapshot => {
-              // Ensure data is an object
               const data = typeof snapshot.data === 'object' ? snapshot.data : {};
               return {
                 id: snapshot.id,
-                ...data // Spread the data directly instead of nesting it
+                ...data
               };
             });
             callback(documents);
@@ -217,14 +273,14 @@ export const addSnapshotListener = async (reference: string, callback: (data: an
     } else {
       // Document reference
       const callbackId = await FirebaseFirestore.addDocumentSnapshotListener(
-        { reference },
+        { reference: path },
         (event, error) => {
           if (error) {
             console.error('Snapshot listener error:', error);
             return;
           }
           if (event?.snapshot?.data) {
-            console.log('Document snapshot received:', reference);
+            console.log('Document snapshot received:', path);
             callback(event.snapshot.data);
           }
         }

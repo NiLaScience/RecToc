@@ -27,6 +27,7 @@ import { rejectJob, unrejectJob, getRejectedJobs } from '../config/firebase';
 import type { RejectedJob } from '../config/firebase';
 import AppHeader from './AppHeader';
 import FilterPopover from './FilterHeader';
+import { useAuth } from '../context/AuthContext';
 
 const feedContainerStyle: React.CSSProperties = {
   display: 'flex',
@@ -57,6 +58,7 @@ const fullscreenVideoStyle: React.CSSProperties = {
 type FeedMode = 'grid' | 'fullscreen';
 
 const Feed = () => {
+  const { user } = useAuth();
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -80,55 +82,60 @@ const Feed = () => {
 
   useEffect(() => {
     let unsubscribeId: string | null = null;
+    let rejectionsUnsubscribeId: string | null = null;
 
-    const setupListener = async () => {
+    const setupListeners = async () => {
+      if (!user) return;
+
       try {
         setLoading(true);
-        // Listen to videos collection
-        unsubscribeId = await addSnapshotListener(
-          'videos',
+        
+        // Listen to rejected jobs
+        rejectionsUnsubscribeId = await addSnapshotListener(
+          `rejectedJobs?userId=${user.uid}`,
           (data) => {
             if (Array.isArray(data)) {
-              // Data is already in the correct format, just need to sort
-              const sortedVideos = data.sort((a, b) => {
+              console.log('Rejected jobs update:', data);
+              const rejectedIds = new Set(data.map(r => r.jobId));
+              setRejectedJobIds(rejectedIds);
+            }
+          }
+        );
+
+        // Listen to all videos
+        unsubscribeId = await addSnapshotListener(
+          'videos',
+          (videoData) => {
+            if (Array.isArray(videoData)) {
+              const sortedVideos = videoData.sort((a, b) => {
                 const dateA = new Date(a.createdAt).getTime();
                 const dateB = new Date(b.createdAt).getTime();
                 return dateB - dateA;
               });
               
-              console.log('Processed videos:', sortedVideos); // Debug log
+              console.log('Processed videos:', sortedVideos);
               setVideos(sortedVideos as VideoItem[]);
             }
             setLoading(false);
           }
         );
       } catch (error) {
-        console.error('Error setting up video listener:', error);
+        console.error('Error setting up listeners:', error);
         setLoading(false);
       }
     };
 
-    setupListener();
+    setupListeners();
 
     return () => {
       if (unsubscribeId) {
         removeSnapshotListener(unsubscribeId);
       }
+      if (rejectionsUnsubscribeId) {
+        removeSnapshotListener(rejectionsUnsubscribeId);
+      }
     };
-  }, []);
-
-  useEffect(() => {
-    loadRejectedJobs();
-  }, []);
-
-  const loadRejectedJobs = async () => {
-    try {
-      const rejected = await getRejectedJobs();
-      setRejectedJobIds(new Set(rejected.map(r => r.jobId)));
-    } catch (error) {
-      console.error('Error loading rejected jobs:', error);
-    }
-  };
+  }, [user]); // Only depend on user, not showRejected
 
   const handleRefresh = async (event: CustomEvent<RefresherEventDetail>) => {
     // Refresh will happen automatically through the snapshot listener
@@ -155,25 +162,50 @@ const Feed = () => {
   const handleSwipe = async (direction: 'up' | 'down' | 'left' | 'right', video: VideoItem) => {
     if (direction === 'up') {
       // Previous video
-      const currentIndex = filteredVideos.findIndex(v => v.id === video.id);
+      const currentIndex = videos.findIndex(v => v.id === video.id);
       if (currentIndex > 0) {
-        setSelectedVideo(filteredVideos[currentIndex - 1]);
+        // Find the previous non-rejected video if we're not showing rejected videos
+        if (!showRejected) {
+          for (let i = currentIndex - 1; i >= 0; i--) {
+            if (!rejectedJobIds.has(videos[i].id)) {
+              setSelectedVideo(videos[i]);
+              break;
+            }
+          }
+        } else {
+          setSelectedVideo(videos[currentIndex - 1]);
+        }
       }
     } else if (direction === 'down') {
       // Next video
-      const currentIndex = filteredVideos.findIndex(v => v.id === video.id);
-      if (currentIndex < filteredVideos.length - 1) {
-        setSelectedVideo(filteredVideos[currentIndex + 1]);
+      const currentIndex = videos.findIndex(v => v.id === video.id);
+      if (currentIndex < videos.length - 1) {
+        // Find the next non-rejected video if we're not showing rejected videos
+        if (!showRejected) {
+          for (let i = currentIndex + 1; i < videos.length; i++) {
+            if (!rejectedJobIds.has(videos[i].id)) {
+              setSelectedVideo(videos[i]);
+              break;
+            }
+          }
+        } else {
+          setSelectedVideo(videos[currentIndex + 1]);
+        }
       }
     } else if (direction === 'left') {
       // Reject job
       if (!rejectedJobIds.has(video.id)) {
         await rejectJob(video.id);
-        setRejectedJobIds(new Set([...Array.from(rejectedJobIds), video.id]));
-        // Move to next video if available
-        const currentIndex = filteredVideos.findIndex(v => v.id === video.id);
-        if (currentIndex < filteredVideos.length - 1) {
-          setSelectedVideo(filteredVideos[currentIndex + 1]);
+        // Move to next non-rejected video if available
+        const currentIndex = videos.findIndex(v => v.id === video.id);
+        if (currentIndex < videos.length - 1) {
+          // Find the next non-rejected video
+          for (let i = currentIndex + 1; i < videos.length; i++) {
+            if (!rejectedJobIds.has(videos[i].id)) {
+              setSelectedVideo(videos[i]);
+              break;
+            }
+          }
         }
       }
     } else if (direction === 'right') {
@@ -195,11 +227,10 @@ const Feed = () => {
     setShowRejected(!showRejected);
   };
 
-  // Filter videos based on rejection status
+  // Filter videos in memory based on rejection status
   const filteredVideos = useMemo(() => {
-    const rejectedIds = Array.from(rejectedJobIds);
     return videos.filter(video => {
-      const isRejected = rejectedIds.includes(video.id);
+      const isRejected = rejectedJobIds.has(video.id);
       return showRejected ? isRejected : !isRejected;
     });
   }, [videos, rejectedJobIds, showRejected]);
@@ -213,7 +244,13 @@ const Feed = () => {
         onToggleView={() => {
           if (mode === 'grid') {
             if (!selectedVideo && videos.length > 0) {
-              setSelectedVideo(videos[0]);
+              // Find the first non-rejected video if we're not showing rejected videos
+              const firstVideo = !showRejected 
+                ? videos.find(v => !rejectedJobIds.has(v.id))
+                : videos[0];
+              if (firstVideo) {
+                setSelectedVideo(firstVideo);
+              }
             }
             setMode('fullscreen');
           } else {
