@@ -16,7 +16,8 @@
 /build
 
 /.next
-
+/dist/
+/dist
 # misc
 .DS_Store
 *.pem
