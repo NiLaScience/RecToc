@@ -32,8 +32,8 @@ import { useAuth } from '../context/AuthContext';
 const feedContainerStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(2, 1fr)',
-  gap: '2px',
-  padding: '2px',
+  gap: '1px',
+  padding: '1px',
   backgroundColor: '#f0f0f0'
 };
 
@@ -289,11 +289,30 @@ const Feed = () => {
           --background: #000;
           --color: #fff;
         }
+
+        /* Hide scrollbars everywhere */
+        ion-content,
+        ion-content::part(scroll),
+        .ion-page,
+        body,
+        :root {
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+        }
+
+        ion-content::-webkit-scrollbar,
+        ion-content::part(scroll)::-webkit-scrollbar,
+        .ion-page::-webkit-scrollbar,
+        body::-webkit-scrollbar,
+        :root::-webkit-scrollbar {
+          display: none !important;
+        }
       `}</style>
 
       <IonContent 
         scrollY={mode === 'grid'} 
         fullscreen
+        style={{ '--padding-top': '0px' }}
       >
         {loading ? (
           <div style={emptyStateStyle}>
