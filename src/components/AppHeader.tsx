@@ -27,22 +27,20 @@ const AppHeader: React.FC<AppHeaderProps> = ({
   onNotifications,
   rightContent,
 }) => {
-  const isDark = mode === 'fullscreen' || mode === 'upload';
-
   const headerStyle: React.CSSProperties = {
     position: 'fixed',
     top: 0,
     left: 0,
     right: 0,
     zIndex: 1000,
-    backgroundColor: isDark ? '#000' : undefined,
+    backgroundColor: '#000',
   };
 
   return (
     <>
       <IonHeader style={headerStyle}>
-        <IonToolbar className={isDark ? 'dark-toolbar' : undefined}>
-          <IonTitle style={{ color: isDark ? '#fff' : undefined }}>{title}</IonTitle>
+        <IonToolbar className="dark-toolbar">
+          <IonTitle style={{ color: '#fff' }}>{title}</IonTitle>
           {(showFeedButtons || onClose || rightContent) && (
             <IonButtons slot="end">
               {showFeedButtons ? (
@@ -50,7 +48,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
                   {onToggleView && (
                     <IonButton 
                       onClick={onToggleView}
-                      style={{ color: isDark ? '#fff' : undefined }}
+                      style={{ color: '#fff' }}
                     >
                       <IonIcon icon={gridOutline} />
                     </IonButton>
@@ -58,7 +56,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
                   {onNotifications && (
                     <IonButton 
                       onClick={onNotifications}
-                      style={{ color: isDark ? '#fff' : undefined }}
+                      style={{ color: '#fff' }}
                     >
                       <IonIcon icon={notificationsOutline} />
                     </IonButton>
@@ -67,7 +65,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({
               ) : onClose ? (
                 <IonButton 
                   onClick={onClose}
-                  style={{ color: isDark ? '#fff' : undefined }}
+                  style={{ color: '#fff' }}
                 >
                   <IonIcon icon={closeOutline} />
                 </IonButton>
