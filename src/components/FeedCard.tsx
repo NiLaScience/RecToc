@@ -8,6 +8,7 @@ import { addSnapshotListener, removeSnapshotListener } from '../config/firebase'
 
 interface FeedCardProps {
   video: VideoItem;
+  onClick?: () => void;
 }
 
 const cardStyle: React.CSSProperties = {
@@ -61,7 +62,7 @@ const userDescriptionStyle: React.CSSProperties = {
   color: '#4b5563'
 };
 
-export default function FeedCard({ video }: FeedCardProps) {
+export default function FeedCard({ video, onClick }: FeedCardProps) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showDescription, setShowDescription] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -72,14 +73,23 @@ export default function FeedCard({ video }: FeedCardProps) {
     const setupProfileListener = async () => {
       try {
         callbackId = await addSnapshotListener(`users/${video.userId}`, (profileData) => {
-          setUserProfile(profileData as UserProfile);
+          if (profileData) {
+            // Transform the data to match UserProfile structure
+            const profile = {
+              id: video.userId,
+              ...(typeof profileData === 'object' && 'data' in profileData ? profileData.data : profileData)
+            } as UserProfile;
+            setUserProfile(profile);
+          }
         });
       } catch (error) {
         console.error('Error setting up profile listener:', error);
       }
     };
 
-    setupProfileListener();
+    if (video.userId) {
+      setupProfileListener();
+    }
 
     return () => {
       if (callbackId) {
@@ -89,8 +99,14 @@ export default function FeedCard({ video }: FeedCardProps) {
   }, [video.userId]);
 
   const handleVideoClick = () => {
-    setIsPlaying(!isPlaying);
+    if (onClick) {
+      onClick();
+    } else if (video.videoUrl) {
+      setIsPlaying(!isPlaying);
+    }
   };
+
+  if (!video) return null;
 
   return (
     <IonCard style={cardStyle}>
@@ -100,18 +116,24 @@ export default function FeedCard({ video }: FeedCardProps) {
             <img
               src={userProfile?.photoURL || 'https://ionicframework.com/docs/img/demos/avatar.svg'}
               alt={userProfile?.displayName || 'User'}
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = 'https://ionicframework.com/docs/img/demos/avatar.svg';
+              }}
             />
           </IonAvatar>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600 }}>{userProfile?.displayName || 'Anonymous'}</div>
             <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>@{userProfile?.username || 'user'}</div>
           </div>
-          <IonButton
-            fill="clear"
-            onClick={() => setShowDescription(!showDescription)}
-          >
-            <IonIcon icon={informationCircleOutline} />
-          </IonButton>
+          {userProfile?.description && (
+            <IonButton
+              fill="clear"
+              onClick={() => setShowDescription(!showDescription)}
+            >
+              <IonIcon icon={informationCircleOutline} />
+            </IonButton>
+          )}
         </div>
 
         <h2 style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0, color: '#111827' }}>
@@ -139,7 +161,7 @@ export default function FeedCard({ video }: FeedCardProps) {
           style={videoContainerStyle}
           onClick={handleVideoClick}
         >
-          {isPlaying ? (
+          {isPlaying && video.videoUrl ? (
             <VideoPlayer
               video={video}
               autoPlay={true}
@@ -155,32 +177,38 @@ export default function FeedCard({ video }: FeedCardProps) {
                   height: '100%', 
                   objectFit: 'cover'
                 }}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.backgroundColor = '#f3f4f6';
+                }}
               />
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                borderRadius: '50%',
-                padding: '1rem',
-                cursor: 'pointer'
-              }}>
-                <IonIcon
-                  icon={playCircleOutline}
-                  style={{
-                    fontSize: '2rem',
-                    color: 'white'
-                  }}
-                />
-              </div>
+              {video.videoUrl && (
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                  borderRadius: '50%',
+                  padding: '1rem',
+                  cursor: 'pointer'
+                }}>
+                  <IonIcon
+                    icon={playCircleOutline}
+                    style={{
+                      fontSize: '2rem',
+                      color: 'white'
+                    }}
+                  />
+                </div>
+              )}
             </>
           )}
         </div>
         <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', color: '#6b7280' }}>
-          <span>{video.views} views</span>
+          <span>{video.views || 0} views</span>
           <span>•</span>
-          <span>{video.likes} likes</span>
+          <span>{video.likes || 0} likes</span>
         </div>
       </IonCardContent>
     </IonCard>

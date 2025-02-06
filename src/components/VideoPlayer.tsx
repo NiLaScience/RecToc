@@ -103,16 +103,37 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded 
         setCurrentSubtitle(segment?.text || '');
       };
 
+      // Reset subtitle when video changes
+      setCurrentSubtitle('');
+
       // Update subtitles every 100ms
       const intervalId = setInterval(updateSubtitles, 100);
       videoRef.current.addEventListener('seeking', updateSubtitles);
 
       return () => {
         clearInterval(intervalId);
-        videoRef.current?.removeEventListener('seeking', updateSubtitles);
+        if (videoRef.current) {
+          videoRef.current.removeEventListener('seeking', updateSubtitles);
+        }
+        // Clear subtitle when unmounting or changing video
+        setCurrentSubtitle('');
       };
     }
-  }, [video.transcript?.segments]);
+    
+    return () => {
+      // Clear subtitle when video has no transcript
+      setCurrentSubtitle('');
+    };
+  }, [video.id, video.transcript?.segments]); // Add video.id to dependencies
+
+  // Reset state when video changes
+  useEffect(() => {
+    setIsPlaying(autoPlay);
+    setIsMuted(autoPlay);
+    setShowDescription(false);
+    setShowDetails(false);
+    setCurrentSubtitle('');
+  }, [video.id, autoPlay]);
 
   useEffect(() => {
     const fabElement = document.querySelector('ion-fab[data-feed-toggle]') as HTMLElement;
@@ -239,7 +260,8 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded 
         width: '100%',
         height: '100%',
         backgroundColor: '#000',
-        cursor: isDragging ? 'grabbing' : 'grab'
+        cursor: isDragging ? 'grabbing' : 'grab',
+        overflow: 'hidden'
       }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -254,7 +276,8 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded 
         style={{
           width: '100%',
           height: '100%',
-          objectFit: 'contain'
+          objectFit: 'contain',
+          touchAction: 'none'
         }}
         onClick={togglePlay}
         playsInline

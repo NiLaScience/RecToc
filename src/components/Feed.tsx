@@ -14,6 +14,7 @@ import {
   RefresherEventDetail,
   IonFab,
   IonFabButton,
+  IonSpinner,
 } from '@ionic/react';
 import { useState, useEffect } from 'react';
 import { notificationsOutline, gridOutline, videocamOutline } from 'ionicons/icons';
@@ -41,7 +42,14 @@ const emptyStateStyle: React.CSSProperties = {
 const fullscreenVideoStyle: React.CSSProperties = {
   height: '100%',
   width: '100%',
-  backgroundColor: '#000'
+  backgroundColor: '#000',
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  zIndex: 1000,
+  overflow: 'hidden'
 };
 
 type FeedMode = 'grid' | 'fullscreen';
@@ -56,20 +64,36 @@ const Feed = () => {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribeId = addSnapshotListener(
-      'videos',
-      null,
-      (data) => {
-        if (data) {
-          setVideos(data as VideoItem[]);
-        }
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Error loading videos:', error);
+    let unsubscribeId: string | null = null;
+
+    const setupListener = async () => {
+      try {
+        setLoading(true);
+        // Listen to videos collection
+        unsubscribeId = await addSnapshotListener(
+          'videos',
+          (data) => {
+            if (Array.isArray(data)) {
+              // Data is already in the correct format, just need to sort
+              const sortedVideos = data.sort((a, b) => {
+                const dateA = new Date(a.createdAt).getTime();
+                const dateB = new Date(b.createdAt).getTime();
+                return dateB - dateA;
+              });
+              
+              console.log('Processed videos:', sortedVideos); // Debug log
+              setVideos(sortedVideos as VideoItem[]);
+            }
+            setLoading(false);
+          }
+        );
+      } catch (error) {
+        console.error('Error setting up video listener:', error);
         setLoading(false);
       }
-    );
+    };
+
+    setupListener();
 
     return () => {
       if (unsubscribeId) {
@@ -116,45 +140,65 @@ const Feed = () => {
         </IonToolbar>
       </IonHeader>
 
-      <IonContent>
+      <IonContent scrollY={mode === 'grid'}>
         <IonRefresher slot="fixed" onIonRefresh={handleRefresh}>
           <IonRefresherContent />
         </IonRefresher>
 
-        {mode === 'grid' ? (
+        {loading ? (
+          <div style={emptyStateStyle}>
+            <IonSpinner />
+          </div>
+        ) : mode === 'grid' ? (
           <div style={feedContainerStyle}>
-            {videos.map((video) => (
-              <FeedCard
-                key={video.id}
-                video={video}
-                onClick={() => handleVideoClick(video)}
-                onApply={() => handleApply(video.id)}
-              />
-            ))}
-            {!loading && videos.length === 0 && (
+            {videos.length > 0 ? (
+              videos.map((video) => (
+                <FeedCard
+                  key={video.id}
+                  video={video}
+                  onClick={() => handleVideoClick(video)}
+                />
+              ))
+            ) : (
               <div style={emptyStateStyle}>
-                <p>No videos yet</p>
+                <p>No videos available</p>
               </div>
             )}
           </div>
         ) : (
-          selectedVideo && (
-            <div style={fullscreenVideoStyle}>
+          <div style={fullscreenVideoStyle}>
+            {selectedVideo && (
               <VideoPlayer
                 video={selectedVideo}
-                onClose={() => {
-                  setMode('grid');
-                  setSelectedVideo(null);
+                autoPlay
+                onEnded={() => {
+                  // Find next video
+                  const currentIndex = videos.findIndex(v => v.id === selectedVideo.id);
+                  const nextVideo = videos[currentIndex + 1];
+                  if (nextVideo) {
+                    setSelectedVideo(nextVideo);
+                  } else {
+                    setMode('grid');
+                  }
                 }}
-                onApply={() => handleApply(selectedVideo.id)}
+                onSwipe={(direction) => {
+                  const currentIndex = videos.findIndex(v => v.id === selectedVideo.id);
+                  if (direction === 'up' && currentIndex < videos.length - 1) {
+                    setSelectedVideo(videos[currentIndex + 1]);
+                  } else if (direction === 'down' && currentIndex > 0) {
+                    setSelectedVideo(videos[currentIndex - 1]);
+                  } else if (direction === 'down' && currentIndex === 0) {
+                    setMode('grid');
+                  }
+                }}
               />
-            </div>
-          )
+            )}
+          </div>
         )}
 
         <Notifications
-          isOpen={showNotifications}
-          onClose={() => setShowNotifications(false)}
+          open={showNotifications}
+          onDidDismiss={() => setShowNotifications(false)}
         />
 
         {showApplication && selectedJobId && (

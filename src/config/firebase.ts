@@ -201,10 +201,14 @@ export const addSnapshotListener = async (reference: string, callback: (data: an
           }
           if (event?.snapshots) {
             console.log('Collection snapshot received:', reference, event.snapshots.length, 'documents');
-            const documents = event.snapshots.map(snapshot => ({
-              id: snapshot.id,
-              data: snapshot.data
-            }));
+            const documents = event.snapshots.map(snapshot => {
+              // Ensure data is an object
+              const data = typeof snapshot.data === 'object' ? snapshot.data : {};
+              return {
+                id: snapshot.id,
+                ...data // Spread the data directly instead of nesting it
+              };
+            });
             callback(documents);
           }
         }

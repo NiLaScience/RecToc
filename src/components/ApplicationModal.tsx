@@ -21,6 +21,7 @@ import {
   IonAccordion,
   useIonToast,
   IonModal,
+  IonProgressBar,
 } from '@ionic/react';
 import { closeOutline, videocamOutline, documentTextOutline } from 'ionicons/icons';
 import { useAuth } from '../context/AuthContext';
@@ -59,48 +60,31 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
       try {
         // Listen to job post updates
         jobUnsubscribeId = await addSnapshotListener(
-          'videos',
-          jobId,
+          `videos/${jobId}`,
           (data) => {
             if (data) {
               setJobPost(data as VideoItem);
             }
-          },
-          (error) => {
-            console.error('Error loading job post:', error);
-            presentToast({
-              message: 'Error loading job post',
-              duration: 3000,
-              color: 'danger',
-            });
           }
         );
 
-        // Listen to profile updates
+        // Listen to user profile updates
         profileUnsubscribeId = await addSnapshotListener(
-          'users',
-          user.uid,
+          `users/${user.uid}`,
           (data) => {
             if (data) {
               setProfile(data as UserProfile);
             }
-          },
-          (error) => {
-            console.error('Error loading profile:', error);
-            presentToast({
-              message: 'Error loading profile',
-              duration: 3000,
-              color: 'danger',
-            });
           }
         );
 
         // Load existing application if any
-        const existingApplication = await ApplicationService.getApplicationByJobId(jobId);
-        if (existingApplication) {
-          setApplication(existingApplication);
-          if (existingApplication.videoUrl) {
-            setPreviewUrl(existingApplication.videoUrl);
+        const existingApplication = await ApplicationService.getUserApplications();
+        const jobApplication = existingApplication.find(app => app.jobId === jobId);
+        if (jobApplication) {
+          setApplication(jobApplication);
+          if (jobApplication.videoURL) {
+            setPreviewUrl(jobApplication.videoURL);
           }
         }
 
@@ -125,9 +109,30 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     };
   }, [user, jobId, isOpen, presentToast]);
 
-  const handleVideoRecorded = async (file: File) => {
-    setVideoFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
+  const handleVideoRecorded = async (uri: string, format: string) => {
+    try {
+      // Convert the URI to a File object
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const file = new File([blob], `application-video.${format}`, { type: `video/${format}` });
+      setVideoFile(file);
+      setPreviewUrl(uri);
+    } catch (error) {
+      console.error('Error handling recorded video:', error);
+      presentToast({
+        message: 'Error processing recorded video',
+        duration: 3000,
+        color: 'danger',
+      });
+    }
+  };
+
+  const handleVideoError = (error: string) => {
+    presentToast({
+      message: error,
+      duration: 3000,
+      color: 'danger',
+    });
   };
 
   const handleSubmit = async () => {
@@ -138,11 +143,9 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
       if (!application) {
         await ApplicationService.createApplication(jobId);
       }
-      await ApplicationService.uploadVideo(jobId, videoFile, (progress) => {
-        setUploadProgress(progress);
-      });
+      await ApplicationService.uploadApplicationVideo(jobId, videoFile);
       presentToast({
-        message: 'Application submitted successfully!',
+        message: 'Video uploaded successfully',
         duration: 3000,
         color: 'success',
       });
@@ -183,7 +186,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                 <IonCardHeader>
                   <IonCardTitle>{jobPost.title}</IonCardTitle>
                   <IonCardSubtitle>
-                    Posted by {jobPost.recruiterName}
+                    {jobPost.jobDescription?.company || 'Company not specified'}
                   </IonCardSubtitle>
                 </IonCardHeader>
                 <IonCardContent>
@@ -193,16 +196,53 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                         <IonLabel>Job Description</IonLabel>
                       </IonItem>
                       <div className="p-4" slot="content">
-                        {(jobPost.description as JobDescription).sections.map((section, index) => (
-                          <div key={index} className="mb-4">
-                            <h3 className="font-bold mb-2">{section.title}</h3>
-                            <ul className="list-disc pl-6">
-                              {section.items.map((item, itemIndex) => (
-                                <li key={itemIndex}>{item}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
+                        {jobPost.jobDescription && (
+                          <>
+                            {jobPost.jobDescription.responsibilities && jobPost.jobDescription.responsibilities.length > 0 && (
+                              <div className="mb-4">
+                                <h3 className="font-bold mb-2">Responsibilities</h3>
+                                <ul className="list-disc pl-6">
+                                  {jobPost.jobDescription.responsibilities.map((item, index) => (
+                                    <li key={index}>{item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            
+                            {jobPost.jobDescription.requirements && jobPost.jobDescription.requirements.length > 0 && (
+                              <div className="mb-4">
+                                <h3 className="font-bold mb-2">Requirements</h3>
+                                <ul className="list-disc pl-6">
+                                  {jobPost.jobDescription.requirements.map((item, index) => (
+                                    <li key={index}>{item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            
+                            {jobPost.jobDescription.skills && jobPost.jobDescription.skills.length > 0 && (
+                              <div className="mb-4">
+                                <h3 className="font-bold mb-2">Skills</h3>
+                                <ul className="list-disc pl-6">
+                                  {jobPost.jobDescription.skills.map((item, index) => (
+                                    <li key={index}>{item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            
+                            {jobPost.jobDescription.benefits && jobPost.jobDescription.benefits.length > 0 && (
+                              <div className="mb-4">
+                                <h3 className="font-bold mb-2">Benefits</h3>
+                                <ul className="list-disc pl-6">
+                                  {jobPost.jobDescription.benefits.map((item, index) => (
+                                    <li key={index}>{item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     </IonAccordion>
                   </IonAccordionGroup>
@@ -210,7 +250,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                   <div className="mt-6">
                     <h3 className="text-lg font-semibold mb-2">Required Skills</h3>
                     <div className="flex flex-wrap gap-2">
-                      {jobPost.skills.map((skill, index) => (
+                      {jobPost.jobDescription?.skills?.map((skill: string, index: number) => (
                         <IonChip key={index}>{skill}</IonChip>
                       ))}
                     </div>
@@ -221,7 +261,12 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
 
             <div className="mt-6">
               <h2 className="text-xl font-bold mb-4">Your Video Application</h2>
-              {previewUrl ? (
+              {!previewUrl ? (
+                <VideoRecorder 
+                  onVideoRecorded={handleVideoRecorded}
+                  onError={handleVideoError}
+                />
+              ) : (
                 <div className="relative aspect-video">
                   <video
                     src={previewUrl}
@@ -229,8 +274,6 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                     className="w-full h-full object-cover rounded-lg"
                   />
                 </div>
-              ) : (
-                <VideoRecorder onVideoRecorded={handleVideoRecorded} />
               )}
             </div>
 
