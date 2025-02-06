@@ -26,6 +26,20 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /applications/{applicationId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null 
+        && request.resource.data.candidateId == request.auth.uid
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is string;
+      allow update: if request.auth != null 
+        && resource.data.candidateId == request.auth.uid
+        && request.resource.data.candidateId == request.auth.uid
+        && request.resource.data.updatedAt is string;
+      allow delete: if request.auth != null 
+        && resource.data.candidateId == request.auth.uid;
+    }
+
     match /parsedPDFs/{jobId} {
       allow read, write: if request.auth != null;
     }

@@ -55,27 +55,77 @@
 
 ## Phase 4: Basic Transcription (Text Caption) Pipeline
 
-- [ ] **Integrate Transcription/Captions**
-  - [ ] Add a transcript/caption input field on the video upload page.
-  - [ ] Update Firestore documents to include a transcript field.
-  - [ ] Optionally, plan for integration with a simple third-party transcription service or Cloud Function (prototype-level).
-- [ ] **Display Transcript**
-  - [ ] Ensure that the transcript is shown alongside the video on its detail or playback page.
-- [ ] **Testing**
-  - [ ] Verify that transcript data is captured and displayed correctly.
+- [x] **Integrate Transcription/Captions**
+  - [x] Add a transcript/caption input field on the video upload page.
+  - [x] Update Firestore documents to include a transcript field.
+  - [x] Optionally, plan for integration with a simple third-party transcription service or Cloud Function (prototype-level).
+- [x] **Display Transcript**
+  - [x] Ensure that the transcript is shown alongside the video on its detail or playback page.
+- [x] **Testing**
+  - [x] Verify that transcript data is captured and displayed correctly.
 
-## Phase 5: Feed Presentation and Basic Interactivity
+## Phase 5: Feed Presentation
 
 - [ ] **Enhance Feed UI**
   - [ ] Refine the feed layout to mimic a TikTok-like experience using Ionic cards or slides.
   - [ ] Enable smooth scrolling or swiping through video posts.
-- [ ] **Implement Video Playback**
-  - [ ] Ensure videos are playable within the feed.
-  - [ ] Configure auto-play (muted) with tap-to-unmute functionality.
-- [ ] **Add Interactive Features**
-  - [ ] Add a like button to each video and configure it to update a like count in Firestore.
-  - [ ] Optionally, add a basic commenting system (storing comments as subcollections in Firestore).
-- [ ] **Secure Interactions**
-  - [x] Update Firebase security rules to allow only authenticated users to interact (upload, like, comment).
-- [ ] **Testing**
-  - [ ] Test interactivity and ensure data updates (likes, comments) are reflected in real time on both web and mobile.
+- [x] **Implement Video Playback**
+  - [x] Ensure videos are playable within the feed.
+  - [x] Configure auto-play (muted) with tap-to-unmute functionality.
+
+
+## Phase 6: Job Application Features
+
+- [ ] **CV Upload and Processing**
+  - [x] Create CV upload component
+  - [x] Implement CV parsing using OpenAI API
+  - [x] Store structured CV data in Firestore
+  - [ ] Add validation and error handling for CV uploads
+  - [ ] Support multiple file formats (PDF, DOC, DOCX)
+  
+- [ ] **Video Application System**
+  - [ ] Create video recording interface for job applications
+  - [ ] Allow candidates to review and re-record their videos
+  - [ ] Implement video processing pipeline (compression, thumbnails)
+  - [ ] Store application metadata (CV + video) in Firestore
+  - [ ] Add progress tracking for video upload and processing
+
+- [ ] **Recruiter Dashboard**
+  - [ ] Create a dedicated recruiter view for managing job postings
+  - [ ] Implement job posting creation and editing
+  - [ ] Add application tracking system
+  - [ ] Create candidate review interface
+  - [ ] Add sorting and filtering options for applications
+  - [ ] Implement status tracking (new, reviewed, shortlisted, rejected)
+
+- [ ] **Candidate Feed and Applications**
+  - [ ] Create separate feeds for recruiters and candidates
+  - [ ] Implement job search and filtering
+  - [ ] Add application status tracking for candidates
+  - [ ] Create "My Applications" section for candidates
+  - [ ] Add job recommendations based on CV content
+
+- [ ] **Video Enhancement Features**
+  - [ ] Add job description overlay options for videos
+  - [ ] Implement clickable links within videos
+  - [ ] Add custom branding options for recruiter videos
+  - [ ] Create video templates for different job types
+  - [ ] Add caption/subtitle support
+
+- [ ] **Security and Privacy**
+  - [ ] Implement role-based access control (recruiter vs candidate)
+  - [ ] Add CV data encryption
+  - [ ] Implement video access controls
+  - [ ] Add data retention policies
+  - [ ] Implement GDPR compliance features
+
+## Phase 7: Optimization
+
+- [ ] **Performance Optimization**
+  - [ ] Optimize video loading and playback
+  - [ ] Implement lazy loading for feed items
+  - [ ] Add caching for frequently accessed data
+  - [ ] Optimize CV parsing performance
+  - [ ] Implement background processing for heavy tasks
+  - [ ] Optimize video playback for mobile
+  

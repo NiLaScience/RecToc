@@ -5,7 +5,9 @@ const config: CapacitorConfig = {
   appName: 'rectoc',
   webDir: 'out',
   server: {
-    androidScheme: 'https'
+    androidScheme: 'https',
+    iosScheme: 'https',
+    hostname: 'app'
   },
   plugins: {
     FirebaseAuthentication: {

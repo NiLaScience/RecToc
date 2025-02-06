@@ -16,7 +16,8 @@ class CVParserService {
       }
 
       const cvId = uuidv4();
-      const fileName = `${cvId}.pdf`;
+      const fileExtension = cvFile.name.split('.').pop()?.toLowerCase() || 'pdf';
+      const fileName = `${cvId}.${fileExtension}`;
       const storagePath = `cvs-to-parse/${fileName}`;
       let downloadURL: string;
 
@@ -44,7 +45,7 @@ class CVParserService {
               path: storagePath,
               uri: fileInfo.uri,
               metadata: {
-                contentType: 'application/pdf'
+                contentType: cvFile.type
               }
             },
             (event, error) => {
@@ -85,7 +86,7 @@ class CVParserService {
               path: storagePath,
               uri: fileInfo.uri,
               metadata: {
-                contentType: 'application/pdf'
+                contentType: cvFile.type
               }
             },
             (event, error) => {

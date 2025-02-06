@@ -1,9 +1,22 @@
+export interface JobDescription {
+  title: string;
+  company?: string;
+  location?: string;
+  employmentType?: string;
+  experienceLevel?: string;
+  responsibilities?: string[];
+  requirements?: string[];
+  skills?: string[];
+  benefits?: string[];
+  applicationUrl?: string;
+}
+
 export interface VideoItem {
   id: string;
   title: string;
   videoUrl: string;
   thumbnailUrl?: string;
-  jobDescription?: string;
+  jobDescription?: JobDescription;
   tags: string[];
   userId: string;
   createdAt: string;
@@ -18,4 +31,4 @@ export interface VideoItem {
       text: string;
     }[];
   } | null;
-} 
+}

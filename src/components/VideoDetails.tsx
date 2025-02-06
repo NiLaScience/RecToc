@@ -18,6 +18,7 @@ import {
 } from '@ionic/react';
 import { closeOutline, paperPlaneOutline } from 'ionicons/icons';
 import { VideoItem } from '../types/video';
+import { useRouter } from 'next/navigation';
 
 interface VideoDetailsProps {
   video: VideoItem;
@@ -38,14 +39,11 @@ interface JobDescription {
 }
 
 const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose }) => {
+  const router = useRouter();
   const jobDescription = video.jobDescription as JobDescription;
 
   const handleApply = () => {
-    if (jobDescription.applicationUrl) {
-      window.open(jobDescription.applicationUrl, '_blank');
-    } else {
-      console.log('Application flow not implemented yet');
-    }
+    router.push(`/apply?jobId=${video.id}`);
   };
 
   return (

@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  output: process.env.NODE_ENV === 'production' ? 'export' : undefined,
+  distDir: process.env.NODE_ENV === 'production' ? 'out' : '.next',
+  trailingSlash: true,
   images: {
     unoptimized: true,
   },
@@ -48,9 +50,7 @@ const nextConfig = {
     '@firebase/storage',
     '@firebase/analytics',
     'undici'
-  ],
-  // Add trailing slash to handle static export routing
-  trailingSlash: true
-}
+  ]
+};
 
-module.exports = nextConfig 
+module.exports = nextConfig;

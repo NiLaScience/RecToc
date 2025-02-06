@@ -2,7 +2,7 @@
 
 import { Inter } from "next/font/google";
 import { setupIonicReact } from '@ionic/react';
-import { AuthProvider } from '../context/AuthContext';
+import { AuthProvider } from '@/context/AuthContext';
 import Head from 'next/head';
 
 /* Core CSS required for Ionic components to work properly */

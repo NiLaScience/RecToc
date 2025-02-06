@@ -93,6 +93,27 @@ const Profile = () => {
   const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      const fileType = file.type;
+      
+      // Check if file type is supported
+      const supportedTypes = [
+        'application/pdf',                     // PDF
+        'application/msword',                  // DOC
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // DOCX
+        'text/plain',                         // TXT
+        'application/rtf',                    // RTF
+        'application/vnd.oasis.opendocument.text' // ODT
+      ];
+      
+      if (!supportedTypes.includes(fileType)) {
+        presentToast({
+          message: 'Unsupported file type. Please upload a PDF, DOC, DOCX, TXT, RTF, or ODT file.',
+          duration: 3000,
+          color: 'danger'
+        });
+        return;
+      }
+
       setCVFile(file);
       setCVUploading(true);
       
@@ -355,7 +376,7 @@ const Profile = () => {
             <IonLabel position="stacked">CV/Resume</IonLabel>
             <input
               type="file"
-              accept=".pdf"
+              accept=".pdf,.doc,.docx,.txt,.rtf,.odt"
               onChange={handleCVUpload}
               style={{ marginTop: '0.5rem' }}
               disabled={cvUploading}
