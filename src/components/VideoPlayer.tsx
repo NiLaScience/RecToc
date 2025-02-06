@@ -1,15 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { IonIcon, IonButton, IonAvatar } from '@ionic/react';
-import { heart, chatbubble, share, informationCircleOutline } from 'ionicons/icons';
+import { heart, chatbubble, share, informationCircleOutline, volumeHighOutline, volumeMuteOutline } from 'ionicons/icons';
 import { VideoItem } from '../types/video';
 import type { UserProfile } from '../types/user';
 import SubtitleService from '../services/SubtitleService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
+import VideoDetails from './VideoDetails';
 
 interface VideoPlayerProps {
   video: VideoItem;
   onSwipe?: (direction: 'up' | 'down') => void;
   autoPlay?: boolean;
+  onEnded?: () => void;
 }
 
 const overlayStyle: React.CSSProperties = {
@@ -56,14 +58,18 @@ const tagsStyle: React.CSSProperties = {
   marginTop: '0.5rem'
 };
 
-export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoPlayerProps) {
+export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(autoPlay);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [isMuted, setIsMuted] = useState(autoPlay);
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
+  const [mouseStart, setMouseStart] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [showDescription, setShowDescription] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
   const [currentSubtitle, setCurrentSubtitle] = useState<string>('');
+  const [showDetails, setShowDetails] = useState(false);
 
   useEffect(() => {
     let callbackId: string;
@@ -106,7 +112,18 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
         videoRef.current?.removeEventListener('seeking', updateSubtitles);
       };
     }
-  }, [video.transcript]);
+  }, [video.transcript?.segments]);
+
+  useEffect(() => {
+    const fabElement = document.querySelector('ion-fab[data-feed-toggle]') as HTMLElement;
+    if (fabElement) {
+      if (showDetails) {
+        fabElement.style.display = 'none';
+      } else {
+        fabElement.style.display = 'block';
+      }
+    }
+  }, [showDetails]);
 
   useEffect(() => {
     if (videoRef.current) {
@@ -118,29 +135,101 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
     }
   }, [isPlaying]);
 
+  useEffect(() => {
+    if (videoRef.current && autoPlay) {
+      setIsPlaying(true);
+      videoRef.current.play().catch(error => {
+        console.error('Error auto-playing video:', error);
+      });
+    }
+  }, [video.videoUrl, autoPlay]);
+
+  const handleSwipeGesture = (startPos: { x: number; y: number }, endPos: { x: number; y: number }) => {
+    const diffX = startPos.x - endPos.x;
+    const diffY = startPos.y - endPos.y;
+
+    // Check if the swipe is more horizontal than vertical
+    if (Math.abs(diffX) > Math.abs(diffY)) {
+      // Right swipe
+      if (diffX < -50) {
+        setShowDetails(true);
+      }
+    } else {
+      // Vertical swipe
+      if (Math.abs(diffY) > 50 && onSwipe) {
+        if (diffY > 0) {
+          onSwipe('up');
+        } else {
+          onSwipe('down');
+        }
+      }
+    }
+  };
+
+  // Touch event handlers for mobile
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStart(e.touches[0].clientY);
+    setTouchStart({
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY
+    });
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStart || !onSwipe) return;
+    if (!touchStart) return;
 
-    const touchEnd = e.changedTouches[0].clientY;
-    const diff = touchStart - touchEnd;
+    const touchEnd = {
+      x: e.changedTouches[0].clientX,
+      y: e.changedTouches[0].clientY
+    };
 
-    if (Math.abs(diff) > 50) {
-      if (diff > 0) {
-        onSwipe('up');
-      } else {
-        onSwipe('down');
-      }
-    }
-
+    handleSwipeGesture(touchStart, touchEnd);
     setTouchStart(null);
+  };
+
+  // Mouse event handlers for desktop
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setMouseStart({
+      x: e.clientX,
+      y: e.clientY
+    });
+    setIsDragging(true);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !mouseStart) return;
+
+    // Prevent text selection during drag
+    e.preventDefault();
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (!mouseStart || !isDragging) return;
+
+    const mouseEnd = {
+      x: e.clientX,
+      y: e.clientY
+    };
+
+    handleSwipeGesture(mouseStart, mouseEnd);
+    setMouseStart(null);
+    setIsDragging(false);
+  };
+
+  // Handle mouse leaving the element
+  const handleMouseLeave = () => {
+    setMouseStart(null);
+    setIsDragging(false);
   };
 
   const togglePlay = () => {
     setIsPlaying(!isPlaying);
+  };
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      setIsMuted(!isMuted);
+      videoRef.current.muted = !isMuted;
+    }
   };
 
   return (
@@ -149,10 +238,15 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
         position: 'relative',
         width: '100%',
         height: '100%',
-        backgroundColor: '#000'
+        backgroundColor: '#000',
+        cursor: isDragging ? 'grabbing' : 'grab'
       }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
     >
       <video
         ref={videoRef}
@@ -164,7 +258,8 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
         }}
         onClick={togglePlay}
         playsInline
-        muted={autoPlay}
+        muted={isMuted}
+        onEnded={onEnded}
       />
 
       {subtitlesEnabled && currentSubtitle && (
@@ -230,6 +325,16 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
       </div>
 
       <div style={actionButtonsStyle}>
+        <IonButton
+          fill="clear"
+          color="light"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleMute();
+          }}
+        >
+          <IonIcon icon={isMuted ? volumeMuteOutline : volumeHighOutline} />
+        </IonButton>
         <IonButton fill="clear" color="light">
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <IonIcon icon={heart} style={{ fontSize: '1.5rem' }} />
@@ -271,6 +376,13 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
         )}
       </div>
 
+      {showDetails && (
+        <VideoDetails
+          video={video}
+          onClose={() => setShowDetails(false)}
+        />
+      )}
+
       <style>{`
         video::cue {
           background-color: rgba(0, 0, 0, 0.7);
@@ -284,4 +396,4 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false }: VideoP
       `}</style>
     </div>
   );
-} 
+}

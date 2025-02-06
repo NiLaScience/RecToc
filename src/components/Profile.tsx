@@ -14,6 +14,11 @@ import {
   IonSpinner,
   IonAvatar,
   useIonToast,
+  IonCard,
+  IonCardHeader,
+  IonCardTitle,
+  IonCardContent,
+  IonChip,
 } from '@ionic/react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -22,8 +27,9 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { useRouter } from 'next/navigation';
 import type { UserProfile } from '../types/user';
 import { uploadFile, addSnapshotListener, updateDocument, removeSnapshotListener, signOut } from '../config/firebase';
+import CVParserService from '../services/CVParserService';
 
-const Settings = () => {
+const Profile = () => {
   const { user } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -34,6 +40,8 @@ const Settings = () => {
   const [description, setDescription] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>('');
+  const [cvFile, setCVFile] = useState<File | null>(null);
+  const [cvUploading, setCVUploading] = useState(false);
   const [presentToast] = useIonToast();
   const pendingChangesRef = useRef<Set<string>>(new Set());
 
@@ -79,6 +87,40 @@ const Settings = () => {
       pendingChangesRef.current.add('photoURL');
       setPhotoFile(file);
       setPhotoPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setCVFile(file);
+      setCVUploading(true);
+      
+      try {
+        const structuredCV = await CVParserService.parseCV(file);
+        
+        // Update user profile with CV data
+        await updateDocument(`users/${user!.uid}`, {
+          cv: structuredCV,
+          updatedAt: new Date().toISOString()
+        });
+
+        presentToast({
+          message: 'CV uploaded and parsed successfully',
+          duration: 2000,
+          color: 'success'
+        });
+      } catch (error) {
+        console.error('Error uploading CV:', error);
+        presentToast({
+          message: 'Failed to upload CV. Please try again.',
+          duration: 2000,
+          color: 'danger'
+        });
+      } finally {
+        setCVUploading(false);
+        setCVFile(null);
+      }
     }
   };
 
@@ -253,20 +295,15 @@ const Settings = () => {
 
   return (
     <IonPage>
-      <IonHeader className="ion-no-border">
+      <IonHeader>
         <IonToolbar>
-          <IonTitle>Settings</IonTitle>
+          <IonTitle>Profile</IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent className="ion-padding">
-        <IonHeader collapse="condense" className="ion-no-border">
-          <IonToolbar>
-            <IonTitle size="large">Settings</IonTitle>
-          </IonToolbar>
-        </IonHeader>
-
-        <div className="ion-padding">
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
+      
+      <IonContent>
+        <div style={{ padding: '1rem' }}>
+          <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
             <div style={{ position: 'relative' }}>
               <input
                 type="file"
@@ -300,41 +337,177 @@ const Settings = () => {
             <IonInput
               value={username}
               onIonInput={e => handleFieldChange('username', e.detail.value!)}
-              placeholder="Choose a username"
+              placeholder="Enter your username"
             />
           </IonItem>
 
           <IonItem>
-            <IonLabel position="stacked">Description</IonLabel>
+            <IonLabel position="stacked">Bio</IonLabel>
             <IonTextarea
               value={description}
               onIonInput={e => handleFieldChange('description', e.detail.value!)}
               placeholder="Tell us about yourself"
-              autoGrow
+              rows={4}
             />
           </IonItem>
 
-          <IonButton
-            expand="block"
-            onClick={handleSave}
-            disabled={saving}
-            className="ion-margin-top"
-          >
-            {saving ? <IonSpinner name="dots" /> : 'Save Changes'}
-          </IonButton>
+          <IonItem>
+            <IonLabel position="stacked">CV/Resume</IonLabel>
+            <input
+              type="file"
+              accept=".pdf"
+              onChange={handleCVUpload}
+              style={{ marginTop: '0.5rem' }}
+              disabled={cvUploading}
+            />
+            {cvUploading && (
+              <div style={{ display: 'flex', alignItems: 'center', marginTop: '0.5rem' }}>
+                <IonSpinner name="dots" style={{ marginRight: '0.5rem' }} />
+                <span>Processing CV...</span>
+              </div>
+            )}
+          </IonItem>
 
-          <IonButton
-            expand="block"
-            color="danger"
-            className="ion-margin-top"
-            onClick={() => signOut().catch(console.error)}
-          >
-            Sign Out
-          </IonButton>
+          {profile?.cv && (
+            <div style={{ margin: '1rem 0' }}>
+              <h3>Your CV Information</h3>
+              
+              {profile.cv.personalInfo.summary && (
+                <IonCard>
+                  <IonCardHeader>
+                    <IonCardTitle>Professional Summary</IonCardTitle>
+                  </IonCardHeader>
+                  <IonCardContent>
+                    <p>{profile.cv.personalInfo.summary}</p>
+                  </IonCardContent>
+                </IonCard>
+              )}
+
+              {profile.cv.experience && profile.cv.experience.length > 0 && (
+                <IonCard>
+                  <IonCardHeader>
+                    <IonCardTitle>Experience</IonCardTitle>
+                  </IonCardHeader>
+                  <IonCardContent>
+                    {profile.cv.experience.map((exp, index) => (
+                      <div key={index} style={{ marginBottom: '1rem' }}>
+                        <h4>{exp.title} at {exp.company}</h4>
+                        <p style={{ color: 'var(--ion-color-medium)' }}>
+                          {exp.startDate} - {exp.current ? 'Present' : exp.endDate}
+                          {exp.location && ` • ${exp.location}`}
+                        </p>
+                        <ul>
+                          {exp.highlights.map((highlight, i) => (
+                            <li key={i}>{highlight}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </IonCardContent>
+                </IonCard>
+              )}
+
+              {profile.cv.education && profile.cv.education.length > 0 && (
+                <IonCard>
+                  <IonCardHeader>
+                    <IonCardTitle>Education</IonCardTitle>
+                  </IonCardHeader>
+                  <IonCardContent>
+                    {profile.cv.education.map((edu, index) => (
+                      <div key={index} style={{ marginBottom: '1rem' }}>
+                        <h4>{edu.degree} in {edu.field}</h4>
+                        <p>{edu.institution}</p>
+                        {edu.graduationDate && (
+                          <p style={{ color: 'var(--ion-color-medium)' }}>
+                            Graduated: {edu.graduationDate}
+                            {edu.gpa && ` • GPA: ${edu.gpa}`}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </IonCardContent>
+                </IonCard>
+              )}
+
+              {profile.cv.skills && profile.cv.skills.length > 0 && (
+                <IonCard>
+                  <IonCardHeader>
+                    <IonCardTitle>Skills</IonCardTitle>
+                  </IonCardHeader>
+                  <IonCardContent>
+                    {profile.cv.skills.map((skillGroup, index) => (
+                      <div key={index} style={{ marginBottom: '1rem' }}>
+                        <h4>{skillGroup.category}</h4>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          {skillGroup.items.map((skill, i) => (
+                            <IonChip key={i}>{skill}</IonChip>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </IonCardContent>
+                </IonCard>
+              )}
+
+              {profile.cv.certifications && profile.cv.certifications.length > 0 && (
+                <IonCard>
+                  <IonCardHeader>
+                    <IonCardTitle>Certifications</IonCardTitle>
+                  </IonCardHeader>
+                  <IonCardContent>
+                    {profile.cv.certifications.map((cert, index) => (
+                      <div key={index}>
+                        <h4>{cert.name}</h4>
+                        <p>
+                          {cert.issuer}
+                          {cert.date && ` • ${cert.date}`}
+                        </p>
+                      </div>
+                    ))}
+                  </IonCardContent>
+                </IonCard>
+              )}
+
+              {profile.cv.languages && profile.cv.languages.length > 0 && (
+                <IonCard>
+                  <IonCardHeader>
+                    <IonCardTitle>Languages</IonCardTitle>
+                  </IonCardHeader>
+                  <IonCardContent>
+                    {profile.cv.languages.map((lang, index) => (
+                      <IonChip key={index}>
+                        {lang.language} - {lang.proficiency}
+                      </IonChip>
+                    ))}
+                  </IonCardContent>
+                </IonCard>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2rem' }}>
+            <IonButton
+              expand="block"
+              onClick={handleSave}
+              disabled={saving}
+              className="ion-margin-top"
+            >
+              {saving ? <IonSpinner name="dots" /> : 'Save Changes'}
+            </IonButton>
+
+            <IonButton
+              expand="block"
+              color="danger"
+              className="ion-margin-top"
+              onClick={() => signOut().catch(console.error)}
+            >
+              Sign Out
+            </IonButton>
+          </div>
         </div>
       </IonContent>
     </IonPage>
   );
 };
 
-export default Settings; 
+export default Profile;

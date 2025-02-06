@@ -123,6 +123,12 @@ const Feed = () => {
     }
   };
 
+  const handleVideoEnd = () => {
+    if (currentVideoIndex < videos.length - 1) {
+      setCurrentVideoIndex(prev => prev + 1);
+    }
+  };
+
   const toggleFeedMode = () => {
     setFeedMode(prev => prev === 'grid' ? 'fullscreen' : 'grid');
   };
@@ -198,10 +204,11 @@ const Feed = () => {
               video={videos[currentVideoIndex]}
               onSwipe={handleVideoSwipe}
               autoPlay
+              onEnded={handleVideoEnd}
             />
           </div>
         )}
-        <IonFab vertical="bottom" horizontal="center" slot="fixed" style={{ marginBottom: '16px' }}>
+        <IonFab vertical="bottom" horizontal="center" slot="fixed" style={{ marginBottom: '16px' }} data-feed-toggle>
           <IonFabButton onClick={toggleFeedMode} color={feedMode === 'grid' ? 'primary' : 'light'}>
             <IonIcon icon={feedMode === 'grid' ? videocamOutline : gridOutline} />
           </IonFabButton>
