@@ -18,8 +18,8 @@ import {
 } from '@ionic/react';
 import { notificationsOutline, gridOutline, videocamOutline, filterOutline } from 'ionicons/icons';
 import Notifications from './Notifications';
-import FeedCard from './FeedCard';
 import VideoPlayer from './VideoPlayer';
+import VideoTile from './VideoTile';
 import ApplicationModal from './ApplicationModal';
 import type { VideoItem } from '../types/video';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
@@ -30,10 +30,11 @@ import FilterPopover from './FilterHeader';
 import { useAuth } from '../context/AuthContext';
 
 const feedContainerStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '1rem',
-  padding: '1rem'
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, 1fr)',
+  gap: '2px',
+  padding: '2px',
+  backgroundColor: '#f0f0f0'
 };
 
 const emptyStateStyle: React.CSSProperties = {
@@ -302,7 +303,7 @@ const Feed = () => {
           <div style={feedContainerStyle}>
             {filteredVideos.length > 0 ? (
               filteredVideos.map((video) => (
-                <FeedCard
+                <VideoTile
                   key={video.id}
                   video={video}
                   onClick={() => handleVideoClick(video)}
