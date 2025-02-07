@@ -26,6 +26,8 @@ import type { RejectedJob } from '../config/firebase';
 import AppHeader from './AppHeader';
 import FilterPopover from './FilterHeader';
 import { useAuth } from '../context/AuthContext';
+import { db } from '../config/firebase';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 const HEADER_HEIGHT = 56; // Fixed header height
 

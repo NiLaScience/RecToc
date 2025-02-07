@@ -8,6 +8,7 @@ import { FirebaseFunctions } from '@capacitor-firebase/functions';
 import { FirebaseRemoteConfig } from '@capacitor-firebase/remote-config';
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 
 // Firebase configuration from environment variables
@@ -23,6 +24,7 @@ const firebaseConfig = {
 
 // Initialize Firebase based on platform
 let isInitialized = false;
+let db: any = null;
 
 const initializeFirebase = async () => {
   if (isInitialized) return;
@@ -44,6 +46,8 @@ const initializeFirebase = async () => {
         const app = initializeApp(firebaseConfig);
         // Initialize Auth for web platform
         const auth = getAuth(app);
+        // Initialize Firestore
+        db = getFirestore(app);
         isInitialized = true;
         if (process.env.NODE_ENV === 'development') {
           console.log('Firebase Web initialized successfully');
@@ -517,3 +521,5 @@ if (typeof window !== 'undefined') {
 
   // ... rest of initialization code ...
 }
+
+export { db };

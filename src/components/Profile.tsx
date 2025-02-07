@@ -39,6 +39,7 @@ import {
   signOut,
   getRejectedJobs,
   unrejectJob,
+  rejectJob,
 } from '../config/firebase';
 import CVParserService from '../services/CVParserService';
 import { GeminiParserService } from '../services/GeminiParserService';
@@ -148,13 +149,13 @@ const Profile = () => {
           });
         } else {
           // For web platform, convert to base64 directly
-          const base64Data = await new Promise<string>((resolve) => {
+          const base64Data = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => {
               const base64 = reader.result as string;
               resolve(base64);
             };
-            reader.onerror = reject;
+            reader.onerror = error => reject(error);
             reader.readAsDataURL(file);
           });
           
@@ -376,7 +377,7 @@ const Profile = () => {
             const reader = new FileReader();
             const dataUrl = await new Promise<string>((resolve, reject) => {
               reader.onload = () => resolve(reader.result as string);
-              reader.onerror = reject;
+              reader.onerror = error => reject(error);
               reader.readAsDataURL(blob);
             });
             
