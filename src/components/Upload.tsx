@@ -62,7 +62,7 @@ const Upload = () => {
   const [webSuccess, setWebSuccess] = useState(false);
   const [jobDescription, setJobDescription] = useState<JobDescriptionSchema | null>(null);
   const [parsingPDF, setParsingPDF] = useState(false);
-  const [useGemini, setUseGemini] = useState(false);
+  const [useGemini, setUseGemini] = useState(true);
 
   // Constants for upload handling
   const CHUNK_UPLOAD_THRESHOLD = 25 * 1024 * 1024; // 25 MB threshold
@@ -705,7 +705,7 @@ const Upload = () => {
             <IonToggle 
               checked={useGemini}
               onIonChange={e => setUseGemini(e.detail.checked)}
-              style={{ marginLeft: '1rem' }}
+              style={{ '--background': 'black', '--background-checked': 'black', '--handle-background': 'white', '--handle-background-checked': 'white' }}
             />
           </IonItem>
           <IonButton

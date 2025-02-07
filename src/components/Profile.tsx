@@ -67,7 +67,7 @@ const Profile = () => {
   const [showResetAlert, setShowResetAlert] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [useGemini, setUseGemini] = useState(false);
+  const [useGemini, setUseGemini] = useState(true);
 
   // Helper function to update all profile-related state
   const updateProfileState = (profileData: UserProfile) => {
@@ -540,15 +540,6 @@ const Profile = () => {
             </div>
           </div>
 
-          <IonItem>
-            <IonLabel>Use Gemini for parsing</IonLabel>
-            <IonToggle 
-              checked={useGemini}
-              onIonChange={e => setUseGemini(e.detail.checked)}
-              style={{ marginLeft: '1rem' }}
-            />
-          </IonItem>
-
           <div className="input-container">
             <label className="input-label">Display Name</label>
             <IonInput
@@ -583,6 +574,19 @@ const Profile = () => {
             />
           </div>
 
+          <div className="input-container">
+
+          <IonItem lines="none">
+              <IonLabel>Use Gemini for parsing</IonLabel>
+              <IonToggle 
+                checked={useGemini}
+                onIonChange={e => setUseGemini(e.detail.checked)}
+                style={{ '--background': 'black', '--background-checked': 'black', '--handle-background': 'white', '--handle-background-checked': 'white' }}
+              />
+            </IonItem>
+
+          </div>
+
           <div style={{ 
             display: 'flex', 
             gap: '1rem', 
@@ -611,6 +615,8 @@ const Profile = () => {
               )}
             </IonButton>
 
+
+
             <input
               type="file"
               accept=".pdf,.doc,.docx,.txt,.rtf,.odt"
@@ -634,6 +640,8 @@ const Profile = () => {
                 'Upload Resume'
               )}
             </IonButton>
+
+
           </div>
 
           {profile?.cv && (
