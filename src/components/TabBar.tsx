@@ -7,6 +7,7 @@ import { IonReactRouter } from '@ionic/react-router';
 import Feed from './Feed';
 import Upload from './Upload';
 import Profile from './Profile';
+import TutorialFAB from './TutorialFAB';
 
 const TabBarContent = () => {
   const location = useLocation();
@@ -48,6 +49,7 @@ const TabBarContent = () => {
           </IonTabButton>
         </IonTabBar>
       </IonTabs>
+      <TutorialFAB />
     </>
   );
 };
@@ -60,4 +62,4 @@ const TabBar = () => {
   );
 };
 
-export default TabBar; 
+export default TabBar;

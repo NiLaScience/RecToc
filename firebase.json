@@ -10,14 +10,9 @@
     "ignore": [
       "firebase.json",
       "**/node_modules/**",
-      "**/.*",
-      "**/*.apk"
+      "**/.*"
     ],
     "rewrites": [
-      {
-        "source": "/install/app-debug.apk",
-        "destination": "/install/app-debug.apk"
-      },
       {
         "source": "/install",
         "destination": "/install/index.html"
@@ -47,6 +42,10 @@
           {
             "key": "Content-Type",
             "value": "application/vnd.android.package-archive"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=300"
           }
         ]
       }

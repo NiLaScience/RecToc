@@ -19,3 +19,92 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Tutorial styles */
+.tutorial-modal {
+  --height: 100%;
+  --width: 100%;
+}
+
+.tutorial-modal .tutorial-swiper {
+  height: calc(100vh - 120px); /* Account for header and padding */
+  overflow: hidden;
+}
+
+.tutorial-modal .swiper-slide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.tutorial-modal .slide-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  text-align: center;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.tutorial-modal .icon-container {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(var(--ion-color-primary-rgb), 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2rem;
+  flex-shrink: 0;
+}
+
+.tutorial-modal .slide-icon {
+  font-size: 64px;
+  --ionicon-stroke-width: 32px;
+}
+
+.tutorial-modal h2 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--ion-color-primary);
+}
+
+.tutorial-modal p {
+  font-size: 1.1rem;
+  line-height: 1.5;
+  margin-bottom: 2rem;
+  max-width: 80%;
+}
+
+/* Swiper pagination styles */
+.tutorial-modal .swiper-pagination-bullet {
+  background: var(--ion-color-medium);
+  opacity: 0.5;
+}
+
+.tutorial-modal .swiper-pagination-bullet-active {
+  background: var(--ion-color-primary);
+  opacity: 1;
+}
+
+/* Color variations for icon containers */
+.tutorial-modal .icon-container ion-icon[color="primary"] {
+  color: var(--ion-color-primary);
+}
+
+.tutorial-modal .icon-container ion-icon[color="secondary"] {
+  color: var(--ion-color-secondary);
+}
+
+.tutorial-modal .icon-container ion-icon[color="tertiary"] {
+  color: var(--ion-color-tertiary);
+}
+
+.tutorial-modal .icon-container ion-icon[color="success"] {
+  color: var(--ion-color-success);
+}
