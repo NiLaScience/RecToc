@@ -1,4 +1,17 @@
-import { IonModal, IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem, IonLabel } from '@ionic/react';
+import { 
+  IonModal, 
+  IonHeader, 
+  IonToolbar, 
+  IonTitle, 
+  IonContent, 
+  IonList, 
+  IonItem, 
+  IonLabel, 
+  IonButtons,
+  IonButton,
+  IonIcon 
+} from '@ionic/react';
+import { closeOutline } from 'ionicons/icons';
 
 interface NotificationsProps {
   open: boolean;
@@ -11,6 +24,11 @@ const Notifications: React.FC<NotificationsProps> = ({ open, onDidDismiss }) => 
       <IonHeader>
         <IonToolbar>
           <IonTitle>Notifications</IonTitle>
+          <IonButtons slot="end">
+            <IonButton onClick={onDidDismiss}>
+              <IonIcon icon={closeOutline} />
+            </IonButton>
+          </IonButtons>
         </IonToolbar>
       </IonHeader>
       <IonContent>
@@ -27,4 +45,4 @@ const Notifications: React.FC<NotificationsProps> = ({ open, onDidDismiss }) => 
   );
 };
 
-export default Notifications; 
+export default Notifications;

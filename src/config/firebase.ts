@@ -122,7 +122,7 @@ export const uploadFile = async (path: string, uri?: string, metadata?: { conten
       FirebaseStorage.uploadFile(
         {
           path,
-          ...(uri && { uri }),
+          ...(uri && { data: uri }), // Use data instead of uri for base64 content
           ...(metadata?.blob && { blob: metadata.blob }),
           metadata: {
             contentType: metadata?.contentType

@@ -148,21 +148,26 @@ const Profile = () => {
             directory: Directory.Cache
           });
         } else {
-          // For web platform, convert to base64 directly
-          const base64Data = await new Promise<string>((resolve, reject) => {
+          // For web platform, convert file to blob and base64
+          const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+          const base64 = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => {
               const base64 = reader.result as string;
-              resolve(base64);
+              // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
+              const base64Data = base64.split(',')[1];
+              resolve(base64Data);
             };
-            reader.onerror = error => reject(error);
-            reader.readAsDataURL(file);
+            reader.readAsDataURL(blob);
           });
           
           photoURL = await uploadFile(
             `users/${user!.uid}/profile.jpg`,
-            base64Data,
-            { contentType: 'image/jpeg' }
+            base64,
+            { 
+              contentType: file.type,
+              blob 
+            }
           );
         }
 
@@ -370,21 +375,26 @@ const Profile = () => {
               directory: Directory.Cache
             });
           } else {
-            // Web platform - upload directly
-            const blob = await photoFile.arrayBuffer().then(buffer => new Blob([buffer], { type: 'image/jpeg' }));
-            
-            // Create a data URL from the blob
-            const reader = new FileReader();
-            const dataUrl = await new Promise<string>((resolve, reject) => {
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = error => reject(error);
+            // For web platform, convert file to blob and base64
+            const blob = new Blob([await photoFile.arrayBuffer()], { type: photoFile.type });
+            const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64 = reader.result as string;
+                // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
+                const base64Data = base64.split(',')[1];
+                resolve(base64Data);
+              };
               reader.readAsDataURL(blob);
             });
             
             photoURL = await uploadFile(
-              `users/${user.uid}/profile.jpg`,
-              dataUrl,
-              { contentType: 'image/jpeg' }
+              `users/${user!.uid}/profile.jpg`,
+              base64,
+              { 
+                contentType: photoFile.type,
+                blob 
+              }
             );
           }
 

@@ -117,12 +117,26 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
 
   const handleVideoRecorded = async (uri: string, format: string) => {
     try {
-      // Convert the URI to a File object
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const file = new File([blob], `application-video.${format}`, { type: `video/${format}` });
-      setVideoFile(file);
-      setPreviewUrl(uri);
+      if (Capacitor.isNativePlatform()) {
+        // For native platforms, convert URI to File
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const file = new File([blob], `application-video.${format}`, { type: `video/${format}` });
+        setVideoFile(file);
+        setPreviewUrl(uri);
+      } else {
+        // For web platform, convert the blob directly
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        // Clean up the format string to remove codecs
+        const cleanFormat = format.split(';')[0];
+        const cleanMimeType = `video/${cleanFormat}`;
+        // Create a clean blob with proper MIME type
+        const cleanBlob = new Blob([blob], { type: cleanMimeType });
+        const file = new File([cleanBlob], `application-video.${cleanFormat}`, { type: cleanMimeType });
+        setVideoFile(file);
+        setPreviewUrl(URL.createObjectURL(cleanBlob));
+      }
     } catch (error) {
       console.error('Error handling recorded video:', error);
       presentToast({
@@ -164,7 +178,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
       );
       
       presentToast({
-        message: 'Video uploaded successfully',
+        message: 'Application submitted successfully',
         duration: 3000,
         color: 'success',
       });
