@@ -464,8 +464,9 @@ const Upload = () => {
   return (
     <IonPage>
       <AppHeader
-        title="Upload Video"
+        title="Upload Job"
         mode="upload"
+        onClose={() => {}}
       />
       <IonContent>
         <div style={{ padding: '1rem', paddingTop: '56px' }}>
@@ -488,7 +489,7 @@ const Upload = () => {
                 <IonLabel>Choose File</IonLabel>
               </IonSegmentButton>
               <IonSegmentButton value="record">
-                <IonLabel>Record Video</IonLabel>
+                <IonLabel>Record Pitch</IonLabel>
               </IonSegmentButton>
             </IonSegment>
           )}
@@ -497,7 +498,7 @@ const Upload = () => {
             <IonInput
               value={title}
               onIonChange={e => setTitle(e.detail.value!)}
-              placeholder="Video title"
+              placeholder="Job title"
               className={title ? 'has-value' : ''}
             />
           </div>
@@ -589,7 +590,7 @@ const Upload = () => {
                     onClick={() => document.getElementById('video-record')?.click()}
                     style={{ flex: 1 }}
                   >
-                    Record Video
+                    Record Pitch
                   </IonButton>
                   <IonButton
                     expand="block"
@@ -799,7 +800,7 @@ const Upload = () => {
             disabled={uploading || !file || !title.trim()}
           >
             <IonIcon icon={cloudUploadOutline} slot="start" />
-            {uploading ? 'Uploading...' : 'Upload Video'}
+            {uploading ? 'Uploading...' : 'Upload Job'}
           </IonButton>
 
           {webSuccess && !Capacitor.isNativePlatform() && (

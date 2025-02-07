@@ -246,7 +246,7 @@ const Feed = () => {
     <IonPage>
       <div ref={headerRef}>
         <AppHeader
-          title="Feed"
+          title="Job Feed"
           mode={mode}
           showFeedButtons
           onToggleView={() => {

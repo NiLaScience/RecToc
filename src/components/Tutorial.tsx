@@ -17,6 +17,10 @@ import {
   videocamOutline,
   documentTextOutline,
   rocketOutline,
+  gridOutline,
+  personOutline,
+  notificationsOutline,
+  helpCircleOutline,
 } from 'ionicons/icons';
 import { useState } from 'react';
 // Import Swiper and modules
@@ -37,34 +41,67 @@ const Tutorial: React.FC<TutorialProps> = ({ isOpen, onClose }) => {
   const tutorialSteps = [
     {
       title: 'Welcome to ReCToC',
-      description: 'Your personalized video job application platform. Let\'s get you started!',
-      icon: playCircleOutline,
-      color: 'primary'
-    },
-    {
-      title: 'Browse Job Listings',
-      description: 'Scroll through our curated list of video job postings. Each posting includes detailed information about the role.',
-      icon: searchOutline,
-      color: 'secondary'
-    },
-    {
-      title: 'Record Your Response',
-      description: 'Create personalized video responses to job postings. Show your personality and skills in action!',
-      icon: videocamOutline,
-      color: 'tertiary'
-    },
-    {
-      title: 'Track Applications',
-      description: 'Keep track of all your applications and their status in one place.',
-      icon: documentTextOutline,
-      color: 'success'
-    },
-    {
-      title: 'Ready to Start!',
-      description: 'You\'re all set to begin your video job application journey.',
+      description:
+        'We are a personalized video job application platform. With ReCToC, you can browse, watch, and apply to job listings through short videos. Let\'s get started!',
       icon: rocketOutline,
-      color: 'primary'
-    }
+      color: 'primary',
+    },
+    {
+      title: 'Two Feed Views',
+      description:
+        'Use the grid view for quick scanning or switch to fullscreen mode for a TikTok-like swiping experience. Toggle between these modes with the grid icon in the header.',
+      icon: gridOutline,
+      color: 'secondary',
+    },
+    {
+      title: 'Swipe Gestures',
+      description:
+        'In fullscreen mode, swipe up or down to move between videos, swipe left to reject a job, or swipe right to open details. In the details view, swipe left to close.',
+      icon: arrowForward,
+      color: 'tertiary',
+    },
+    {
+      title: 'Reject and Filter',
+      description:
+        'Left swiping rejects a video. You can also use the filter icon in the header to show or hide rejected videos at any time.',
+      icon: closeOutline,
+      color: 'danger',
+    },
+    {
+      title: 'View Job Details',
+      description:
+        'Tap or swipe right on a video to see more info about the job, including descriptions and an option to apply.',
+      icon: documentTextOutline,
+      color: 'success',
+    },
+    {
+      title: 'Apply with Video',
+      description:
+        'Record or upload your video response directly in the app. Use our integrated application modal to submit quickly.',
+      icon: videocamOutline,
+      color: 'warning',
+    },
+    {
+      title: 'Profile & CV',
+      description:
+        'In the Profile tab, you can manage your account info, upload or parse your CV, and update your personal details.',
+      icon: personOutline,
+      color: 'tertiary',
+    },
+    {
+      title: 'Notifications & Subtitles',
+      description:
+        'In fullscreen playback, tap the volume or CC button for audio and subtitles control.',
+      icon: playCircleOutline,
+      color: 'primary',
+    },
+    {
+      title: 'Revisit Tutorial',
+      description:
+        'You can reopen this guide anytime by tapping the help button in the top-left corner. Enjoy exploring ReCToC!',
+      icon: helpCircleOutline,
+      color: 'medium',
+    },
   ];
 
   const handleSlideChange = (swiper: any) => {
@@ -72,8 +109,8 @@ const Tutorial: React.FC<TutorialProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <IonModal 
-      isOpen={isOpen} 
+    <IonModal
+      isOpen={isOpen}
       onDidDismiss={onClose}
       className="tutorial-modal"
     >
@@ -110,7 +147,7 @@ const Tutorial: React.FC<TutorialProps> = ({ isOpen, onClose }) => {
                     className="slide-icon"
                   />
                 </div>
-                <h2>{step.title}</h2>
+                <h2 style={{ color: '#fff' }}>{step.title}</h2>
                 <IonText color="medium">
                   <p>{step.description}</p>
                 </IonText>

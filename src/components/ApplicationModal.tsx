@@ -396,7 +396,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
               {/* Video Recording Section */}
               <div style={{ maxWidth: '600px', margin: '1.5rem auto' }}>
                 <h2 style={{ color: '#fff', marginBottom: '1rem', fontSize: '1.25rem' }}>
-                  Your Video Application
+                  Pitch yourself!
                 </h2>
                 {!previewUrl ? (
                   <>
@@ -442,7 +442,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                               }}
                             >
                               <IonIcon slot="start" icon={cameraOutline} />
-                              Record Video
+                              Record Pitch
                             </IonButton>
                           )}
                           <IonButton

@@ -1,7 +1,7 @@
 'use client';
 
 import { IonTabs, IonTabBar, IonTabButton, IonIcon, IonLabel, IonRouterOutlet } from '@ionic/react';
-import { homeOutline, addCircleOutline, personOutline } from 'ionicons/icons';
+import { homeOutline, addCircleOutline, personOutline, cloudUploadOutline } from 'ionicons/icons';
 import { Route, Redirect, useLocation } from 'react-router-dom';
 import { IonReactRouter } from '@ionic/react-router';
 import Feed from './Feed';
@@ -37,11 +37,11 @@ const TabBarContent = () => {
         <IonTabBar slot="bottom">
           <IonTabButton tab="feed" href="/" selected={path === '/'}>
             <IonIcon icon={homeOutline} />
-            <IonLabel>Feed</IonLabel>
+            <IonLabel>Job Feed</IonLabel>
           </IonTabButton>
           <IonTabButton tab="upload" href="/upload" selected={path === '/upload'}>
-            <IonIcon icon={addCircleOutline} />
-            <IonLabel>Upload</IonLabel>
+            <IonIcon icon={cloudUploadOutline} />
+            <IonLabel>Upload Job</IonLabel>
           </IonTabButton>
           <IonTabButton tab="profile" href="/profile" selected={path === '/profile'}>
             <IonIcon icon={personOutline} />

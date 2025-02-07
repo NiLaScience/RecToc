@@ -147,7 +147,7 @@ const VideoRecorder: React.FC<VideoRecorderProps> = ({ onVideoRecorded, onError 
       ) : (
         <IonButton expand="block" onClick={startRecording}>
           <IonIcon icon={videocamOutline} slot="start" />
-          Start Recording
+          Record Pitch
         </IonButton>
       )}
     </div>
