@@ -2,10 +2,11 @@ import type { CVSchema } from '../services/OpenAIService';
 
 export interface UserProfile {
   id: string;
+  uid: string;
   displayName: string;
   username: string;
   email: string;
-  photoURL?: string;
+  photoURL?: string;  // Keep using photoURL in our database schema
   description?: string;
   cv?: CVSchema;
   createdAt: string;

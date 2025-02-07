@@ -20,6 +20,7 @@ import {
 } from '@ionic/react';
 import { logInOutline, personAddOutline, mailOutline, lockClosedOutline } from 'ionicons/icons';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { useRouter } from 'next/navigation';
 
@@ -54,10 +55,38 @@ export default function Auth() {
         });
       } else {
         console.log('Attempting signup with email:', email);
-        await FirebaseAuthentication.createUserWithEmailAndPassword({
+        const result = await FirebaseAuthentication.createUserWithEmailAndPassword({
           email,
           password
         });
+        
+        // Create user profile in Firestore
+        if (result.user) {
+          const now = new Date().toISOString();
+          const userProfile = {
+            uid: result.user.uid, // Add uid field as required by rules
+            id: result.user.uid,
+            displayName: email.split('@')[0], // temporary display name
+            username: email.split('@')[0].toLowerCase(), // temporary username
+            email: result.user.email || '',
+            photoURL: result.user.photoUrl || null, // Map from Capacitor's photoUrl to our photoURL
+            createdAt: now,
+            updatedAt: now
+          };
+          
+          // Initialize user profile in Firestore using Capacitor plugin
+          try {
+            await FirebaseFirestore.setDocument({
+              reference: `users/${result.user.uid}`,
+              data: userProfile
+            });
+            console.log('User profile created successfully:', userProfile);
+          } catch (error) {
+            console.error('Error creating user profile:', error);
+            // Consider showing an error message to the user
+            setError('Failed to create user profile. Please try again.');
+          }
+        }
       }
       // Success - AuthContext will handle navigation
     } catch (error: any) {
