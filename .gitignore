@@ -66,3 +66,6 @@ resources/
 # Logs
 logs
 *.log
+
+# APK files
+*.apk
