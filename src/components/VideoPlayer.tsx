@@ -229,6 +229,20 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
   }, [video.videoUrl, autoPlay]);
 
   useEffect(() => {
+    if (mode === 'details' && videoRef.current) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (showDetails && videoRef.current) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    }
+  }, [showDetails]);
+
+  useEffect(() => {
     if (videoRef.current) {
       const handleLoadStart = () => setVideoLoading(true);
       const handleCanPlay = () => setVideoLoading(false);
@@ -249,8 +263,8 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
   }, []);
 
   const handleSwipeGesture = (startPos: { x: number; y: number }, endPos: { x: number; y: number }) => {
-    // Only allow swipes in feed mode
-    if (mode !== 'feed') return;
+    // Only allow swipes in feed mode and details mode
+    if (mode !== 'feed' && mode !== 'details') return;
     
     const diffX = startPos.x - endPos.x;
     const diffY = startPos.y - endPos.y;
@@ -260,9 +274,8 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
     if (Math.abs(diffX) > Math.abs(diffY)) {
       // Right swipe (swipe left to right)
       if (diffX < -SWIPE_THRESHOLD) {
-        if (!showDetails) {
-          setShowDetails(true);
-          if (onSwipe) onSwipe('right');
+        if (!showDetails && onSwipe) {
+          onSwipe('right');
         }
       }
       // Left swipe (swipe right to left)
@@ -358,16 +371,16 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
         width: '100%',
         height: '100%',
         backgroundColor: '#000',
-        cursor: mode === 'feed' ? (isDragging ? 'grabbing' : 'grab') : 'default',
+        cursor: (mode === 'feed' || mode === 'details') ? (isDragging ? 'grabbing' : 'grab') : 'default',
         overflow: 'hidden',
-        touchAction: mode === 'feed' ? 'none' : 'auto'
+        touchAction: (mode === 'feed' || mode === 'details') ? 'none' : 'auto'
       }}
-      onTouchStart={mode === 'feed' ? handleTouchStart : undefined}
-      onTouchEnd={mode === 'feed' ? handleTouchEnd : undefined}
-      onMouseDown={mode === 'feed' ? handleMouseDown : undefined}
-      onMouseMove={mode === 'feed' ? handleMouseMove : undefined}
-      onMouseUp={mode === 'feed' ? handleMouseUp : undefined}
-      onMouseLeave={mode === 'feed' ? handleMouseLeave : undefined}
+      onTouchStart={(mode === 'feed' || mode === 'details') ? handleTouchStart : undefined}
+      onTouchEnd={(mode === 'feed' || mode === 'details') ? handleTouchEnd : undefined}
+      onMouseDown={(mode === 'feed' || mode === 'details') ? handleMouseDown : undefined}
+      onMouseMove={(mode === 'feed' || mode === 'details') ? handleMouseMove : undefined}
+      onMouseUp={(mode === 'feed' || mode === 'details') ? handleMouseUp : undefined}
+      onMouseLeave={(mode === 'feed' || mode === 'details') ? handleMouseLeave : undefined}
     >
       {/* Show thumbnail while video is loading */}
       {videoLoading && video.thumbnailUrl && !thumbnailError && (
@@ -407,7 +420,7 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
           src={video.videoUrl}
           style={{
             ...videoStyle,
-            touchAction: mode === 'feed' ? 'none' : 'auto',
+            touchAction: (mode === 'feed' || mode === 'details') ? 'none' : 'auto',
             opacity: videoLoading ? 0 : 1,
             transition: 'opacity 0.2s ease-in-out'
           }}

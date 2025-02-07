@@ -3,9 +3,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   IonPage,
-  IonHeader,
-  IonToolbar,
-  IonTitle,
   IonContent,
   IonRefresher,
   IonRefresherContent,
@@ -15,6 +12,7 @@ import {
   IonSpinner,
   IonButton,
   IonIcon,
+  IonToast
 } from '@ionic/react';
 import { notificationsOutline, gridOutline, videocamOutline, filterOutline } from 'ionicons/icons';
 import Notifications from './Notifications';
@@ -29,12 +27,13 @@ import AppHeader from './AppHeader';
 import FilterPopover from './FilterHeader';
 import { useAuth } from '../context/AuthContext';
 
+const HEADER_HEIGHT = 56; // Fixed header height
+
 const feedContainerStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(2, 1fr)',
-  gap: '1px',
-  padding: '1px',
-  backgroundColor: '#f0f0f0'
+  gap: '1.5px',
+  backgroundColor: 'black'
 };
 
 const emptyStateStyle: React.CSSProperties = {
@@ -56,7 +55,7 @@ const fullscreenVideoStyle: React.CSSProperties = {
   overflow: 'hidden'
 };
 
-type FeedMode = 'grid' | 'fullscreen';
+type FeedMode = 'grid' | 'fullscreen' | 'details';
 
 const Feed = () => {
   const { user } = useAuth();
@@ -70,16 +69,9 @@ const Feed = () => {
   const [rejectedJobIds, setRejectedJobIds] = useState<Set<string>>(new Set());
   const [showRejected, setShowRejected] = useState(false);
   const [showFilterPopover, setShowFilterPopover] = useState(false);
+  const [showToast, setShowToast] = useState(false);
   const filterButtonRef = useRef<HTMLIonButtonElement>(null);
-
-  const headerStyle: React.CSSProperties = {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1000,
-    backgroundColor: mode === 'fullscreen' ? '#000' : undefined,
-  };
+  const headerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let unsubscribeId: string | null = null;
@@ -195,22 +187,34 @@ const Feed = () => {
       }
     } else if (direction === 'left') {
       // Reject job
-      if (!rejectedJobIds.has(video.id)) {
-        await rejectJob(video.id);
-        // Move to next non-rejected video if available
-        const currentIndex = videos.findIndex(v => v.id === video.id);
-        if (currentIndex < videos.length - 1) {
-          // Find the next non-rejected video
-          for (let i = currentIndex + 1; i < videos.length; i++) {
-            if (!rejectedJobIds.has(videos[i].id)) {
-              setSelectedVideo(videos[i]);
-              break;
-            }
-          }
-        }
+      const newRejectedJobIds = new Set(rejectedJobIds);
+      newRejectedJobIds.add(video.id);
+      setRejectedJobIds(newRejectedJobIds);
+      setShowToast(true);
+
+      // Find next non-rejected video
+      const currentIndex = filteredVideos.findIndex(v => v.id === video.id);
+      const nextVideo = filteredVideos.slice(currentIndex + 1).find(v => !newRejectedJobIds.has(v.id));
+      if (nextVideo) {
+        setSelectedVideo(nextVideo);
+      } else {
+        setMode('grid');
+      }
+
+      // Update rejection in Firestore
+      try {
+        const userRef = doc(db, 'users', user?.uid || '');
+        await updateDoc(userRef, {
+          [`rejectedJobs.${video.id}`]: serverTimestamp()
+        });
+      } catch (error) {
+        console.error('Error updating rejected jobs:', error);
       }
     } else if (direction === 'right') {
-      // Show details (handled by VideoPlayer)
+      // Show details
+      setMode('details');
+      setSelectedJobId(video.id);
+      setShowApplication(true);
     }
   };
 
@@ -238,42 +242,43 @@ const Feed = () => {
 
   return (
     <IonPage>
-      <AppHeader
-        title="Feed"
-        mode={mode}
-        showFeedButtons
-        onToggleView={() => {
-          if (mode === 'grid') {
-            if (!selectedVideo && videos.length > 0) {
-              // Find the first non-rejected video if we're not showing rejected videos
-              const firstVideo = !showRejected 
-                ? videos.find(v => !rejectedJobIds.has(v.id))
-                : videos[0];
-              if (firstVideo) {
-                setSelectedVideo(firstVideo);
+      <div ref={headerRef}>
+        <AppHeader
+          title="Feed"
+          mode={mode}
+          showFeedButtons
+          onToggleView={() => {
+            if (mode === 'grid') {
+              if (!selectedVideo && videos.length > 0) {
+                const firstVideo = !showRejected 
+                  ? videos.find(v => !rejectedJobIds.has(v.id))
+                  : videos[0];
+                if (firstVideo) {
+                  setSelectedVideo(firstVideo);
+                }
               }
+              setMode('fullscreen');
+            } else {
+              setMode('grid');
             }
-            setMode('fullscreen');
-          } else {
-            setMode('grid');
+          }}
+          onNotifications={() => setShowNotifications(true)}
+          rightContent={
+            <IonButton
+              id="filter-trigger"
+              fill="clear"
+              ref={filterButtonRef}
+              onClick={() => setShowFilterPopover(true)}
+            >
+              <IonIcon
+                icon={filterOutline}
+                color={showRejected ? 'primary' : 'medium'}
+                slot="icon-only"
+              />
+            </IonButton>
           }
-        }}
-        onNotifications={() => setShowNotifications(true)}
-        rightContent={
-          <IonButton
-            id="filter-trigger"
-            fill="clear"
-            ref={filterButtonRef}
-            onClick={() => setShowFilterPopover(true)}
-          >
-            <IonIcon
-              icon={filterOutline}
-              color={showRejected ? 'primary' : 'medium'}
-              slot="icon-only"
-            />
-          </IonButton>
-        }
-      />
+        />
+      </div>
 
       <FilterPopover
         isOpen={showFilterPopover}
@@ -284,55 +289,29 @@ const Feed = () => {
         triggerRef={filterButtonRef}
       />
 
-      <style>{`
-        .dark-toolbar {
-          --background: #000;
-          --color: #fff;
-        }
-
-        /* Hide scrollbars everywhere */
-        ion-content,
-        ion-content::part(scroll),
-        .ion-page,
-        body,
-        :root {
-          scrollbar-width: none !important;
-          -ms-overflow-style: none !important;
-        }
-
-        ion-content::-webkit-scrollbar,
-        ion-content::part(scroll)::-webkit-scrollbar,
-        .ion-page::-webkit-scrollbar,
-        body::-webkit-scrollbar,
-        :root::-webkit-scrollbar {
-          display: none !important;
-        }
-      `}</style>
-
-      <IonContent 
-        scrollY={mode === 'grid'} 
-        fullscreen
-        style={{ '--padding-top': '0px' }}
-      >
+      <IonContent scrollY={mode === 'grid'} style={{ '--background': '#000' }}>
         {loading ? (
-          <div style={emptyStateStyle}>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
             <IonSpinner />
           </div>
+        ) : videos.length === 0 ? (
+          <div style={emptyStateStyle}>
+            <p>No videos available</p>
+          </div>
         ) : mode === 'grid' ? (
-          <div style={feedContainerStyle}>
-            {filteredVideos.length > 0 ? (
-              filteredVideos.map((video) => (
+          <div style={{ paddingTop: '56px', backgroundColor: '#000' }}>
+            <div style={{
+              ...feedContainerStyle,
+              marginTop: '-56px'
+            }}>
+              {filteredVideos.map((video) => (
                 <VideoTile
                   key={video.id}
                   video={video}
                   onClick={() => handleVideoClick(video)}
                 />
-              ))
-            ) : (
-              <div style={emptyStateStyle}>
-                <p>No videos available</p>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         ) : (
           <div style={fullscreenVideoStyle}>
@@ -356,20 +335,30 @@ const Feed = () => {
             )}
           </div>
         )}
-
-        <Notifications
-          open={showNotifications}
-          onDidDismiss={() => setShowNotifications(false)}
-        />
-
-        {showApplication && selectedJobId && (
-          <ApplicationModal
-            isOpen={showApplication}
-            onClose={handleCloseApplication}
-            jobId={selectedJobId}
-          />
-        )}
       </IonContent>
+
+      <Notifications
+        open={showNotifications}
+        onDidDismiss={() => setShowNotifications(false)}
+      />
+
+      {showApplication && selectedJobId && (
+        <ApplicationModal
+          isOpen={showApplication}
+          onClose={handleCloseApplication}
+          jobId={selectedJobId}
+        />
+      )}
+
+      <IonToast
+        isOpen={showToast}
+        onDidDismiss={() => setShowToast(false)}
+        message="Job rejected"
+        duration={1500}
+        position="top"
+        color="danger"
+        style={{ zIndex: 9999 }}
+      />
     </IonPage>
   );
 };

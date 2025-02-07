@@ -35,77 +35,26 @@ const thumbnailStyle: React.CSSProperties = {
   backgroundColor: '#000'
 };
 
-const tileOverlayStyle: React.CSSProperties = {
+const overlayStyle: React.CSSProperties = {
   position: 'absolute',
-  bottom: 0,
+  top: 0,
   left: 0,
   right: 0,
-  padding: '12px',
-  paddingBottom: '16px',
-  background: 'linear-gradient(transparent, rgba(0,0,0,0.9))',
-  marginTop: 'auto'
-};
-
-const infoRowStyle: React.CSSProperties = {
+  bottom: 0,
+  padding: '0.75rem',
   display: 'flex',
-  alignItems: 'center',
+  flexDirection: 'column',
   justifyContent: 'space-between',
-  gap: '8px'
+  zIndex: 2,
+  pointerEvents: 'none'
 };
 
-const userInfoStyle: React.CSSProperties = {
+const upperContainerStyle: React.CSSProperties = {
   display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  flex: '1 1 auto'
-};
-
-const avatarStyle: React.CSSProperties = {
-  width: '48px',
-  height: '48px',
-  borderRadius: '50%',
-  border: '2px solid #fff',
-  objectFit: 'cover',
-  minWidth: '48px', // Prevent shrinking
-  backgroundColor: '#f4f4f4' // Placeholder background while loading
-};
-
-const usernameStyle: React.CSSProperties = {
-  margin: 0,
-  color: '#fff',
-  fontSize: '14px',
-  fontWeight: 'bold',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap'
-};
-
-const titleStyle: React.CSSProperties = {
-  margin: 0,
-  color: '#fff',
-  fontSize: '16px',
-  fontWeight: 'bold',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-  textAlign: 'right',
-  flex: '1 1 auto',
-  maxWidth: '50%'
-};
-
-const tagContainerStyle: React.CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: '4px',
-  marginTop: '4px'
-};
-
-const tagStyle: React.CSSProperties = {
-  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  color: '#fff',
-  padding: '2px 8px',
-  borderRadius: '12px',
-  fontSize: '12px'
+  justifyContent: 'space-between',
+  alignItems: 'flex-start',
+  width: '100%',
+  pointerEvents: 'auto'
 };
 
 const VideoTile: React.FC<VideoTileProps> = ({ video, onClick }) => {
@@ -146,29 +95,95 @@ const VideoTile: React.FC<VideoTileProps> = ({ video, onClick }) => {
           alt={video.title}
           style={thumbnailStyle}
         />
-        <div style={tileOverlayStyle}>
-          <div style={infoRowStyle}>
-            <div style={userInfoStyle}>
-              <img
-                src={userProfile?.photoURL || 'https://ionicframework.com/docs/img/demos/avatar.svg'}
-                alt={userProfile?.displayName || 'User'}
-                style={avatarStyle}
-              />
-              <p style={usernameStyle}>{userProfile?.displayName || 'User'}</p>
+        <div style={overlayStyle}>
+          <div style={upperContainerStyle}>
+            {/* Title in upper left */}
+            <div style={{ maxWidth: '60%' }}>
+              <p style={{ 
+                margin: 0, 
+                fontSize: '0.9rem', 
+                fontWeight: 'bold',
+                color: 'white',
+                textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
+                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                display: 'inline-block'
+              }}>
+                {video.title}
+              </p>
             </div>
-            <p style={titleStyle}>{video.title}</p>
-            {video.tags && video.tags.length > 0 && (
-              <div style={tagContainerStyle}>
-                {video.tags.slice(0, 3).map((tag, index) => (
-                  <span key={index} style={tagStyle}>
+
+            {/* Tags in upper right */}
+            {Array.isArray(video.tags) && video.tags.length > 0 && (
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.25rem',
+                justifyContent: 'flex-end',
+                maxWidth: '40%'
+              }}>
+                {video.tags.slice(0, 2).map((tag, index) => (
+                  <span key={index} style={{
+                    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                    color: '#fff',
+                    padding: '4px 8px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    display: 'inline-block',
+                    textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
+                  }}>
                     {tag}
                   </span>
                 ))}
-                {video.tags.length > 3 && (
-                  <span style={tagStyle}>+{video.tags.length - 3}</span>
+                {video.tags.length > 2 && (
+                  <span style={{
+                    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                    color: '#fff',
+                    padding: '4px 8px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    display: 'inline-block',
+                    textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
+                  }}>
+                    +{video.tags.length - 2}
+                  </span>
                 )}
               </div>
             )}
+          </div>
+
+          {/* Profile info in lower left */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            pointerEvents: 'auto'
+          }}>
+            <img
+              src={userProfile?.photoURL || 'https://ionicframework.com/docs/img/demos/avatar.svg'}
+              alt="Profile"
+              style={{
+                width: '2rem',
+                height: '2rem',
+                borderRadius: '50%',
+                border: '2px solid #fff',
+                objectFit: 'cover',
+                minWidth: '2rem', // Prevent shrinking
+                backgroundColor: '#f4f4f4' // Placeholder background while loading
+              }}
+            />
+            <div>
+              <p style={{ 
+                margin: 0, 
+                fontWeight: 'bold', 
+                fontSize: '0.8rem',
+                color: 'white',
+                textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
+              }}>
+                {userProfile?.displayName || 'User'}
+              </p>
+            </div>
           </div>
         </div>
       </div>
