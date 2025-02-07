@@ -49,6 +49,7 @@ import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
 import '../styles/accordion.css';
+import { FirebaseStorage } from '@capacitor-firebase/storage';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -135,12 +136,25 @@ const Profile = () => {
             directory: Directory.Cache
           });
 
-          // Upload to Firebase Storage
-          photoURL = await uploadFile(
-            `users/${user!.uid}/profile.jpg`,
-            fileInfo.uri,
-            { contentType: 'image/jpeg' }
-          );
+          // Upload to Firebase Storage using the native plugin directly
+          photoURL = await new Promise<string>((resolve, reject) => {
+            FirebaseStorage.uploadFile(
+              {
+                path: `users/${user!.uid}/profile.jpg`,
+                uri: fileInfo.uri,
+                metadata: { contentType: 'image/jpeg' }
+              },
+              (progress: { progress?: number; completed?: boolean } | null, error: any) => {
+                if (error) {
+                  reject(error);
+                } else if (progress?.completed) {
+                  FirebaseStorage.getDownloadUrl({ path: `users/${user!.uid}/profile.jpg` })
+                    .then((result: { downloadUrl: string }) => resolve(result.downloadUrl))
+                    .catch(reject);
+                }
+              }
+            );
+          });
 
           // Clean up temp file
           await Filesystem.deleteFile({
@@ -148,22 +162,11 @@ const Profile = () => {
             directory: Directory.Cache
           });
         } else {
-          // For web platform, convert file to blob and base64
+          // For web platform, use blob directly
           const blob = new Blob([await file.arrayBuffer()], { type: file.type });
-          const base64 = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const base64 = reader.result as string;
-              // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
-              const base64Data = base64.split(',')[1];
-              resolve(base64Data);
-            };
-            reader.readAsDataURL(blob);
-          });
-          
           photoURL = await uploadFile(
             `users/${user!.uid}/profile.jpg`,
-            base64,
+            undefined,
             { 
               contentType: file.type,
               blob 
