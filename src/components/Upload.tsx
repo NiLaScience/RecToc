@@ -61,6 +61,28 @@ const Upload = () => {
   const [jobDescription, setJobDescription] = useState<JobDescriptionSchema | null>(null);
   const [parsingPDF, setParsingPDF] = useState(false);
 
+  // Constants for upload handling
+  const CHUNK_UPLOAD_THRESHOLD = 25 * 1024 * 1024; // 25 MB threshold
+
+  const writeFileInChunks = async (path: string, blob: Blob, chunkSize: number = 5 * 1024 * 1024) => {
+    const totalSize = blob.size;
+    let offset = 0;
+    
+    while (offset < totalSize) {
+      const chunk = blob.slice(offset, offset + chunkSize);
+      const chunkArrayBuffer = await chunk.arrayBuffer();
+      const base64chunk = Buffer.from(chunkArrayBuffer).toString('base64');
+      
+      await Filesystem.appendFile({
+        path,
+        data: base64chunk,
+        directory: Directory.Cache
+      });
+      
+      offset += chunkSize;
+    }
+  };
+
   useEffect(() => {
     return () => {
       // Cleanup any existing preview URL
@@ -261,25 +283,6 @@ const Upload = () => {
     }
   };
 
-  const writeFileInChunks = async (path: string, blob: Blob, chunkSize: number = 5 * 1024 * 1024) => {
-    const totalSize = blob.size;
-    let offset = 0;
-    
-    while (offset < totalSize) {
-      const chunk = blob.slice(offset, offset + chunkSize);
-      const chunkArrayBuffer = await chunk.arrayBuffer();
-      const base64chunk = Buffer.from(chunkArrayBuffer).toString('base64');
-      
-      await Filesystem.appendFile({
-        path,
-        data: base64chunk,
-        directory: Directory.Cache
-      });
-      
-      offset += chunkSize;
-    }
-  };
-
   const handleUpload = async () => {
     if (!file || !title.trim()) {
       setError('Please fill in all fields and select a video');
@@ -305,122 +308,45 @@ const Upload = () => {
         const thumbnailFile = await ThumbnailService.generateThumbnail(file);
         console.log('Thumbnail generated successfully');
         
-        // Save files to temporary storage
+        // Generate unique file names and upload paths
         const videoFileName = `${Date.now()}-${file.name}`;
         const thumbnailFileName = `${Date.now()}-thumbnail.jpg`;
-        
-        console.log('Writing files to filesystem...');
-        
-        // Upload paths
         const videoPath = `videos/${currentUser.uid}/${videoFileName}`;
         const thumbnailPath = `thumbnails/${currentUser.uid}/${thumbnailFileName}`;
         
         console.log('Uploading files to Firebase Storage...');
-        
+
         let videoUrl: string;
         let thumbnailUrl: string;
-        
-        if (Capacitor.isNativePlatform()) {
-          // For Android, write files to filesystem first
-          if (previewUrl?.startsWith('file://')) {
-            // File is already on the filesystem, just use it directly
-            console.log('Using existing file on filesystem');
-            const [fileInfo, thumbnailFileInfo] = await Promise.all([
-              Filesystem.getUri({
-                path: previewUrl.replace('file://', ''),
-                directory: Directory.Data
-              }),
-              Filesystem.getUri({
-                path: thumbnailFileName,
-                directory: Directory.Cache
-              })
-            ]);
+        const cleanMimeType = file.type.split(';')[0];
 
-            // Upload with progress tracking
-            [videoUrl, thumbnailUrl] = await Promise.all([
-              new Promise<string>((resolve, reject) => {
-                FirebaseStorage.uploadFile({
-                  path: videoPath,
-                  uri: fileInfo.uri,
-                  metadata: { contentType: file.type }
-                }, (progress, error) => {
-                  if (error) {
-                    reject(error);
-                  } else if (progress) {
-                    if (progress.progress) {
-                      setUploadProgress(progress.progress * 100);
-                    }
-                    if (progress.completed) {
-                      FirebaseStorage.getDownloadUrl({ path: videoPath })
-                        .then(result => resolve(result.downloadUrl))
-                        .catch(reject);
-                    }
-                  }
-                });
-              }),
-              uploadFile(thumbnailPath, thumbnailFileInfo.uri, { contentType: 'image/jpeg' })
-            ]);
+        if (Capacitor.isNativePlatform()) {
+          // For native platforms (e.g., Android), use chunking if the file is very large
+          if (file.size > CHUNK_UPLOAD_THRESHOLD) {
+            // Write the video file in chunks to avoid memory issues
+            await writeFileInChunks(videoFileName, file);
           } else {
-            // Need to write the file to filesystem
-            const response = await fetch(URL.createObjectURL(file));
-            const blob = await response.blob();
-            await writeFileInChunks(videoFileName, blob);
-            
-            // Write thumbnail
-            const thumbnailResponse = await fetch(URL.createObjectURL(thumbnailFile));
-            const thumbnailBlob = await thumbnailResponse.blob();
-            await writeFileInChunks(thumbnailFileName, thumbnailBlob);
-            
-            // Get file URIs
-            const [videoFileInfo, thumbnailFileInfo] = await Promise.all([
-              Filesystem.getUri({
-                path: videoFileName,
-                directory: Directory.Cache
-              }),
-              Filesystem.getUri({
-                path: thumbnailFileName,
-                directory: Directory.Cache
-              })
-            ]);
-            
-            // Upload with progress tracking
-            [videoUrl, thumbnailUrl] = await Promise.all([
-              new Promise<string>((resolve, reject) => {
-                FirebaseStorage.uploadFile({
-                  path: videoPath,
-                  uri: videoFileInfo.uri,
-                  metadata: { contentType: file.type }
-                }, (progress, error) => {
-                  if (error) {
-                    reject(error);
-                  } else if (progress) {
-                    if (progress.progress) {
-                      setUploadProgress(progress.progress * 100);
-                    }
-                    if (progress.completed) {
-                      FirebaseStorage.getDownloadUrl({ path: videoPath })
-                        .then(result => resolve(result.downloadUrl))
-                        .catch(reject);
-                    }
-                  }
-                });
-              }),
-              uploadFile(thumbnailPath, thumbnailFileInfo.uri, { contentType: 'image/jpeg' })
-            ]);
+            // For smaller files, convert directly to base64 and write to filesystem
+            const videoBuffer = await file.arrayBuffer();
+            const videoBase64 = Buffer.from(videoBuffer).toString('base64');
+            await Filesystem.writeFile({
+              path: videoFileName,
+              data: videoBase64,
+              directory: Directory.Cache,
+            });
           }
-        } else {
-          // For web platform, upload blobs directly
-          // Clean up the MIME type
-          const cleanMimeType = file.type.split(';')[0];
-          
-          // Upload with progress tracking
-          [videoUrl, thumbnailUrl] = await Promise.all([
-            new Promise<string>((resolve, reject) => {
-              FirebaseStorage.uploadFile({
+          const videoFileInfo = await Filesystem.getUri({
+            path: videoFileName,
+            directory: Directory.Cache,
+          });
+          videoUrl = await new Promise<string>((resolve, reject) => {
+            FirebaseStorage.uploadFile(
+              {
                 path: videoPath,
-                blob: file,
-                metadata: { contentType: cleanMimeType }
-              }, (progress, error) => {
+                uri: videoFileInfo.uri,
+                metadata: { contentType: cleanMimeType },
+              },
+              (progress, error) => {
                 if (error) {
                   reject(error);
                 } else if (progress) {
@@ -429,16 +355,61 @@ const Upload = () => {
                   }
                   if (progress.completed) {
                     FirebaseStorage.getDownloadUrl({ path: videoPath })
-                      .then(result => resolve(result.downloadUrl))
+                      .then((result) => resolve(result.downloadUrl))
                       .catch(reject);
                   }
                 }
-              });
+              }
+            );
+          });
+
+          // Upload Thumbnail (thumbnails are expected to be small; no chunking needed)
+          const thumbBuffer = await thumbnailFile.arrayBuffer();
+          const thumbBase64 = Buffer.from(thumbBuffer).toString('base64');
+          await Filesystem.writeFile({
+            path: thumbnailFileName,
+            data: thumbBase64,
+            directory: Directory.Cache,
+          });
+          const thumbnailFileInfo = await Filesystem.getUri({
+            path: thumbnailFileName,
+            directory: Directory.Cache,
+          });
+          thumbnailUrl = await uploadFile(
+            thumbnailPath,
+            thumbnailFileInfo.uri,
+            { contentType: 'image/jpeg' }
+          );
+        } else {
+          // For web platforms, use the blob directly
+          [videoUrl, thumbnailUrl] = await Promise.all([
+            new Promise<string>((resolve, reject) => {
+              FirebaseStorage.uploadFile(
+                {
+                  path: videoPath,
+                  blob: file,
+                  metadata: { contentType: cleanMimeType },
+                },
+                (progress, error) => {
+                  if (error) {
+                    reject(error);
+                  } else if (progress) {
+                    if (progress.progress) {
+                      setUploadProgress(progress.progress * 100);
+                    }
+                    if (progress.completed) {
+                      FirebaseStorage.getDownloadUrl({ path: videoPath })
+                        .then((result) => resolve(result.downloadUrl))
+                        .catch(reject);
+                    }
+                  }
+                }
+              );
             }),
             uploadFile(thumbnailPath, undefined, {
               contentType: 'image/jpeg',
-              blob: thumbnailFile
-            })
+              blob: thumbnailFile,
+            }),
           ]);
         }
         
