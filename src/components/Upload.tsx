@@ -29,6 +29,9 @@ import PDFParserService from '../services/PDFParserService';
 import type { JobDescriptionSchema } from '../services/OpenAIService';
 import { uploadFile, addDocument } from '../config/firebase';
 import AppHeader from './AppHeader';
+import AccordionGroup from './shared/AccordionGroup';
+import AccordionSection from './shared/AccordionSection';
+import { ListContent, ChipsContent } from './shared/AccordionContent';
 
 interface User {
   uid: string;
@@ -674,83 +677,39 @@ const Upload = () => {
                   </div>
                 </div>
 
-                <IonAccordionGroup>
+                <AccordionGroup>
                   {jobDescription.responsibilities && jobDescription.responsibilities.length > 0 && (
-                    <IonAccordion value="responsibilities">
-                      <IonItem slot="header" style={{ '--background': '#333' }}>
-                        <IonLabel>Responsibilities</IonLabel>
-                      </IonItem>
-                      <div className="ion-padding" slot="content" style={{ background: '#333' }}>
-                        <ul style={{ margin: 0, paddingLeft: '1.5rem', color: '#fff' }}>
-                          {jobDescription.responsibilities.map((item, index) => (
-                            <li key={index} style={{ marginBottom: '0.5rem' }}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </IonAccordion>
+                    <AccordionSection value="responsibilities" label="Responsibilities">
+                      <ListContent items={jobDescription.responsibilities} />
+                    </AccordionSection>
                   )}
                   
                   {jobDescription.requirements && jobDescription.requirements.length > 0 && (
-                    <IonAccordion value="requirements">
-                      <IonItem slot="header" style={{ '--background': '#333' }}>
-                        <IonLabel>Requirements</IonLabel>
-                      </IonItem>
-                      <div className="ion-padding" slot="content" style={{ background: '#333' }}>
-                        <ul style={{ margin: 0, paddingLeft: '1.5rem', color: '#fff' }}>
-                          {jobDescription.requirements.map((item, index) => (
-                            <li key={index} style={{ marginBottom: '0.5rem' }}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </IonAccordion>
+                    <AccordionSection value="requirements" label="Requirements">
+                      <ListContent items={jobDescription.requirements} />
+                    </AccordionSection>
                   )}
                   
                   {jobDescription.skills && jobDescription.skills.length > 0 && (
-                    <IonAccordion value="skills">
-                      <IonItem slot="header" style={{ '--background': '#333' }}>
-                        <IonLabel>Required Skills</IonLabel>
-                      </IonItem>
-                      <div className="ion-padding" slot="content" style={{ background: '#333' }}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                          {jobDescription.skills.map((skill, index) => (
-                            <IonChip 
-                              key={index}
-                              style={{ '--background': '#444', '--color': '#fff' }}
-                            >
-                              {skill}
-                            </IonChip>
-                          ))}
-                        </div>
-                      </div>
-                    </IonAccordion>
+                    <AccordionSection value="skills" label="Required Skills">
+                      <ChipsContent items={jobDescription.skills} />
+                    </AccordionSection>
                   )}
                   
                   {jobDescription.benefits && jobDescription.benefits.length > 0 && (
-                    <IonAccordion value="benefits">
-                      <IonItem slot="header" style={{ '--background': '#333' }}>
-                        <IonLabel>Benefits</IonLabel>
-                      </IonItem>
-                      <div className="ion-padding" slot="content" style={{ background: '#333' }}>
-                        <ul style={{ margin: 0, paddingLeft: '1.5rem', color: '#fff' }}>
-                          {jobDescription.benefits.map((item, index) => (
-                            <li key={index} style={{ marginBottom: '0.5rem' }}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </IonAccordion>
+                    <AccordionSection value="benefits" label="Benefits">
+                      <ListContent items={jobDescription.benefits} />
+                    </AccordionSection>
                   )}
 
                   {jobDescription.salary && (
-                    <IonAccordion value="salary">
-                      <IonItem slot="header" style={{ '--background': '#333' }}>
-                        <IonLabel>Salary</IonLabel>
-                      </IonItem>
-                      <div className="ion-padding" slot="content" style={{ background: '#333', color: '#fff' }}>
+                    <AccordionSection value="salary" label="Salary">
+                      <p style={{ color: '#fff' }}>
                         {jobDescription.salary.min}-{jobDescription.salary.max} {jobDescription.salary.currency} ({jobDescription.salary.period})
-                      </div>
-                    </IonAccordion>
+                      </p>
+                    </AccordionSection>
                   )}
-                </IonAccordionGroup>
+                </AccordionGroup>
               </div>
             </div>
           )}

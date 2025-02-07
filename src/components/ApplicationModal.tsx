@@ -33,6 +33,9 @@ import ApplicationService from '../services/ApplicationService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import { Capacitor } from '@capacitor/core';
 import AppHeader from './AppHeader';
+import AccordionGroup from './shared/AccordionGroup';
+import AccordionSection from './shared/AccordionSection';
+import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
 
 interface ApplicationModalProps {
   isOpen: boolean;
@@ -202,9 +205,9 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     <IonModal 
       isOpen={isOpen} 
       onDidDismiss={onClose}
-      style={{ '--height': '100%' }}
+      style={{ '--height': '100%', '--background': '#1a1a1a' }}
     >
-      <IonContent scrollY={true} style={{ '--overflow': 'hidden' }}>
+      <IonContent scrollY={true} style={{ '--background': '#1a1a1a', '--overflow': 'hidden' }}>
         <AppHeader
           title="Apply for Position"
           mode="apply"
@@ -214,7 +217,8 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
         <div style={{ 
           height: '100%', 
           overflowY: 'auto',
-          WebkitOverflowScrolling: 'touch'
+          WebkitOverflowScrolling: 'touch',
+          color: '#fff'
         }}>
           {loading ? (
             <div className="flex items-center justify-center h-full">
@@ -231,85 +235,62 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                 {/* Job Description */}
                 <div>
                   {jobPost && (
-                    <IonCard>
+                    <IonCard style={{ 
+                      '--background': '#2a2a2a',
+                      '--color': '#fff',
+                      margin: 0,
+                      borderRadius: '8px',
+                      border: '2px solid rgba(255, 255, 255, 0.1)'
+                    }}>
                       <IonCardHeader>
-                        <IonCardTitle>{jobPost.title}</IonCardTitle>
-                        <IonCardSubtitle>
+                        <IonCardTitle style={{ color: '#fff' }}>{jobPost.title}</IonCardTitle>
+                        <IonCardSubtitle style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
                           {jobPost.jobDescription?.company || 'Company not specified'}
                           {jobPost.jobDescription?.location && ` • ${jobPost.jobDescription.location}`}
                         </IonCardSubtitle>
                       </IonCardHeader>
                       <IonCardContent>
                         {jobPost.jobDescription?.employmentType && (
-                          <div className="mb-4">
-                            <IonChip>{jobPost.jobDescription.employmentType}</IonChip>
+                          <div style={{ marginBottom: '1rem' }}>
+                            <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
+                              {jobPost.jobDescription.employmentType}
+                            </IonChip>
                             {jobPost.jobDescription.experienceLevel && (
-                              <IonChip>{jobPost.jobDescription.experienceLevel}</IonChip>
+                              <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
+                                {jobPost.jobDescription.experienceLevel}
+                              </IonChip>
                             )}
                           </div>
                         )}
 
-                        <IonAccordionGroup>
-                          {jobPost.jobDescription?.responsibilities && jobPost.jobDescription.responsibilities.length > 0 && (
-                            <IonAccordion value="responsibilities">
-                              <IonItem slot="header">
-                                <IonLabel>Responsibilities</IonLabel>
-                              </IonItem>
-                              <div className="p-4" slot="content">
-                                <ul className="list-disc pl-6">
-                                  {jobPost.jobDescription.responsibilities.map((item, index) => (
-                                    <li key={index} className="mb-2">{item}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </IonAccordion>
-                          )}
-                          
-                          {jobPost.jobDescription?.requirements && jobPost.jobDescription.requirements.length > 0 && (
-                            <IonAccordion value="requirements">
-                              <IonItem slot="header">
-                                <IonLabel>Requirements</IonLabel>
-                              </IonItem>
-                              <div className="p-4" slot="content">
-                                <ul className="list-disc pl-6">
-                                  {jobPost.jobDescription.requirements.map((item, index) => (
-                                    <li key={index} className="mb-2">{item}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </IonAccordion>
-                          )}
-                          
-                          {jobPost.jobDescription?.skills && jobPost.jobDescription.skills.length > 0 && (
-                            <IonAccordion value="skills">
-                              <IonItem slot="header">
-                                <IonLabel>Required Skills</IonLabel>
-                              </IonItem>
-                              <div className="p-4" slot="content">
-                                <div className="flex flex-wrap gap-2">
-                                  {jobPost.jobDescription.skills.map((skill, index) => (
-                                    <IonChip key={index}>{skill}</IonChip>
-                                  ))}
-                                </div>
-                              </div>
-                            </IonAccordion>
-                          )}
+                        <div style={{ marginBottom: '2rem' }}>
+                          <h3 style={{ color: '#fff', marginBottom: '1rem' }}>Job Details</h3>
+                          <AccordionGroup>
+                            {jobPost.jobDescription?.responsibilities && jobPost.jobDescription.responsibilities.length > 0 && (
+                              <AccordionSection value="responsibilities" label="Responsibilities">
+                                <ListContent items={jobPost.jobDescription.responsibilities} />
+                              </AccordionSection>
+                            )}
+                            
+                            {jobPost.jobDescription?.requirements && jobPost.jobDescription.requirements.length > 0 && (
+                              <AccordionSection value="requirements" label="Requirements">
+                                <ListContent items={jobPost.jobDescription.requirements} />
+                              </AccordionSection>
+                            )}
+                            
+                            {jobPost.jobDescription?.skills && jobPost.jobDescription.skills.length > 0 && (
+                              <AccordionSection value="skills" label="Required Skills">
+                                <ChipsContent items={jobPost.jobDescription.skills} />
+                              </AccordionSection>
+                            )}
 
-                          {jobPost.jobDescription?.benefits && jobPost.jobDescription.benefits.length > 0 && (
-                            <IonAccordion value="benefits">
-                              <IonItem slot="header">
-                                <IonLabel>Benefits</IonLabel>
-                              </IonItem>
-                              <div className="p-4" slot="content">
-                                <ul className="list-disc pl-6">
-                                  {jobPost.jobDescription.benefits.map((item, index) => (
-                                    <li key={index} className="mb-2">{item}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            </IonAccordion>
-                          )}
-                        </IonAccordionGroup>
+                            {jobPost.jobDescription?.benefits && jobPost.jobDescription.benefits.length > 0 && (
+                              <AccordionSection value="benefits" label="Benefits">
+                                <ListContent items={jobPost.jobDescription.benefits} />
+                              </AccordionSection>
+                            )}
+                          </AccordionGroup>
+                        </div>
                       </IonCardContent>
                     </IonCard>
                   )}
@@ -317,11 +298,17 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
 
                 {/* User CV */}
                 <div>
-                  <IonCard>
+                  <IonCard style={{ 
+                    '--background': '#2a2a2a',
+                    '--color': '#fff',
+                    margin: 0,
+                    borderRadius: '8px',
+                    border: '2px solid rgba(255, 255, 255, 0.1)'
+                  }}>
                     <IonCardHeader>
-                      <IonCardTitle>Your Profile</IonCardTitle>
+                      <IonCardTitle style={{ color: '#fff' }}>Your Profile</IonCardTitle>
                       {profile && (
-                        <IonCardSubtitle>
+                        <IonCardSubtitle style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
                           {profile.displayName}
                           {profile.cv?.personalInfo.location && ` • ${profile.cv.personalInfo.location}`}
                         </IonCardSubtitle>
@@ -329,96 +316,56 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                     </IonCardHeader>
                     <IonCardContent>
                       {profile?.cv ? (
-                        <IonAccordionGroup>
-                          {profile.cv.personalInfo.summary && (
-                            <div className="mb-4 text-gray-600">
-                              {profile.cv.personalInfo.summary}
-                            </div>
-                          )}
+                        <div>
+                          <h3 style={{ color: '#fff', marginBottom: '1rem' }}>Candidate Details</h3>
+                          <AccordionGroup>
+                            {profile.cv.experience && profile.cv.experience.length > 0 && (
+                              <AccordionSection value="experience" label="Experience">
+                                {profile.cv.experience.map((exp, index) => (
+                                  <ExperienceContent
+                                    key={index}
+                                    title={exp.title}
+                                    company={exp.company}
+                                    startDate={exp.startDate}
+                                    endDate={exp.endDate}
+                                    current={exp.current}
+                                    location={exp.location}
+                                    highlights={exp.highlights}
+                                  />
+                                ))}
+                              </AccordionSection>
+                            )}
 
-                          <IonAccordion value="experience">
-                            <IonItem slot="header">
-                              <IonLabel>Experience</IonLabel>
-                            </IonItem>
-                            <div className="p-4" slot="content">
-                              {profile.cv.experience.length > 0 ? (
-                                <div>
-                                  {profile.cv.experience.map((exp, index) => (
-                                    <div key={index} className="mb-4">
-                                      <h3 className="font-bold">{exp.title}</h3>
-                                      <p className="text-sm text-gray-600">
-                                        {exp.company}
-                                        {exp.location && ` • ${exp.location}`}
-                                      </p>
-                                      <p className="text-sm text-gray-600">
-                                        {formatDate(exp.startDate)} - {exp.current ? 'Present' : exp.endDate && formatDate(exp.endDate)}
-                                      </p>
-                                      <ul className="mt-2 list-disc pl-6">
-                                        {exp.highlights.map((highlight, i) => (
-                                          <li key={i} className="text-sm">{highlight}</li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-gray-500">No experience listed</p>
-                              )}
-                            </div>
-                          </IonAccordion>
+                            {profile.cv.education && profile.cv.education.length > 0 && (
+                              <AccordionSection value="education" label="Education">
+                                {profile.cv.education.map((edu, index) => (
+                                  <EducationContent
+                                    key={index}
+                                    degree={edu.degree}
+                                    field={edu.field}
+                                    institution={edu.institution}
+                                    graduationDate={edu.graduationDate}
+                                    gpa={edu.gpa?.toString()}
+                                  />
+                                ))}
+                              </AccordionSection>
+                            )}
 
-                          <IonAccordion value="education">
-                            <IonItem slot="header">
-                              <IonLabel>Education</IonLabel>
-                            </IonItem>
-                            <div className="p-4" slot="content">
-                              {profile.cv.education.length > 0 ? (
-                                <div>
-                                  {profile.cv.education.map((edu, index) => (
-                                    <div key={index} className="mb-4">
-                                      <h3 className="font-bold">{edu.degree} in {edu.field}</h3>
-                                      <p className="text-sm text-gray-600">{edu.institution}</p>
-                                      {edu.graduationDate && (
-                                        <p className="text-sm text-gray-600">
-                                          Graduated {formatDate(edu.graduationDate)}
-                                        </p>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-gray-500">No education listed</p>
-                              )}
-                            </div>
-                          </IonAccordion>
-
-                          <IonAccordion value="skills">
-                            <IonItem slot="header">
-                              <IonLabel>Skills</IonLabel>
-                            </IonItem>
-                            <div className="p-4" slot="content">
-                              {profile.cv.skills.length > 0 ? (
-                                <div>
-                                  {profile.cv.skills.map((skillGroup, index) => (
-                                    <div key={index} className="mb-4">
-                                      <h3 className="font-bold mb-2">{skillGroup.category}</h3>
-                                      <div className="flex flex-wrap gap-2">
-                                        {skillGroup.items.map((skill, i) => (
-                                          <IonChip key={i}>{skill}</IonChip>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-gray-500">No skills listed</p>
-                              )}
-                            </div>
-                          </IonAccordion>
-                        </IonAccordionGroup>
+                            {profile.cv.skills && profile.cv.skills.length > 0 && (
+                              <AccordionSection value="skills" label="Skills">
+                                {profile.cv.skills.map((skillGroup, index) => (
+                                  <div key={index} style={{ marginBottom: index < (profile.cv.skills?.length || 0) - 1 ? '1rem' : 0 }}>
+                                    <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{skillGroup.category}</h4>
+                                    <ChipsContent items={skillGroup.items} />
+                                  </div>
+                                ))}
+                              </AccordionSection>
+                            )}
+                          </AccordionGroup>
+                        </div>
                       ) : (
-                        <div className="text-center p-4">
-                          <p className="text-gray-500">CV not available</p>
+                        <div style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255, 255, 255, 0.7)' }}>
+                          <p>CV not available</p>
                         </div>
                       )}
                     </IonCardContent>
@@ -427,8 +374,10 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
               </div>
 
               {/* Video Recording Section */}
-              <div className="mt-6" style={{ maxWidth: '600px', margin: '1.5rem auto' }}>
-                <h2 className="text-xl font-bold mb-4">Your Video Application</h2>
+              <div style={{ maxWidth: '600px', margin: '1.5rem auto' }}>
+                <h2 style={{ color: '#fff', marginBottom: '1rem', fontSize: '1.25rem' }}>
+                  Your Video Application
+                </h2>
                 {!previewUrl ? (
                   <>
                     {(uploadMode === 'file' || Capacitor.isNativePlatform()) ? (
@@ -462,6 +411,11 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                           {Capacitor.isNativePlatform() && (
                             <IonButton
                               expand="block"
+                              style={{
+                                '--background': '#0055ff',
+                                '--color': '#fff',
+                                '--border-radius': '8px'
+                              }}
                               onClick={() => {
                                 const input = document.getElementById('video-record');
                                 input?.click();
@@ -473,6 +427,11 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                           )}
                           <IonButton
                             expand="block"
+                            style={{
+                              '--background': '#0055ff',
+                              '--color': '#fff',
+                              '--border-radius': '8px'
+                            }}
                             onClick={() => {
                               const input = document.getElementById('video-select');
                               input?.click();
@@ -496,6 +455,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                         }}>
                           <IonButton
                             fill="clear"
+                            style={{ '--color': '#fff' }}
                             onClick={() => setUploadMode('file')}
                           >
                             <IonIcon slot="start" icon={videocamOutline} />
@@ -513,8 +473,11 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                   }}>
                     <div style={{
                       width: '100%',
-                      paddingTop: '56.25%', // 16:9 aspect ratio
-                      position: 'relative'
+                      paddingTop: '56.25%',
+                      position: 'relative',
+                      backgroundColor: '#000',
+                      borderRadius: '8px',
+                      overflow: 'hidden'
                     }}>
                       <video
                         src={previewUrl}
@@ -525,15 +488,14 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                           left: 0,
                           width: '100%',
                           height: '100%',
-                          objectFit: 'contain',
-                          backgroundColor: '#000',
-                          borderRadius: '8px'
+                          objectFit: 'contain'
                         }}
                       />
                     </div>
                     <IonButton
                       expand="block"
                       fill="clear"
+                      style={{ '--color': '#fff' }}
                       className="mt-4"
                       onClick={() => {
                         setVideoFile(null);
@@ -553,8 +515,15 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
               {videoFile && !submitting && (
                 <IonButton
                   expand="block"
-                  className="mt-4"
-                  style={{ maxWidth: '600px', margin: '1.5rem auto' }}
+                  style={{ 
+                    maxWidth: '600px', 
+                    margin: '1.5rem auto',
+                    '--background': '#0055ff',
+                    '--color': '#fff',
+                    '--border-radius': '8px',
+                    '--padding-top': '1rem',
+                    '--padding-bottom': '1rem'
+                  }}
                   onClick={handleSubmit}
                 >
                   Submit Application
@@ -562,9 +531,16 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
               )}
 
               {submitting && (
-                <div className="mt-4" style={{ maxWidth: '600px', margin: '0 auto' }}>
-                  <IonProgressBar value={uploadProgress / 100} />
-                  <p className="text-center mt-2">
+                <div style={{ maxWidth: '600px', margin: '1.5rem auto' }}>
+                  <IonProgressBar 
+                    value={uploadProgress / 100}
+                    style={{ '--progress-background': '#0055ff' }}
+                  />
+                  <p style={{ 
+                    textAlign: 'center', 
+                    marginTop: '0.5rem',
+                    color: 'rgba(255, 255, 255, 0.7)'
+                  }}>
                     Uploading... {Math.round(uploadProgress)}%
                   </p>
                 </div>

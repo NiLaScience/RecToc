@@ -21,6 +21,9 @@ import { VideoItem } from '../types/video';
 import { useState } from 'react';
 import ApplicationModal from './ApplicationModal';
 import AppHeader from './AppHeader';
+import AccordionGroup from './shared/AccordionGroup';
+import AccordionSection from './shared/AccordionSection';
+import { ListContent, ChipsContent } from './shared/AccordionContent';
 
 interface VideoDetailsProps {
   video: VideoItem;
@@ -102,17 +105,17 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, onApplicati
           right: 0,
           bottom: 0,
           width: '100%',
-          backgroundColor: '#fff',
-          zIndex: showApplication ? 999 : 1000, // Lower z-index when application modal is open
+          backgroundColor: '#1a1a1a',
+          zIndex: showApplication ? 999 : 1000,
           overflowY: 'auto',
           transform: 'translateX(0)',
           transition: 'transform 0.3s ease-out',
-          pointerEvents: showApplication ? 'none' : 'auto' // Disable interactions when application modal is open
+          pointerEvents: showApplication ? 'none' : 'auto'
         }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        <IonContent scrollY={true} style={{ '--overflow': 'hidden' }}>
+        <IonContent scrollY={true} style={{ '--background': '#1a1a1a', '--overflow': 'hidden' }}>
           <AppHeader
             title="Job Details"
             mode="details"
@@ -124,129 +127,115 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, onApplicati
             overflowY: 'auto',
             WebkitOverflowScrolling: 'touch',
             padding: '1rem', 
-            paddingBottom: '80px'
+            paddingBottom: '80px',
+            color: '#fff'
           }}>
-            {/* Job Description Card */}
-            {jobDescription && (
-              <IonCard>
+            <div style={{ padding: '1rem' }}>
+              <IonCard style={{ 
+                '--background': '#2a2a2a',
+                '--color': '#fff',
+                margin: 0,
+                borderRadius: '8px',
+                border: '2px solid rgba(255, 255, 255, 0.1)'
+              }}>
                 <IonCardHeader>
-                  <IonCardTitle>{jobDescription.title || 'Job Description'}</IonCardTitle>
-                  {jobDescription.company && (
-                    <IonCardSubtitle>
+                  <IonCardTitle style={{ color: '#fff' }}>{jobDescription?.title || video.title}</IonCardTitle>
+                  {jobDescription?.company && (
+                    <IonCardSubtitle style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
                       {jobDescription.company}
                       {jobDescription.location && ` • ${jobDescription.location}`}
                     </IonCardSubtitle>
                   )}
                 </IonCardHeader>
-
                 <IonCardContent>
-                  <div style={{ marginBottom: '1rem' }}>
-                    {jobDescription.employmentType && (
-                      <IonChip>{jobDescription.employmentType}</IonChip>
+                  {jobDescription?.employmentType && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
+                        {jobDescription.employmentType}
+                      </IonChip>
+                      {jobDescription.experienceLevel && (
+                        <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
+                          {jobDescription.experienceLevel}
+                        </IonChip>
+                      )}
+                    </div>
+                  )}
+
+                  <AccordionGroup>
+                    {jobDescription?.responsibilities && jobDescription.responsibilities.length > 0 && (
+                      <AccordionSection value="responsibilities" label="Responsibilities">
+                        <ListContent items={jobDescription.responsibilities} />
+                      </AccordionSection>
                     )}
-                    {jobDescription.experienceLevel && (
-                      <IonChip>{jobDescription.experienceLevel}</IonChip>
+                    
+                    {jobDescription?.requirements && jobDescription.requirements.length > 0 && (
+                      <AccordionSection value="requirements" label="Requirements">
+                        <ListContent items={jobDescription.requirements} />
+                      </AccordionSection>
                     )}
-                  </div>
+                    
+                    {jobDescription?.skills && jobDescription.skills.length > 0 && (
+                      <AccordionSection value="skills" label="Required Skills">
+                        <ChipsContent items={jobDescription.skills} />
+                      </AccordionSection>
+                    )}
 
-                  {jobDescription.responsibilities && jobDescription.responsibilities.length > 0 && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <h4>Responsibilities</h4>
-                      <IonList>
-                        {jobDescription.responsibilities.map((item, index) => (
-                          <IonItem key={index}>
-                            <IonLabel className="ion-text-wrap">{item}</IonLabel>
-                          </IonItem>
-                        ))}
-                      </IonList>
-                    </div>
-                  )}
+                    {jobDescription?.benefits && jobDescription.benefits.length > 0 && (
+                      <AccordionSection value="benefits" label="Benefits">
+                        <ListContent items={jobDescription.benefits} />
+                      </AccordionSection>
+                    )}
 
-                  {jobDescription.requirements && jobDescription.requirements.length > 0 && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <h4>Requirements</h4>
-                      <IonList>
-                        {jobDescription.requirements.map((item, index) => (
-                          <IonItem key={index}>
-                            <IonLabel className="ion-text-wrap">{item}</IonLabel>
-                          </IonItem>
-                        ))}
-                      </IonList>
-                    </div>
-                  )}
-
-                  {jobDescription.skills && jobDescription.skills.length > 0 && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <h4>Skills</h4>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                        {jobDescription.skills.map((skill, index) => (
-                          <IonChip key={index}>{skill}</IonChip>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {jobDescription.benefits && jobDescription.benefits.length > 0 && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <h4>Benefits</h4>
-                      <IonList>
-                        {jobDescription.benefits.map((item, index) => (
-                          <IonItem key={index}>
-                            <IonLabel className="ion-text-wrap">{item}</IonLabel>
-                          </IonItem>
-                        ))}
-                      </IonList>
-                    </div>
-                  )}
+                    {video.transcript && (
+                      <AccordionSection value="transcript" label="Video Transcript">
+                        <IonList style={{ background: 'transparent' }}>
+                          {video.transcript.segments.map((segment) => (
+                            <IonItem 
+                              key={segment.id} 
+                              lines="none"
+                              style={{ 
+                                '--background': 'transparent',
+                                '--color': '#fff'
+                              }}
+                            >
+                              <IonLabel className="ion-text-wrap">
+                                <p style={{ 
+                                  color: 'rgba(255, 255, 255, 0.6)', 
+                                  fontSize: '0.8rem', 
+                                  marginBottom: '0.25rem' 
+                                }}>
+                                  {formatTime(segment.start)} - {formatTime(segment.end)}
+                                </p>
+                                {segment.text}
+                              </IonLabel>
+                            </IonItem>
+                          ))}
+                        </IonList>
+                      </AccordionSection>
+                    )}
+                  </AccordionGroup>
                 </IonCardContent>
               </IonCard>
-            )}
 
-            {/* Transcript Card */}
-            <IonCard>
-              <IonCardHeader>
-                <IonCardTitle>Video Transcript</IonCardTitle>
-              </IonCardHeader>
-              <IonCardContent>
-                {video.transcript ? (
-                  <IonList>
-                    {video.transcript.segments.map((segment) => (
-                      <IonItem key={segment.id}>
-                        <IonLabel className="ion-text-wrap">
-                          <p style={{ 
-                            color: '#666', 
-                            fontSize: '0.8rem', 
-                            marginBottom: '0.25rem' 
-                          }}>
-                            {formatTime(segment.start)} - {formatTime(segment.end)}
-                          </p>
-                          {segment.text}
-                        </IonLabel>
-                      </IonItem>
-                    ))}
-                  </IonList>
-                ) : (
-                  <p style={{ textAlign: 'center', color: '#666' }}>
-                    No transcript available
-                  </p>
-                )}
-              </IonCardContent>
-            </IonCard>
-
-            {/* Apply Button - Always visible */}
-            <IonButton
-              expand="block"
-              onClick={handleApply}
-              style={{ 
-                margin: '2rem 0',
-                maxWidth: '400px',
-                marginLeft: 'auto',
-                marginRight: 'auto'
-              }}
-            >
-              <IonIcon icon={paperPlaneOutline} slot="start" />
-              Apply Now
-            </IonButton>
+              <IonButton
+                expand="block"
+                onClick={handleApply}
+                style={{ 
+                  margin: '2rem 0',
+                  maxWidth: '400px',
+                  marginLeft: 'auto',
+                  marginRight: 'auto',
+                  '--background': '#0055ff',
+                  '--color': '#fff',
+                  '--border-radius': '8px',
+                  '--padding-top': '1rem',
+                  '--padding-bottom': '1rem'
+                }}
+              >
+                <IonIcon icon={paperPlaneOutline} slot="start" />
+                Apply Now
+              </IonButton>
+            </div>
           </div>
         </IonContent>
       </div>

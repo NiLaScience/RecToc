@@ -42,6 +42,10 @@ import {
 import CVParserService from '../services/CVParserService';
 import AppHeader from './AppHeader';
 import { pencilOutline } from 'ionicons/icons';
+import AccordionGroup from './shared/AccordionGroup';
+import AccordionSection from './shared/AccordionSection';
+import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
+import '../styles/accordion.css';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -632,127 +636,78 @@ const Profile = () => {
             <div style={{ margin: '1rem 0' }}>
               <h3 style={{ color: '#fff', marginBottom: '1rem' }}>Your CV Information</h3>
               
-              <IonAccordionGroup style={{ 
-                borderRadius: '8px', 
-                border: '2px solid rgba(255, 255, 255, 0.2)',
-                background: '#333',
-                overflow: 'hidden'
-              }}>
+              <AccordionGroup>
                 {profile?.cv?.personalInfo?.summary && (
-                  <IonAccordion value="summary" className="cv-accordion">
-                    <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
-                      <IonLabel>Professional Summary</IonLabel>
-                    </IonItem>
-                    <div className="ion-padding accordion-content" slot="content">
-                      {profile?.cv?.personalInfo?.summary}
-                    </div>
-                  </IonAccordion>
+                  <AccordionSection value="summary" label="Professional Summary">
+                    {profile?.cv?.personalInfo?.summary}
+                  </AccordionSection>
                 )}
 
                 {profile?.cv?.experience && profile?.cv?.experience?.length > 0 && (
-                  <IonAccordion value="experience" className="cv-accordion">
-                    <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
-                      <IonLabel>Experience</IonLabel>
-                    </IonItem>
-                    <div className="ion-padding accordion-content" slot="content">
-                      {profile?.cv?.experience?.map((exp, index) => (
-                        <div key={index} style={{ marginBottom: index < (profile?.cv?.experience?.length || 0) - 1 ? '1rem' : 0 }}>
-                          <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{exp.title} at {exp.company}</h4>
-                          <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                            {exp.startDate} - {exp.current ? 'Present' : exp.endDate}
-                            {exp.location && ` • ${exp.location}`}
-                          </p>
-                          <ul style={{ color: 'rgba(255, 255, 255, 0.7)', paddingLeft: '1.5rem', margin: '0.5rem 0' }}>
-                            {exp.highlights.map((highlight, i) => (
-                              <li key={i} style={{ marginBottom: '0.5rem' }}>{highlight}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  </IonAccordion>
+                  <AccordionSection value="experience" label="Experience">
+                    {profile?.cv?.experience?.map((exp, index) => (
+                      <ExperienceContent
+                        key={index}
+                        title={exp.title}
+                        company={exp.company}
+                        startDate={exp.startDate}
+                        endDate={exp.endDate}
+                        current={exp.current}
+                        location={exp.location}
+                        highlights={exp.highlights}
+                      />
+                    ))}
+                  </AccordionSection>
                 )}
 
                 {profile?.cv?.education && profile?.cv?.education?.length > 0 && (
-                  <IonAccordion value="education" className="cv-accordion">
-                    <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
-                      <IonLabel>Education</IonLabel>
-                    </IonItem>
-                    <div className="ion-padding accordion-content" slot="content">
-                      {profile?.cv?.education?.map((edu, index) => (
-                        <div key={index} style={{ marginBottom: index < (profile?.cv?.education?.length || 0) - 1 ? '1rem' : 0 }}>
-                          <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{edu.degree} in {edu.field}</h4>
-                          <p style={{ color: '#fff' }}>{edu.institution}</p>
-                          {edu.graduationDate && (
-                            <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                              Graduated: {edu.graduationDate}
-                              {edu.gpa && ` • GPA: ${edu.gpa}`}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </IonAccordion>
+                  <AccordionSection value="education" label="Education">
+                    {profile?.cv?.education?.map((edu, index) => (
+                      <EducationContent
+                        key={index}
+                        degree={edu.degree}
+                        field={edu.field}
+                        institution={edu.institution}
+                        graduationDate={edu.graduationDate}
+                        gpa={edu.gpa}
+                      />
+                    ))}
+                  </AccordionSection>
                 )}
 
                 {profile?.cv?.skills && profile?.cv?.skills?.length > 0 && (
-                  <IonAccordion value="skills" className="cv-accordion">
-                    <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
-                      <IonLabel>Skills</IonLabel>
-                    </IonItem>
-                    <div className="ion-padding accordion-content" slot="content">
-                      {profile?.cv?.skills?.map((skillGroup, index) => (
-                        <div key={index} style={{ marginBottom: index < (profile?.cv?.skills?.length || 0) - 1 ? '1rem' : 0 }}>
-                          <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{skillGroup.category}</h4>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                            {skillGroup.items.map((skill, i) => (
-                              <IonChip key={i} style={{ '--background': '#444', '--color': '#fff' }}>
-                                {skill}
-                              </IonChip>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </IonAccordion>
+                  <AccordionSection value="skills" label="Skills">
+                    {profile?.cv?.skills?.map((skillGroup, index) => (
+                      <div key={index} style={{ marginBottom: index < (profile?.cv?.skills?.length || 0) - 1 ? '1rem' : 0 }}>
+                        <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{skillGroup.category}</h4>
+                        <ChipsContent items={skillGroup.items} />
+                      </div>
+                    ))}
+                  </AccordionSection>
                 )}
 
                 {profile?.cv?.certifications && profile?.cv?.certifications?.length > 0 && (
-                  <IonAccordion value="certifications" className="cv-accordion">
-                    <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
-                      <IonLabel>Certifications</IonLabel>
-                    </IonItem>
-                    <div className="ion-padding" slot="content" style={{ background: '#2a2a2a' }}>
-                      {profile?.cv?.certifications?.map((cert, index) => (
-                        <div key={index} style={{ marginBottom: index < (profile?.cv?.certifications?.length || 0) - 1 ? '1rem' : 0 }}>
-                          <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{cert.name}</h4>
-                          <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                            {cert.issuer}
-                            {cert.date && ` • ${cert.date}`}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </IonAccordion>
+                  <AccordionSection value="certifications" label="Certifications">
+                    {profile?.cv?.certifications?.map((cert, index) => (
+                      <div key={index} style={{ marginBottom: index < (profile?.cv?.certifications?.length || 0) - 1 ? '1rem' : 0 }}>
+                        <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{cert.name}</h4>
+                        <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                          {cert.issuer}
+                          {cert.date && ` • ${cert.date}`}
+                        </p>
+                      </div>
+                    ))}
+                  </AccordionSection>
                 )}
 
                 {profile?.cv?.languages && profile?.cv?.languages?.length > 0 && (
-                  <IonAccordion value="languages" className="cv-accordion">
-                    <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
-                      <IonLabel>Languages</IonLabel>
-                    </IonItem>
-                    <div className="ion-padding" slot="content" style={{ background: '#2a2a2a' }}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                        {profile?.cv?.languages?.map((lang, index) => (
-                          <IonChip key={index} style={{ '--background': '#444', '--color': '#fff' }}>
-                            {lang.language} - {lang.proficiency}
-                          </IonChip>
-                        ))}
-                      </div>
-                    </div>
-                  </IonAccordion>
+                  <AccordionSection value="languages" label="Languages">
+                    <ChipsContent 
+                      items={profile.cv.languages.map(lang => `${lang.language} - ${lang.proficiency}`)} 
+                    />
+                  </AccordionSection>
                 )}
-              </IonAccordionGroup>
+              </AccordionGroup>
             </div>
           )}
 

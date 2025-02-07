@@ -1,0 +1,32 @@
+.accordion-group {
+  background: #2a2a2a;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.accordion-section {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.accordion-section:last-child {
+  border-bottom: none;
+}
+
+.accordion-section::part(header) {
+  background: #2a2a2a;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.accordion-section:last-child::part(header) {
+  border-bottom: none;
+}
+
+.accordion-content {
+  background: #2a2a2a;
+  color: #fff;
+}
+
+ion-item::part(native) {
+  border-radius: 0 !important;
+  --border-color: rgba(255, 255, 255, 0.05) !important;
+  --inner-border-width: 0;
+} 
