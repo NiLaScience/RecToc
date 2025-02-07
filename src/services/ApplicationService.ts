@@ -24,6 +24,7 @@ class ApplicationService {
 
   static async createApplication(jobId: string): Promise<JobApplication> {
     const result = await FirebaseAuthentication.getCurrentUser();
+    console.log('Auth result:', result); // Debug log
     if (!result.user) {
       throw new Error('User must be authenticated to create an application');
     }
@@ -33,6 +34,12 @@ class ApplicationService {
       candidateId: result.user.uid,
       status: 'draft'
     };
+
+    console.log('Creating application with data:', {
+      ...application,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }); // Debug log
 
     const doc = await FirebaseFirestore.addDocument({
       reference: this.COLLECTION,
@@ -61,6 +68,7 @@ class ApplicationService {
     onProgress?: (progress: number) => void
   ): Promise<void> {
     const result = await FirebaseAuthentication.getCurrentUser();
+    console.log('Auth result for upload:', result); // Debug log
     if (!result.user) {
       throw new Error('User must be authenticated to upload application video');
     }
@@ -167,16 +175,20 @@ class ApplicationService {
       }
 
       // Update application with URL and ensure we follow the schema
+      const updateData = {
+        videoURL,
+        status: 'submitted',
+        updatedAt: new Date().toISOString(),
+        candidateId: result.user.uid
+      };
+      console.log('Updating application with data:', updateData); // Debug log
+
       await FirebaseFirestore.updateDocument({
-        reference: `${this.COLLECTION}/${applicationId}`,
-        data: {
-          videoURL,
-          status: 'submitted',
-          updatedAt: new Date().toISOString(),
-          candidateId: result.user.uid
-        }
+        reference: `${this.COLLECTION}/${applicationId.toString()}`,
+        data: updateData
       });
     } catch (error) {
+      console.error('Detailed error:', error); // More detailed error logging
       console.error('Error uploading application video:', error);
       // If we fail, we should try to clean up the uploaded file
       try {

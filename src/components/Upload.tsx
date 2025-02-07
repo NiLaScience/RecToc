@@ -391,11 +391,24 @@ const Upload = () => {
             path: thumbnailFileName,
             directory: Directory.Cache,
           });
-          thumbnailUrl = await uploadFile(
-            thumbnailPath,
-            thumbnailFileInfo.uri,
-            { contentType: 'image/jpeg' }
-          );
+          thumbnailUrl = await new Promise<string>((resolve, reject) => {
+            FirebaseStorage.uploadFile(
+              {
+                path: thumbnailPath,
+                uri: thumbnailFileInfo.uri,
+                metadata: { contentType: 'image/jpeg' }
+              },
+              (progress, error) => {
+                if (error) {
+                  reject(error);
+                } else if (progress?.completed) {
+                  FirebaseStorage.getDownloadUrl({ path: thumbnailPath })
+                    .then(result => resolve(result.downloadUrl))
+                    .catch(reject);
+                }
+              }
+            );
+          });
         } else {
           // For web platforms, use the blob directly
           [videoUrl, thumbnailUrl] = await Promise.all([
