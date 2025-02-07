@@ -405,7 +405,6 @@ const Upload = () => {
               onIonChange={e => {
                 const newMode = e.detail.value as 'file' | 'record';
                 setUploadMode(newMode);
-                // Clear existing file and preview when switching modes
                 if (newMode === 'record') {
                   setFile(null);
                   if (previewUrl) {
@@ -424,23 +423,23 @@ const Upload = () => {
             </IonSegment>
           )}
 
-          <IonItem>
-            <IonLabel position="stacked">Title</IonLabel>
+          <div className="input-container">
             <IonInput
               value={title}
               onIonChange={e => setTitle(e.detail.value!)}
-              placeholder="Enter video title"
+              placeholder="Video title"
+              className={title ? 'has-value' : ''}
             />
-          </IonItem>
+          </div>
 
-          <IonItem>
-            <IonLabel position="stacked">Tags</IonLabel>
-            <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+          <div className="input-container">
+            <div className="tags-container">
               <IonInput
                 value={currentTag}
                 onIonInput={e => setCurrentTag(e.detail.value!)}
                 onKeyPress={handleAddTag}
-                placeholder="Type tag and press Enter"
+                placeholder="Add tags (press Enter after each tag)"
+                className={currentTag ? 'has-value' : ''}
                 style={{ flex: 1 }}
               />
               <IonButton
@@ -458,18 +457,17 @@ const Upload = () => {
                 +
               </IonButton>
             </div>
-          </IonItem>
-
-          {tags.length > 0 && (
-            <div className="ion-padding-vertical" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {tags.map(tag => (
-                <IonChip key={tag} onClick={() => removeTag(tag)}>
-                  <IonLabel>{tag}</IonLabel>
-                  <IonIcon icon={closeCircleOutline} />
-                </IonChip>
-              ))}
-            </div>
-          )}
+            {tags.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                {tags.map(tag => (
+                  <IonChip key={tag} onClick={() => removeTag(tag)}>
+                    <IonLabel>{tag}</IonLabel>
+                    <IonIcon icon={closeCircleOutline} />
+                  </IonChip>
+                ))}
+              </div>
+            )}
+          </div>
 
           {(uploadMode === 'file' || Capacitor.isNativePlatform()) ? (
             <div className="ion-padding-vertical">
@@ -519,7 +517,6 @@ const Upload = () => {
                   <IonButton
                     expand="block"
                     onClick={() => document.getElementById('video-record')?.click()}
-                    color="medium"
                     style={{ flex: 1 }}
                   >
                     Record Video
@@ -527,7 +524,6 @@ const Upload = () => {
                   <IonButton
                     expand="block"
                     onClick={() => document.getElementById('video-select')?.click()}
-                    color="medium"
                     style={{ flex: 1 }}
                   >
                     Choose Video
@@ -537,7 +533,6 @@ const Upload = () => {
                 <IonButton
                   expand="block"
                   onClick={() => document.getElementById('video-select')?.click()}
-                  color="medium"
                 >
                   {file ? 'Change Video' : 'Select Video'}
                 </IonButton>
@@ -553,7 +548,6 @@ const Upload = () => {
                       setPreviewUrl(null);
                     }
                   }}
-                  color="medium"
                   className="ion-margin-top"
                 >
                   Remove Video
@@ -583,12 +577,21 @@ const Upload = () => {
                   </IonButton>
 
                   {transcript && (
-                    <IonItem lines="none" className="ion-margin-top">
-                      <IonLabel>
-                        <h2>Transcript Preview</h2>
-                        <p style={{ whiteSpace: 'pre-wrap' }}>{transcript.text}</p>
-                      </IonLabel>
-                    </IonItem>
+                    <div className="transcript-preview">
+                      <h2 style={{ color: '#fff', marginBottom: '12px' }}>Transcript Preview</h2>
+                      <div style={{ 
+                        background: '#2a2a2a',
+                        padding: '16px',
+                        borderRadius: '8px',
+                        border: '2px solid rgba(255, 255, 255, 0.2)',
+                        color: '#fff',
+                        whiteSpace: 'pre-wrap',
+                        fontSize: '14px',
+                        lineHeight: '1.5'
+                      }}>
+                        {transcript.text}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -620,99 +623,96 @@ const Upload = () => {
             </>
           )}
 
-          <IonItem>
-            <IonLabel position="stacked">Job Description (PDF)</IonLabel>
-            <input
-              type="file"
-              accept="application/pdf"
-              onChange={handlePDFChange}
-              style={{ display: 'none' }}
-              id="pdf-upload"
-            />
-            <IonButton
-              expand="block"
-              onClick={() => document.getElementById('pdf-upload')?.click()}
-              color="medium"
-              disabled={parsingPDF}
-            >
-              {parsingPDF ? (
-                <>
-                  <IonSpinner name="crescent" />
-                  <span className="ion-padding-start">Parsing PDF...</span>
-                </>
-              ) : jobDescription ? (
-                'Change Job Description'
-              ) : (
-                'Upload Job Description'
-              )}
-            </IonButton>
-
-            {jobDescription && (
-              <IonItem lines="none" className="ion-margin-top">
-                <IonLabel>
-                  <h2>Job Description Preview</h2>
-                  <div style={{ 
-                    whiteSpace: 'pre-wrap',
-                    maxHeight: '400px',
-                    overflowY: 'auto',
-                    backgroundColor: '#f9fafb',
-                    padding: '1rem',
-                    borderRadius: '0.5rem',
-                    marginTop: '0.5rem',
-                    fontSize: '0.875rem'
-                  }}>
-                    <div><strong>Title:</strong> {jobDescription.title}</div>
-                    <div><strong>Company:</strong> {jobDescription.company}</div>
-                    <div><strong>Location:</strong> {jobDescription.location}</div>
-                    <div><strong>Type:</strong> {jobDescription.employmentType}</div>
-                    <div><strong>Level:</strong> {jobDescription.experienceLevel}</div>
-                    
-                    {jobDescription.salary && (
-                      <div>
-                        <strong>Salary:</strong> {jobDescription.salary.min}-{jobDescription.salary.max} {jobDescription.salary.currency} ({jobDescription.salary.period})
-                      </div>
-                    )}
-                    
-                    <div style={{ marginTop: '1rem' }}>
-                      <strong>Skills:</strong>
-                      <ul>
-                        {jobDescription.skills.map((skill, index) => (
-                          <li key={index}>{skill}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    
-                    <div>
-                      <strong>Responsibilities:</strong>
-                      <ul>
-                        {jobDescription.responsibilities.map((resp, index) => (
-                          <li key={index}>{resp}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    
-                    <div>
-                      <strong>Requirements:</strong>
-                      <ul>
-                        {jobDescription.requirements.map((req, index) => (
-                          <li key={index}>{req}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    
-                    <div>
-                      <strong>Benefits:</strong>
-                      <ul>
-                        {jobDescription.benefits.map((benefit, index) => (
-                          <li key={index}>{benefit}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </IonLabel>
-              </IonItem>
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={handlePDFChange}
+            style={{ display: 'none' }}
+            id="pdf-upload"
+          />
+          <IonButton
+            expand="block"
+            onClick={() => document.getElementById('pdf-upload')?.click()}
+            disabled={parsingPDF}
+            style={{ margin: '16px 0' }}
+          >
+            {parsingPDF ? (
+              <>
+                <IonSpinner name="crescent" />
+                <span className="ion-padding-start">Parsing PDF...</span>
+              </>
+            ) : jobDescription ? (
+              'Change Job Description'
+            ) : (
+              'Upload Job Description'
             )}
-          </IonItem>
+          </IonButton>
+
+          {jobDescription && (
+            <IonItem lines="none" className="ion-margin-top">
+              <IonLabel>
+                <h2>Job Description Preview</h2>
+                <div style={{ 
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: '400px',
+                  overflowY: 'auto',
+                  backgroundColor: '#f9fafb',
+                  padding: '1rem',
+                  borderRadius: '0.5rem',
+                  marginTop: '0.5rem',
+                  fontSize: '0.875rem'
+                }}>
+                  <div><strong>Title:</strong> {jobDescription.title}</div>
+                  <div><strong>Company:</strong> {jobDescription.company}</div>
+                  <div><strong>Location:</strong> {jobDescription.location}</div>
+                  <div><strong>Type:</strong> {jobDescription.employmentType}</div>
+                  <div><strong>Level:</strong> {jobDescription.experienceLevel}</div>
+                  
+                  {jobDescription.salary && (
+                    <div>
+                      <strong>Salary:</strong> {jobDescription.salary.min}-{jobDescription.salary.max} {jobDescription.salary.currency} ({jobDescription.salary.period})
+                    </div>
+                  )}
+                  
+                  <div style={{ marginTop: '1rem' }}>
+                    <strong>Skills:</strong>
+                    <ul>
+                      {jobDescription.skills.map((skill, index) => (
+                        <li key={index}>{skill}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <strong>Responsibilities:</strong>
+                    <ul>
+                      {jobDescription.responsibilities.map((resp, index) => (
+                        <li key={index}>{resp}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <strong>Requirements:</strong>
+                    <ul>
+                      {jobDescription.requirements.map((req, index) => (
+                        <li key={index}>{req}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <strong>Benefits:</strong>
+                    <ul>
+                      {jobDescription.benefits.map((benefit, index) => (
+                        <li key={index}>{benefit}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </IonLabel>
+            </IonItem>
+          )}
 
           {error && (
             <div className="ion-padding-vertical ion-text-center">
@@ -764,12 +764,82 @@ const Upload = () => {
 
       <style>{`
         ion-content {
+          --background: #1a1a1a;
           --padding-top: 0;
           --padding-bottom: 0;
           --padding-start: 0;
           --padding-end: 0;
         }
-        
+
+        .input-container {
+          margin: 16px 0;
+        }
+
+        ion-input {
+          --background: transparent !important;
+          --color: #fff !important;
+          --placeholder-color: rgba(255, 255, 255, 0.5);
+          --padding-start: 16px !important;
+          --padding-end: 16px !important;
+          --border-radius: 8px;
+          --highlight-color: #0055ff;
+          min-height: 52px;
+          border: 2px solid rgba(255, 255, 255, 0.2);
+          border-radius: 8px;
+        }
+
+        ion-input::part(wrapper) {
+          padding-left: 12px;
+        }
+
+        ion-input::part(native) {
+          color: #fff !important;
+        }
+
+        ion-input:focus-within {
+          border-color: #0055ff;
+          border-width: 2px;
+        }
+
+        ion-input.has-value {
+          border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .tags-container {
+          display: flex;
+          gap: 8px;
+          width: 100%;
+        }
+
+        ion-button {
+          --background: #0055ff;
+          --background-hover: #0044cc;
+          --color: #fff;
+        }
+
+        ion-chip {
+          --background: #333;
+          --color: #fff;
+        }
+
+        .job-description-preview {
+          background-color: #f5f5f5 !important;
+          color: #000 !important;
+        }
+
+        ion-segment {
+          background: #2a2a2a;
+          border-radius: 8px;
+          margin-bottom: 16px;
+        }
+
+        ion-segment-button {
+          --background: transparent;
+          --background-checked: #0055ff;
+          --color: #bbb;
+          --color-checked: #fff;
+        }
+
         .alert-with-backdrop::part(backdrop) {
           background: rgba(0, 0, 0, 0.7);
           opacity: 1;
