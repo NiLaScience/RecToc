@@ -145,6 +145,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     if (!user || !videoFile) return;
 
     setSubmitting(true);
+    setUploadProgress(0);
     try {
       let applicationId = application?.id;
       
@@ -155,8 +156,12 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
         setApplication(newApplication);
       }
 
-      // Upload video
-      await ApplicationService.uploadApplicationVideo(applicationId, videoFile);
+      // Upload video with progress tracking
+      await ApplicationService.uploadApplicationVideo(
+        applicationId, 
+        videoFile,
+        (progress) => setUploadProgress(progress)
+      );
       
       presentToast({
         message: 'Video uploaded successfully',
@@ -173,6 +178,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
       });
     } finally {
       setSubmitting(false);
+      setUploadProgress(0);
     }
   };
 

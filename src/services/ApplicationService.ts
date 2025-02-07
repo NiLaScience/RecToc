@@ -20,7 +20,7 @@ interface FirestoreDocument {
 
 class ApplicationService {
   private static readonly COLLECTION = 'applications';
-  private static readonly STORAGE_PATH = 'application-videos';
+  private static readonly STORAGE_PATH = 'users';
 
   static async createApplication(jobId: string): Promise<JobApplication> {
     const result = await FirebaseAuthentication.getCurrentUser();
@@ -55,7 +55,11 @@ class ApplicationService {
     };
   }
 
-  static async uploadApplicationVideo(applicationId: string, videoFile: File): Promise<void> {
+  static async uploadApplicationVideo(
+    applicationId: string, 
+    videoFile: File,
+    onProgress?: (progress: number) => void
+  ): Promise<void> {
     const result = await FirebaseAuthentication.getCurrentUser();
     if (!result.user) {
       throw new Error('User must be authenticated to upload application video');
@@ -64,8 +68,8 @@ class ApplicationService {
     // Generate video ID and set up paths with user ID included
     const videoId = uuidv4();
     const userId = result.user.uid;
-    const fileName = `${videoId}.mp4`;
-    const storagePath = `users/${userId}/application-videos/${fileName}`;
+    const fileName = `${videoId}.${videoFile.type.split('/')[1].split(';')[0]}`; // Get clean extension
+    const storagePath = `${this.STORAGE_PATH}/${userId}/application-videos/${fileName}`;
     
     try {
       // Upload video first
@@ -90,13 +94,18 @@ class ApplicationService {
             path: storagePath,
             uri: fileInfo.uri,
             metadata: {
-              contentType: videoFile.type
+              contentType: videoFile.type.split(';')[0] // Clean MIME type
             }
           }, (progress, error) => {
             if (error) {
               reject(error);
-            } else if (progress?.completed) {
-              resolve();
+            } else if (progress) {
+              if (onProgress && progress.progress) {
+                onProgress(progress.progress * 100);
+              }
+              if (progress.completed) {
+                resolve();
+              }
             }
           });
         });
@@ -108,22 +117,27 @@ class ApplicationService {
         });
       } else {
         // For web, use the blob directly
-        const base64Data = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(videoFile);
+        const cleanMimeType = videoFile.type.split(';')[0]; // Clean MIME type
+        await new Promise<void>((resolve, reject) => {
+          FirebaseStorage.uploadFile({
+            path: storagePath,
+            blob: videoFile,
+            metadata: {
+              contentType: cleanMimeType
+            }
+          }, (progress, error) => {
+            if (error) {
+              reject(error);
+            } else if (progress) {
+              if (onProgress && progress.progress) {
+                onProgress(progress.progress * 100);
+              }
+              if (progress.completed) {
+                resolve();
+              }
+            }
+          });
         });
-
-        // Remove data URL prefix
-        const base64Content = base64Data.split(',')[1];
-
-        await FirebaseStorage.uploadFile({
-          path: storagePath,
-          blob: new Blob([Buffer.from(base64Content, 'base64')], { type: videoFile.type }),
-          metadata: {
-            contentType: videoFile.type
-          }
-        }, () => {});
       }
 
       // Try to get the download URL with retries
@@ -152,7 +166,7 @@ class ApplicationService {
         throw new Error('Failed to get download URL');
       }
 
-      // Update application with URL
+      // Update application with URL and ensure we follow the schema
       await FirebaseFirestore.updateDocument({
         reference: `${this.COLLECTION}/${applicationId}`,
         data: {

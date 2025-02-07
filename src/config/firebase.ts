@@ -111,15 +111,18 @@ export const signOut = async () => {
 };
 
 // Helper function to upload a file to Firebase Storage
-export const uploadFile = async (path: string, uri: string, metadata?: { contentType?: string }) => {
+export const uploadFile = async (path: string, uri?: string, metadata?: { contentType?: string; blob?: Blob }) => {
   await ensureInitialized();
   try {
     await new Promise<void>((resolve, reject) => {
       FirebaseStorage.uploadFile(
         {
           path,
-          uri,
-          metadata
+          ...(uri && { uri }),
+          ...(metadata?.blob && { blob: metadata.blob }),
+          metadata: {
+            contentType: metadata?.contentType
+          }
         },
         (event, error) => {
           if (error) {

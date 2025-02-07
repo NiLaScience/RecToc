@@ -14,6 +14,14 @@
     ],
     "rewrites": [
       {
+        "source": "/install/app-debug.apk",
+        "destination": "/install/app-debug.apk"
+      },
+      {
+        "source": "/install",
+        "destination": "/install/index.html"
+      },
+      {
         "source": "/install/**",
         "destination": "/install/index.html"
       },
@@ -29,6 +37,15 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          }
+        ]
+      },
+      {
+        "source": "**/*.apk",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/vnd.android.package-archive"
           }
         ]
       }

@@ -13,6 +13,7 @@ import {
   IonAlert,
   IonAccordionGroup,
   IonAccordion,
+  IonProgressBar,
 } from '@ionic/react';
 import { cloudUploadOutline, closeCircleOutline, micOutline } from 'ionicons/icons';
 import { useState, useEffect } from 'react';
@@ -32,6 +33,7 @@ import AppHeader from './AppHeader';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent } from './shared/AccordionContent';
+import { FirebaseStorage } from '@capacitor-firebase/storage';
 
 interface User {
   uid: string;
@@ -46,6 +48,7 @@ const Upload = () => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [uploadMode, setUploadMode] = useState<'file' | 'record'>('file');
+  const [uploadProgress, setUploadProgress] = useState(0);
   const { user } = useAuth();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [transcribing, setTranscribing] = useState(false);
@@ -121,14 +124,28 @@ const Upload = () => {
         const fileName = uri.split('/').pop() || `recorded_video_${Date.now()}.${format}`;
         setFile(new File([blob], fileName, { type: `video/${format}` }));
       } else {
-        // For web, ensure we properly handle the recording completion
+        // For web platform
         setPreviewUrl(uri);
         const response = await fetch(uri);
         const blob = await response.blob();
-        const fileName = `recorded_video_${Date.now()}.${format}`;
-        const videoFile = new File([blob], fileName, { type: `video/${format}` });
+        
+        // Clean up the format string to remove codecs
+        const cleanFormat = format.split(';')[0];
+        const cleanMimeType = `video/${cleanFormat}`;
+        
+        // Convert blob to base64
+        const base64Data = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+        
+        // Create a new blob with clean MIME type
+        const cleanBlob = new Blob([blob], { type: cleanMimeType });
+        
+        const fileName = `recorded_video_${Date.now()}.${cleanFormat}`;
+        const videoFile = new File([cleanBlob], fileName, { type: cleanMimeType });
         setFile(videoFile);
-        // Force switch back to file mode after recording is complete
         setUploadMode('file');
       }
     } catch (error) {
@@ -244,22 +261,36 @@ const Upload = () => {
     }
   };
 
-  const writeFileInChunks = async (path: string, blob: Blob, chunkSize: number = 5 * 1024 * 1024) => {
+  const MAX_CHUNK_SIZE = 1 * 1024 * 1024; // 1MB chunks
+
+  const writeFileInChunks = async (path: string, blob: Blob) => {
     const totalSize = blob.size;
     let offset = 0;
+    let isFirstChunk = true;
     
     while (offset < totalSize) {
-      const chunk = blob.slice(offset, offset + chunkSize);
+      const chunk = blob.slice(offset, offset + MAX_CHUNK_SIZE);
       const chunkArrayBuffer = await chunk.arrayBuffer();
       const base64chunk = Buffer.from(chunkArrayBuffer).toString('base64');
       
-      await Filesystem.appendFile({
-        path,
-        data: base64chunk,
-        directory: Directory.Cache
-      });
+      if (isFirstChunk) {
+        // First chunk - create file
+        await Filesystem.writeFile({
+          path,
+          data: base64chunk,
+          directory: Directory.Cache
+        });
+        isFirstChunk = false;
+      } else {
+        // Append subsequent chunks
+        await Filesystem.appendFile({
+          path,
+          data: base64chunk,
+          directory: Directory.Cache
+        });
+      }
       
-      offset += chunkSize;
+      offset += MAX_CHUNK_SIZE;
     }
   };
 
@@ -280,90 +311,147 @@ const Upload = () => {
 
       setUploading(true);
       setError('');
+      setUploadProgress(0);
 
       try {
-        // Generate thumbnail
-        console.log('Generating thumbnail for file:', file.name, 'type:', file.type, 'size:', file.size);
+        // Generate thumbnail first since it's smaller
+        console.log('Generating thumbnail for file:', file.name);
         const thumbnailFile = await ThumbnailService.generateThumbnail(file);
-        console.log('Thumbnail generated successfully');
         
-        // Save files to temporary storage
+        // Upload paths
         const videoFileName = `${Date.now()}-${file.name}`;
         const thumbnailFileName = `${Date.now()}-thumbnail.jpg`;
-        
-        console.log('Writing files to filesystem...');
-        
-        // For Android, write files directly without base64 conversion
-        if (Capacitor.isNativePlatform()) {
-          if (previewUrl?.startsWith('file://')) {
-            // File is already on the filesystem, just use it directly
-            console.log('Using existing file on filesystem');
-          } else {
-            // Need to write the file to filesystem
-            const response = await fetch(URL.createObjectURL(file));
-            const blob = await response.blob();
-            await writeFileInChunks(videoFileName, blob);
-          }
-          
-          // Write thumbnail
-          const thumbnailResponse = await fetch(URL.createObjectURL(thumbnailFile));
-          const thumbnailBlob = await thumbnailResponse.blob();
-          await writeFileInChunks(thumbnailFileName, thumbnailBlob);
-        } else {
-          // Web platform - use base64
-          const [videoBase64, thumbnailBase64] = await Promise.all([
-            new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            }),
-            new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-              reader.onerror = reject;
-              reader.readAsDataURL(thumbnailFile);
-            })
-          ]);
-
-          await Promise.all([
-            Filesystem.writeFile({
-              path: videoFileName,
-              data: videoBase64,
-              directory: Directory.Cache
-            }),
-            Filesystem.writeFile({
-              path: thumbnailFileName,
-              data: thumbnailBase64,
-              directory: Directory.Cache
-            })
-          ]);
-        }
-
-        console.log('Files written to filesystem');
-
-        // Get file URIs
-        const [videoFileInfo, thumbnailFileInfo] = await Promise.all([
-          Filesystem.getUri({
-            path: videoFileName,
-            directory: Directory.Cache
-          }),
-          Filesystem.getUri({
-            path: thumbnailFileName,
-            directory: Directory.Cache
-          })
-        ]);
-
-        // Upload paths
         const videoPath = `videos/${currentUser.uid}/${videoFileName}`;
         const thumbnailPath = `thumbnails/${currentUser.uid}/${thumbnailFileName}`;
         
-        console.log('Uploading files to Firebase Storage...');
-        // Upload files to Firebase Storage
-        const [videoUrl, thumbnailUrl] = await Promise.all([
-          uploadFile(videoPath, videoFileInfo.uri, { contentType: file.type }),
-          uploadFile(thumbnailPath, thumbnailFileInfo.uri, { contentType: 'image/jpeg' })
-        ]);
+        let videoUrl: string;
+        let thumbnailUrl: string;
+        
+        if (Capacitor.isNativePlatform()) {
+          let videoFileUri: string;
+          
+          if (previewUrl?.startsWith('file://')) {
+            // For recordings, use the file directly
+            videoFileUri = previewUrl.replace('file://', '');
+          } else {
+            // For selected files on Android, try to get the real path
+            const fileUri = (file as any).path || (file as any).filepath || (file as any).uri;
+            if (fileUri) {
+              videoFileUri = fileUri;
+            } else {
+              // If we can't get direct access, write to cache in chunks
+              await writeFileInChunks(videoFileName, file);
+              const fileInfo = await Filesystem.getUri({
+                path: videoFileName,
+                directory: Directory.Cache
+              });
+              videoFileUri = fileInfo.uri;
+            }
+          }
+
+          // Write thumbnail (it's small enough to write directly)
+          const thumbnailBlob = await thumbnailFile.arrayBuffer();
+          await Filesystem.writeFile({
+            path: thumbnailFileName,
+            data: Buffer.from(thumbnailBlob).toString('base64'),
+            directory: Directory.Cache
+          });
+          const thumbnailFileInfo = await Filesystem.getUri({
+            path: thumbnailFileName,
+            directory: Directory.Cache
+          });
+
+          try {
+            // Upload video first
+            videoUrl = await new Promise<string>((resolve, reject) => {
+              FirebaseStorage.uploadFile({
+                path: videoPath,
+                uri: videoFileUri,
+                metadata: { contentType: file.type }
+              }, (progress, error) => {
+                if (error) {
+                  reject(error);
+                } else if (progress) {
+                  if (progress.progress) {
+                    setUploadProgress(progress.progress * 100);
+                  }
+                  if (progress.completed) {
+                    FirebaseStorage.getDownloadUrl({ path: videoPath })
+                      .then(result => resolve(result.downloadUrl))
+                      .catch(reject);
+                  }
+                }
+              });
+            });
+
+            // Then upload thumbnail
+            thumbnailUrl = await uploadFile(thumbnailPath, thumbnailFileInfo.uri, { 
+              contentType: 'image/jpeg' 
+            });
+
+            // Clean up temporary files
+            try {
+              if (!previewUrl?.startsWith('file://')) {
+                await Filesystem.deleteFile({
+                  path: videoFileName,
+                  directory: Directory.Cache
+                });
+              }
+              await Filesystem.deleteFile({
+                path: thumbnailFileName,
+                directory: Directory.Cache
+              });
+            } catch (cleanupError) {
+              console.warn('Failed to clean up temporary files:', cleanupError);
+            }
+          } catch (uploadError) {
+            // Clean up on upload failure
+            try {
+              await Filesystem.deleteFile({
+                path: videoFileName,
+                directory: Directory.Cache
+              });
+              await Filesystem.deleteFile({
+                path: thumbnailFileName,
+                directory: Directory.Cache
+              });
+            } catch (cleanupError) {
+              console.warn('Failed to clean up after upload error:', cleanupError);
+            }
+            throw uploadError;
+          }
+        } else {
+          // Web platform code remains the same
+          const cleanMimeType = file.type.split(';')[0];
+          
+          [videoUrl, thumbnailUrl] = await Promise.all([
+            new Promise<string>((resolve, reject) => {
+              FirebaseStorage.uploadFile({
+                path: videoPath,
+                blob: file,
+                metadata: { contentType: cleanMimeType }
+              }, (progress, error) => {
+                if (error) {
+                  reject(error);
+                } else if (progress) {
+                  if (progress.progress) {
+                    setUploadProgress(progress.progress * 100);
+                  }
+                  if (progress.completed) {
+                    FirebaseStorage.getDownloadUrl({ path: videoPath })
+                      .then(result => resolve(result.downloadUrl))
+                      .catch(reject);
+                  }
+                }
+              });
+            }),
+            uploadFile(thumbnailPath, undefined, {
+              contentType: 'image/jpeg',
+              blob: thumbnailFile
+            })
+          ]);
+        }
+        
         console.log('Files uploaded to Firebase Storage successfully');
 
         // Save video metadata to Firestore
@@ -734,6 +822,22 @@ const Upload = () => {
               <IonLabel color="success" style={{ fontSize: '1.2em', fontWeight: 'bold' }}>
                 Upload Complete! Clearing form...
               </IonLabel>
+            </div>
+          )}
+
+          {uploading && (
+            <div style={{ maxWidth: '600px', margin: '1.5rem auto' }}>
+              <IonProgressBar 
+                value={uploadProgress / 100}
+                style={{ '--progress-background': '#0055ff' }}
+              />
+              <p style={{ 
+                textAlign: 'center', 
+                marginTop: '0.5rem',
+                color: 'rgba(255, 255, 255, 0.7)'
+              }}>
+                Uploading... {Math.round(uploadProgress)}%
+              </p>
             </div>
           )}
         </div>
