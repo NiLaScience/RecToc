@@ -1,22 +1,23 @@
-import {
-  IonPage,
-  IonContent,
-  IonItem,
-  IonLabel,
-  IonInput,
-  IonButton,
-  IonChip,
-  IonIcon,
-  IonSegment,
-  IonSegmentButton,
-  IonSpinner,
-  IonAlert,
-  IonAccordionGroup,
-  IonAccordion,
+import { useState, useEffect } from 'react';
+import { 
+  IonPage, 
+  IonContent, 
+  IonItem, 
+  IonLabel, 
+  IonInput, 
+  IonButton, 
+  IonChip, 
+  IonIcon, 
+  IonSegment, 
+  IonSegmentButton, 
+  IonSpinner, 
+  IonAlert, 
+  IonAccordionGroup, 
+  IonAccordion, 
   IonProgressBar,
+  IonToggle,
 } from '@ionic/react';
 import { cloudUploadOutline, closeCircleOutline, micOutline } from 'ionicons/icons';
-import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
@@ -27,6 +28,7 @@ import { Dialog } from '@capacitor/dialog';
 import { alertController } from '@ionic/core';
 import ThumbnailService from '../services/ThumbnailService';
 import PDFParserService from '../services/PDFParserService';
+import { GeminiParserService } from '../services/GeminiParserService';
 import type { JobDescriptionSchema } from '../services/OpenAIService';
 import { uploadFile, addDocument } from '../config/firebase';
 import AppHeader from './AppHeader';
@@ -60,6 +62,7 @@ const Upload = () => {
   const [webSuccess, setWebSuccess] = useState(false);
   const [jobDescription, setJobDescription] = useState<JobDescriptionSchema | null>(null);
   const [parsingPDF, setParsingPDF] = useState(false);
+  const [useGemini, setUseGemini] = useState(false);
 
   // Constants for upload handling
   const CHUNK_UPLOAD_THRESHOLD = 25 * 1024 * 1024; // 25 MB threshold
@@ -272,8 +275,21 @@ const Upload = () => {
       setError('');
 
       try {
-        const structuredData = await PDFParserService.parsePDF(pdfFile);
-        setJobDescription(structuredData);
+        let parsedData: JobDescriptionSchema;
+        
+        if (useGemini) {
+          const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+          if (!geminiApiKey) {
+            throw new Error('NEXT_PUBLIC_GEMINI_API_KEY is not configured in your environment');
+          }
+          const geminiParser = new GeminiParserService(geminiApiKey);
+          const fileBuffer = await pdfFile.arrayBuffer();
+          const base64String = Buffer.from(fileBuffer).toString('base64');
+          parsedData = await geminiParser.parseJobDescription(base64String);
+        } else {
+          parsedData = await PDFParserService.parsePDF(pdfFile);
+        }
+        setJobDescription(parsedData);
       } catch (error) {
         console.error('Error parsing PDF:', error);
         setError('Failed to parse PDF. Please try again.');
@@ -684,6 +700,14 @@ const Upload = () => {
             style={{ display: 'none' }}
             id="pdf-upload"
           />
+          <IonItem>
+            <IonLabel>Use Gemini for parsing</IonLabel>
+            <IonToggle 
+              checked={useGemini}
+              onIonChange={e => setUseGemini(e.detail.checked)}
+              style={{ marginLeft: '1rem' }}
+            />
+          </IonItem>
           <IonButton
             expand="block"
             onClick={() => document.getElementById('pdf-upload')?.click()}

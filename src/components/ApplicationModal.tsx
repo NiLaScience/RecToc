@@ -327,7 +327,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                           <AccordionGroup>
                             {profile.cv.experience && profile.cv.experience.length > 0 && (
                               <AccordionSection value="experience" label="Experience">
-                                {profile.cv.experience.map((exp, index) => (
+                                {profile.cv.experience.map((exp: { title: string; company: string; location?: string; startDate: string; endDate?: string; current?: boolean; highlights: string[] }, index: number) => (
                                   <ExperienceContent
                                     key={index}
                                     title={exp.title}
@@ -344,7 +344,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
 
                             {profile.cv.education && profile.cv.education.length > 0 && (
                               <AccordionSection value="education" label="Education">
-                                {profile.cv.education.map((edu, index) => (
+                                {profile.cv.education.map((edu: { institution: string; degree: string; field: string; graduationDate?: string; gpa?: number }, index: number) => (
                                   <EducationContent
                                     key={index}
                                     degree={edu.degree}
@@ -359,7 +359,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
 
                             {profile.cv?.skills && profile.cv.skills.length > 0 && (
                               <AccordionSection value="skills" label="Skills">
-                                {profile.cv.skills.map((skillGroup, index) => (
+                                {profile.cv.skills.map((skillGroup: { category: string; items: string[] }, index: number) => (
                                   <div key={index} style={{ marginBottom: index < (profile.cv?.skills?.length || 0) - 1 ? '1rem' : 0 }}>
                                     <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{skillGroup.category}</h4>
                                     <ChipsContent items={skillGroup.items} />

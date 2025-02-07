@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import OpenAIService, { CVSchema } from './OpenAIService';
+import { OpenAIService, type CVSchema } from './OpenAIService';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { FirebaseStorage } from '@capacitor-firebase/storage';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';

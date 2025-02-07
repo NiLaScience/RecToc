@@ -23,6 +23,7 @@ import {
   IonIcon,
   IonAccordionGroup,
   IonAccordion,
+  IonToggle,
 } from '@ionic/react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -40,6 +41,7 @@ import {
   unrejectJob,
 } from '../config/firebase';
 import CVParserService from '../services/CVParserService';
+import { GeminiParserService } from '../services/GeminiParserService';
 import AppHeader from './AppHeader';
 import { pencilOutline } from 'ionicons/icons';
 import AccordionGroup from './shared/AccordionGroup';
@@ -65,6 +67,7 @@ const Profile = () => {
   const [showResetAlert, setShowResetAlert] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [useGemini, setUseGemini] = useState(false);
 
   // Helper function to update all profile-related state
   const updateProfileState = (profileData: UserProfile) => {
@@ -151,6 +154,7 @@ const Profile = () => {
               const base64 = reader.result as string;
               resolve(base64);
             };
+            reader.onerror = reject;
             reader.readAsDataURL(file);
           });
           
@@ -205,58 +209,49 @@ const Profile = () => {
     }
   };
 
-  const handleCVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const fileType = file.type;
-      
-      // Check if file type is supported
-      const supportedTypes = [
-        'application/pdf',                     // PDF
-        'application/msword',                  // DOC
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // DOCX
-        'text/plain',                         // TXT
-        'application/rtf',                    // RTF
-        'application/vnd.oasis.opendocument.text' // ODT
-      ];
-      
-      if (!supportedTypes.includes(fileType)) {
-        presentToast({
-          message: 'Unsupported file type. Please upload a PDF, DOC, DOCX, TXT, RTF, or ODT file.',
-          duration: 3000,
-          color: 'danger'
-        });
-        return;
-      }
+  const handleCVUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-      setCVFile(file);
-      setCVUploading(true);
+    setCVUploading(true);
+    try {
+      let parsedData;
       
-      try {
-        const structuredCV = await CVParserService.parseCV(file);
-        
-        // Update user profile with CV data
-        await updateDocument(`users/${user!.uid}`, {
-          cv: structuredCV,
-          updatedAt: new Date().toISOString()
-        });
-
-        presentToast({
-          message: 'CV uploaded and parsed successfully',
-          duration: 2000,
-          color: 'success'
-        });
-      } catch (error) {
-        console.error('Error uploading CV:', error);
-        presentToast({
-          message: 'Failed to upload CV. Please try again.',
-          duration: 2000,
-          color: 'danger'
-        });
-      } finally {
-        setCVUploading(false);
-        setCVFile(null);
+      if (useGemini) {
+        const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+        if (!geminiApiKey) {
+          throw new Error('NEXT_PUBLIC_GEMINI_API_KEY is not configured in your environment');
+        }
+        const geminiParser = new GeminiParserService(geminiApiKey);
+        // Convert File to base64 for Gemini
+        const fileBuffer = await file.arrayBuffer();
+        const base64String = Buffer.from(fileBuffer).toString('base64');
+        parsedData = await geminiParser.parseCV(base64String);
+      } else {
+        parsedData = await CVParserService.parseCV(file);
       }
+      
+      // Update user profile with CV data
+      await updateDocument(`users/${user!.uid}`, {
+        cv: parsedData,
+        updatedAt: new Date().toISOString()
+      });
+
+      presentToast({
+        message: 'CV uploaded and parsed successfully',
+        duration: 2000,
+        color: 'success'
+      });
+    } catch (error) {
+      console.error('Error uploading CV:', error);
+      presentToast({
+        message: 'Failed to upload CV. Please try again.',
+        duration: 2000,
+        color: 'danger'
+      });
+    } finally {
+      setCVUploading(false);
+      setCVFile(null);
     }
   };
 
@@ -544,6 +539,15 @@ const Profile = () => {
               </label>
             </div>
           </div>
+
+          <IonItem>
+            <IonLabel>Use Gemini for parsing</IonLabel>
+            <IonToggle 
+              checked={useGemini}
+              onIonChange={e => setUseGemini(e.detail.checked)}
+              style={{ marginLeft: '1rem' }}
+            />
+          </IonItem>
 
           <div className="input-container">
             <label className="input-label">Display Name</label>
