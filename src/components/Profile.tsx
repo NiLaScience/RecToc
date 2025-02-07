@@ -20,6 +20,9 @@ import {
   IonCardContent,
   IonChip,
   IonAlert,
+  IonIcon,
+  IonAccordionGroup,
+  IonAccordion,
 } from '@ionic/react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -37,6 +40,8 @@ import {
   unrejectJob,
 } from '../config/firebase';
 import CVParserService from '../services/CVParserService';
+import AppHeader from './AppHeader';
+import { pencilOutline } from 'ionicons/icons';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -55,6 +60,7 @@ const Profile = () => {
   const pendingChangesRef = useRef<Set<string>>(new Set());
   const [showResetAlert, setShowResetAlert] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   // Helper function to update all profile-related state
   const updateProfileState = (profileData: UserProfile) => {
@@ -95,9 +101,103 @@ const Profile = () => {
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      pendingChangesRef.current.add('photoURL');
       setPhotoFile(file);
       setPhotoPreview(URL.createObjectURL(file));
+
+      // Automatically save the photo
+      try {
+        let photoURL;
+        
+        if (Capacitor.isNativePlatform()) {
+          // Convert File to base64 for filesystem
+          const arrayBuffer = await file.arrayBuffer();
+          const base64Data = Buffer.from(arrayBuffer).toString('base64');
+          
+          // Save to filesystem temporarily
+          const tempFileName = `profile_${Date.now()}.jpg`;
+          await Filesystem.writeFile({
+            path: tempFileName,
+            data: base64Data,
+            directory: Directory.Cache
+          });
+
+          // Get the file URI
+          const fileInfo = await Filesystem.getUri({
+            path: tempFileName,
+            directory: Directory.Cache
+          });
+
+          // Upload to Firebase Storage
+          photoURL = await uploadFile(
+            `users/${user!.uid}/profile.jpg`,
+            fileInfo.uri,
+            { contentType: 'image/jpeg' }
+          );
+
+          // Clean up temp file
+          await Filesystem.deleteFile({
+            path: tempFileName,
+            directory: Directory.Cache
+          });
+        } else {
+          // For web platform, convert to base64 directly
+          const base64Data = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64 = reader.result as string;
+              resolve(base64);
+            };
+            reader.readAsDataURL(file);
+          });
+          
+          photoURL = await uploadFile(
+            `users/${user!.uid}/profile.jpg`,
+            base64Data,
+            { contentType: 'image/jpeg' }
+          );
+        }
+
+        // Update the profile document with the new photo URL
+        await updateDocument(`users/${user!.uid}`, {
+          photoURL,
+          updatedAt: new Date().toISOString()
+        });
+
+        presentToast({
+          message: 'Profile photo updated successfully',
+          duration: 3000,
+          color: 'success'
+        });
+      } catch (error) {
+        console.error('Error uploading photo:', error);
+        presentToast({
+          message: 'Failed to upload photo',
+          duration: 3000,
+          color: 'warning'
+        });
+        // Reset preview on error
+        setPhotoPreview(profile?.photoURL || '');
+      }
+    }
+  };
+
+  // Helper function to write files in chunks (copied from Upload component)
+  const writeFileInChunks = async (path: string, blob: Blob, chunkSize: number = 5 * 1024 * 1024) => {
+    const totalSize = blob.size;
+    let offset = 0;
+    
+    while (offset < totalSize) {
+      const chunk = blob.slice(offset, offset + chunkSize);
+      const chunkArrayBuffer = await chunk.arrayBuffer();
+      const base64chunk = Buffer.from(chunkArrayBuffer).toString('base64');
+      
+      await Filesystem.appendFile({
+        path,
+        data: base64chunk,
+        directory: Directory.Cache
+      });
+      
+      offset += chunkSize;
     }
   };
 
@@ -236,36 +336,57 @@ const Profile = () => {
       // Handle photo upload
       if (photoFile) {
         try {
-          // Convert File to base64 for filesystem
-          const arrayBuffer = await photoFile.arrayBuffer();
-          const base64Data = Buffer.from(arrayBuffer).toString('base64');
+          let photoURL;
           
-          // Save to filesystem temporarily
-          const tempFileName = `profile_${Date.now()}.jpg`;
-          await Filesystem.writeFile({
-            path: tempFileName,
-            data: base64Data,
-            directory: Directory.Cache
-          });
+          if (Capacitor.isNativePlatform()) {
+            // Convert File to base64 for filesystem
+            const arrayBuffer = await photoFile.arrayBuffer();
+            const base64Data = Buffer.from(arrayBuffer).toString('base64');
+            
+            // Save to filesystem temporarily
+            const tempFileName = `profile_${Date.now()}.jpg`;
+            await Filesystem.writeFile({
+              path: tempFileName,
+              data: base64Data,
+              directory: Directory.Cache
+            });
 
-          // Get the file URI
-          const fileInfo = await Filesystem.getUri({
-            path: tempFileName,
-            directory: Directory.Cache
-          });
+            // Get the file URI
+            const fileInfo = await Filesystem.getUri({
+              path: tempFileName,
+              directory: Directory.Cache
+            });
 
-          // Upload to Firebase Storage
-          const photoURL = await uploadFile(
-            `users/${user.uid}/profile.jpg`,
-            fileInfo.uri,
-            { contentType: 'image/jpeg' }
-          );
+            // Upload to Firebase Storage
+            photoURL = await uploadFile(
+              `users/${user.uid}/profile.jpg`,
+              fileInfo.uri,
+              { contentType: 'image/jpeg' }
+            );
 
-          // Clean up temp file
-          await Filesystem.deleteFile({
-            path: tempFileName,
-            directory: Directory.Cache
-          });
+            // Clean up temp file
+            await Filesystem.deleteFile({
+              path: tempFileName,
+              directory: Directory.Cache
+            });
+          } else {
+            // Web platform - upload directly
+            const blob = await photoFile.arrayBuffer().then(buffer => new Blob([buffer], { type: 'image/jpeg' }));
+            
+            // Create a data URL from the blob
+            const reader = new FileReader();
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+            
+            photoURL = await uploadFile(
+              `users/${user.uid}/profile.jpg`,
+              dataUrl,
+              { contentType: 'image/jpeg' }
+            );
+          }
 
           updates.photoURL = photoURL;
           hasChanges = true;
@@ -352,215 +473,288 @@ const Profile = () => {
 
   return (
     <IonPage>
-      <IonHeader>
-        <IonToolbar>
-          <IonTitle>Profile</IonTitle>
-        </IonToolbar>
-      </IonHeader>
-      
+      <AppHeader
+        title="Profile"
+        mode="details"
+        rightContent={
+          <IonButton
+            fill="clear"
+            color="light"
+            onClick={() => signOut().catch(console.error)}
+          >
+            Sign Out
+          </IonButton>
+        }
+      />
       <IonContent>
-        <div style={{ padding: '1rem' }}>
+        <div style={{ padding: '1rem', paddingTop: '56px' }}>
           <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
               <input
                 type="file"
                 accept="image/*"
                 onChange={handlePhotoChange}
                 style={{ display: 'none' }}
                 id="photo-upload"
+                disabled={!editMode}
               />
-              <label htmlFor="photo-upload">
-                <IonAvatar style={{ width: '100px', height: '100px', cursor: 'pointer' }}>
+              <label htmlFor="photo-upload" style={{ 
+                cursor: editMode ? 'pointer' : 'default', 
+                display: 'block', 
+                position: 'relative' 
+              }}>
+                <IonAvatar style={{ 
+                  width: '150px', 
+                  height: '150px', 
+                  margin: '0 auto',
+                }}>
                   <img
                     src={photoPreview || 'https://ionicframework.com/docs/img/demos/avatar.svg'}
                     alt={displayName || 'User'}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 </IonAvatar>
+                {editMode && (
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '0',
+                    right: '0',
+                    background: '#0055ff',
+                    borderRadius: '50%',
+                    width: '36px',
+                    height: '36px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px solid #1a1a1a'
+                  }}>
+                    <IonIcon 
+                      icon={pencilOutline} 
+                      style={{ 
+                        color: '#fff',
+                        fontSize: '20px'
+                      }} 
+                    />
+                  </div>
+                )}
               </label>
             </div>
           </div>
 
-          <IonItem>
-            <IonLabel position="stacked">Display Name</IonLabel>
+          <div className="input-container">
+            <label className="input-label">Display Name</label>
             <IonInput
               value={displayName}
               onIonInput={e => handleFieldChange('displayName', e.detail.value!)}
               placeholder="Enter your display name"
+              className={displayName ? 'has-value' : ''}
+              disabled={!editMode}
             />
-          </IonItem>
+          </div>
 
-          <IonItem>
-            <IonLabel position="stacked">Username</IonLabel>
+          <div className="input-container">
+            <label className="input-label">Username</label>
             <IonInput
               value={username}
               onIonInput={e => handleFieldChange('username', e.detail.value!)}
               placeholder="Enter your username"
+              className={username ? 'has-value' : ''}
+              disabled={!editMode}
             />
-          </IonItem>
+          </div>
 
-          <IonItem>
-            <IonLabel position="stacked">Bio</IonLabel>
+          <div className="input-container">
+            <label className="input-label">Bio</label>
             <IonTextarea
               value={description}
               onIonInput={e => handleFieldChange('description', e.detail.value!)}
               placeholder="Tell us about yourself"
               rows={4}
+              className={description ? 'has-value' : ''}
+              disabled={!editMode}
             />
-          </IonItem>
+          </div>
 
-          <IonItem>
-            <IonLabel position="stacked">CV/Resume</IonLabel>
+          <div style={{ 
+            display: 'flex', 
+            gap: '1rem', 
+            marginBottom: '2rem',
+            marginTop: '2rem'
+          }}>
+            <IonButton
+              expand="block"
+              style={{ flex: 1 }}
+              onClick={async () => {
+                if (editMode) {
+                  await handleSave();
+                  setEditMode(false);
+                } else {
+                  setEditMode(true);
+                }
+              }}
+              disabled={saving}
+            >
+              {saving ? (
+                <IonSpinner name="dots" />
+              ) : editMode ? (
+                'Save Changes'
+              ) : (
+                'Edit Profile'
+              )}
+            </IonButton>
+
             <input
               type="file"
               accept=".pdf,.doc,.docx,.txt,.rtf,.odt"
               onChange={handleCVUpload}
-              style={{ marginTop: '0.5rem' }}
+              style={{ display: 'none' }}
+              id="cv-upload"
               disabled={cvUploading}
             />
-            {cvUploading && (
-              <div style={{ display: 'flex', alignItems: 'center', marginTop: '0.5rem' }}>
-                <IonSpinner name="dots" style={{ marginRight: '0.5rem' }} />
-                <span>Processing CV...</span>
-              </div>
-            )}
-          </IonItem>
+            <IonButton
+              expand="block"
+              style={{ flex: 1 }}
+              onClick={() => document.getElementById('cv-upload')?.click()}
+              disabled={cvUploading}
+            >
+              {cvUploading ? (
+                <>
+                  <IonSpinner name="dots" style={{ marginRight: '0.5rem' }} />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                'Upload Resume'
+              )}
+            </IonButton>
+          </div>
 
           {profile?.cv && (
             <div style={{ margin: '1rem 0' }}>
-              <h3>Your CV Information</h3>
+              <h3 style={{ color: '#fff', marginBottom: '1rem' }}>Your CV Information</h3>
               
-              {profile.cv.personalInfo.summary && (
-                <IonCard>
-                  <IonCardHeader>
-                    <IonCardTitle>Professional Summary</IonCardTitle>
-                  </IonCardHeader>
-                  <IonCardContent>
-                    <p>{profile.cv.personalInfo.summary}</p>
-                  </IonCardContent>
-                </IonCard>
-              )}
+              <IonAccordionGroup style={{ 
+                borderRadius: '8px', 
+                border: '2px solid rgba(255, 255, 255, 0.2)',
+                background: '#333',
+                overflow: 'hidden'
+              }}>
+                {profile?.cv?.personalInfo?.summary && (
+                  <IonAccordion value="summary" className="cv-accordion">
+                    <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
+                      <IonLabel>Professional Summary</IonLabel>
+                    </IonItem>
+                    <div className="ion-padding accordion-content" slot="content">
+                      {profile?.cv?.personalInfo?.summary}
+                    </div>
+                  </IonAccordion>
+                )}
 
-              {profile.cv.experience && profile.cv.experience.length > 0 && (
-                <IonCard>
-                  <IonCardHeader>
-                    <IonCardTitle>Experience</IonCardTitle>
-                  </IonCardHeader>
-                  <IonCardContent>
-                    {profile.cv.experience.map((exp, index) => (
-                      <div key={index} style={{ marginBottom: '1rem' }}>
-                        <h4>{exp.title} at {exp.company}</h4>
-                        <p style={{ color: 'var(--ion-color-medium)' }}>
-                          {exp.startDate} - {exp.current ? 'Present' : exp.endDate}
-                          {exp.location && ` • ${exp.location}`}
-                        </p>
-                        <ul>
-                          {exp.highlights.map((highlight, i) => (
-                            <li key={i}>{highlight}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </IonCardContent>
-                </IonCard>
-              )}
-
-              {profile.cv.education && profile.cv.education.length > 0 && (
-                <IonCard>
-                  <IonCardHeader>
-                    <IonCardTitle>Education</IonCardTitle>
-                  </IonCardHeader>
-                  <IonCardContent>
-                    {profile.cv.education.map((edu, index) => (
-                      <div key={index} style={{ marginBottom: '1rem' }}>
-                        <h4>{edu.degree} in {edu.field}</h4>
-                        <p>{edu.institution}</p>
-                        {edu.graduationDate && (
-                          <p style={{ color: 'var(--ion-color-medium)' }}>
-                            Graduated: {edu.graduationDate}
-                            {edu.gpa && ` • GPA: ${edu.gpa}`}
+                {profile?.cv?.experience && profile?.cv?.experience?.length > 0 && (
+                  <IonAccordion value="experience" className="cv-accordion">
+                    <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
+                      <IonLabel>Experience</IonLabel>
+                    </IonItem>
+                    <div className="ion-padding accordion-content" slot="content">
+                      {profile?.cv?.experience?.map((exp, index) => (
+                        <div key={index} style={{ marginBottom: index < (profile?.cv?.experience?.length || 0) - 1 ? '1rem' : 0 }}>
+                          <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{exp.title} at {exp.company}</h4>
+                          <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                            {exp.startDate} - {exp.current ? 'Present' : exp.endDate}
+                            {exp.location && ` • ${exp.location}`}
                           </p>
-                        )}
-                      </div>
-                    ))}
-                  </IonCardContent>
-                </IonCard>
-              )}
-
-              {profile.cv.skills && profile.cv.skills.length > 0 && (
-                <IonCard>
-                  <IonCardHeader>
-                    <IonCardTitle>Skills</IonCardTitle>
-                  </IonCardHeader>
-                  <IonCardContent>
-                    {profile.cv.skills.map((skillGroup, index) => (
-                      <div key={index} style={{ marginBottom: '1rem' }}>
-                        <h4>{skillGroup.category}</h4>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                          {skillGroup.items.map((skill, i) => (
-                            <IonChip key={i}>{skill}</IonChip>
-                          ))}
+                          <ul style={{ color: 'rgba(255, 255, 255, 0.7)', paddingLeft: '1.5rem', margin: '0.5rem 0' }}>
+                            {exp.highlights.map((highlight, i) => (
+                              <li key={i} style={{ marginBottom: '0.5rem' }}>{highlight}</li>
+                            ))}
+                          </ul>
                         </div>
-                      </div>
-                    ))}
-                  </IonCardContent>
-                </IonCard>
-              )}
+                      ))}
+                    </div>
+                  </IonAccordion>
+                )}
 
-              {profile.cv.certifications && profile.cv.certifications.length > 0 && (
-                <IonCard>
-                  <IonCardHeader>
-                    <IonCardTitle>Certifications</IonCardTitle>
-                  </IonCardHeader>
-                  <IonCardContent>
-                    {profile.cv.certifications.map((cert, index) => (
-                      <div key={index}>
-                        <h4>{cert.name}</h4>
-                        <p>
-                          {cert.issuer}
-                          {cert.date && ` • ${cert.date}`}
-                        </p>
-                      </div>
-                    ))}
-                  </IonCardContent>
-                </IonCard>
-              )}
+                {profile?.cv?.education && profile?.cv?.education?.length > 0 && (
+                  <IonAccordion value="education" className="cv-accordion">
+                    <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
+                      <IonLabel>Education</IonLabel>
+                    </IonItem>
+                    <div className="ion-padding accordion-content" slot="content">
+                      {profile?.cv?.education?.map((edu, index) => (
+                        <div key={index} style={{ marginBottom: index < (profile?.cv?.education?.length || 0) - 1 ? '1rem' : 0 }}>
+                          <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{edu.degree} in {edu.field}</h4>
+                          <p style={{ color: '#fff' }}>{edu.institution}</p>
+                          {edu.graduationDate && (
+                            <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                              Graduated: {edu.graduationDate}
+                              {edu.gpa && ` • GPA: ${edu.gpa}`}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </IonAccordion>
+                )}
 
-              {profile.cv.languages && profile.cv.languages.length > 0 && (
-                <IonCard>
-                  <IonCardHeader>
-                    <IonCardTitle>Languages</IonCardTitle>
-                  </IonCardHeader>
-                  <IonCardContent>
-                    {profile.cv.languages.map((lang, index) => (
-                      <IonChip key={index}>
-                        {lang.language} - {lang.proficiency}
-                      </IonChip>
-                    ))}
-                  </IonCardContent>
-                </IonCard>
-              )}
+                {profile?.cv?.skills && profile?.cv?.skills?.length > 0 && (
+                  <IonAccordion value="skills" className="cv-accordion">
+                    <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
+                      <IonLabel>Skills</IonLabel>
+                    </IonItem>
+                    <div className="ion-padding accordion-content" slot="content">
+                      {profile?.cv?.skills?.map((skillGroup, index) => (
+                        <div key={index} style={{ marginBottom: index < (profile?.cv?.skills?.length || 0) - 1 ? '1rem' : 0 }}>
+                          <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{skillGroup.category}</h4>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            {skillGroup.items.map((skill, i) => (
+                              <IonChip key={i} style={{ '--background': '#444', '--color': '#fff' }}>
+                                {skill}
+                              </IonChip>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </IonAccordion>
+                )}
+
+                {profile?.cv?.certifications && profile?.cv?.certifications?.length > 0 && (
+                  <IonAccordion value="certifications" className="cv-accordion">
+                    <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
+                      <IonLabel>Certifications</IonLabel>
+                    </IonItem>
+                    <div className="ion-padding" slot="content" style={{ background: '#2a2a2a' }}>
+                      {profile?.cv?.certifications?.map((cert, index) => (
+                        <div key={index} style={{ marginBottom: index < (profile?.cv?.certifications?.length || 0) - 1 ? '1rem' : 0 }}>
+                          <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{cert.name}</h4>
+                          <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                            {cert.issuer}
+                            {cert.date && ` • ${cert.date}`}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </IonAccordion>
+                )}
+
+                {profile?.cv?.languages && profile?.cv?.languages?.length > 0 && (
+                  <IonAccordion value="languages" className="cv-accordion">
+                    <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
+                      <IonLabel>Languages</IonLabel>
+                    </IonItem>
+                    <div className="ion-padding" slot="content" style={{ background: '#2a2a2a' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        {profile?.cv?.languages?.map((lang, index) => (
+                          <IonChip key={index} style={{ '--background': '#444', '--color': '#fff' }}>
+                            {lang.language} - {lang.proficiency}
+                          </IonChip>
+                        ))}
+                      </div>
+                    </div>
+                  </IonAccordion>
+                )}
+              </IonAccordionGroup>
             </div>
           )}
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2rem' }}>
-            <IonButton
-              expand="block"
-              onClick={handleSave}
-              disabled={saving}
-              className="ion-margin-top"
-            >
-              {saving ? <IonSpinner name="dots" /> : 'Save Changes'}
-            </IonButton>
-
-            <IonButton
-              expand="block"
-              color="danger"
-              className="ion-margin-top"
-              onClick={() => signOut().catch(console.error)}
-            >
-              Sign Out
-            </IonButton>
-          </div>
 
           <IonCard>
             <IonCardHeader>
@@ -596,6 +790,162 @@ const Profile = () => {
             ]}
           />
         </div>
+
+        <style>{`
+          ion-content {
+            --background: #1a1a1a;
+          }
+
+          .input-container {
+            margin: 24px 0;
+          }
+
+          ion-input, ion-textarea {
+            --background: transparent !important;
+            --color: #fff !important;
+            --placeholder-color: rgba(255, 255, 255, 0.5);
+            --padding-start: 16px !important;
+            --padding-end: 16px !important;
+            --border-radius: 8px;
+            --highlight-color: #0055ff;
+            min-height: 52px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+          }
+
+          ion-input::part(wrapper),
+          ion-textarea::part(wrapper) {
+            padding-left: 12px;
+          }
+
+          ion-input::part(native),
+          ion-textarea::part(native) {
+            color: #fff !important;
+          }
+
+          ion-input:focus-within,
+          ion-textarea:focus-within {
+            border-color: #0055ff;
+            border-width: 2px;
+          }
+
+          ion-input.has-value,
+          ion-textarea.has-value {
+            border-color: rgba(255, 255, 255, 0.3);
+          }
+
+          .file-input-label {
+            display: block;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.875rem;
+            margin-bottom: 8px;
+            margin-left: 4px;
+          }
+
+          .file-input {
+            width: 100%;
+            padding: 8px;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            background: transparent;
+            color: #fff;
+            cursor: pointer;
+          }
+
+          .file-input:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+          }
+
+          .file-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+
+          ion-card {
+            --background: #2a2a2a;
+            --color: #fff;
+            margin: 16px 0;
+          }
+
+          ion-card-header {
+            --background: #333;
+          }
+
+          ion-card-title {
+            --color: #fff;
+          }
+
+          ion-card-content {
+            color: #fff;
+          }
+
+          ion-chip {
+            --background: #333;
+            --color: #fff;
+          }
+
+          h3, h4 {
+            color: #fff;
+          }
+
+          p {
+            color: rgba(255, 255, 255, 0.7);
+          }
+
+          ul {
+            color: rgba(255, 255, 255, 0.7);
+          }
+
+          .input-label {
+            display: block;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.875rem;
+            margin-bottom: 8px;
+            margin-left: 4px;
+          }
+
+          .cv-accordion {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+          }
+
+          .cv-accordion:last-child {
+            border-bottom: none;
+          }
+
+          ion-accordion-group {
+            background: #2a2a2a;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+          }
+
+          ion-item::part(native) {
+            border-radius: 0 !important;
+            --border-color: rgba(255, 255, 255, 0.05) !important;
+            --inner-border-width: 0;
+          }
+
+          .accordion-content {
+            background: #2a2a2a;
+            color: #fff;
+          }
+
+          ion-accordion.cv-accordion::part(header) {
+            background: #2a2a2a;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+          }
+
+          ion-accordion.cv-accordion:last-child::part(header) {
+            border-bottom: none;
+          }
+
+          ion-input[disabled], ion-textarea[disabled] {
+            opacity: 1 !important;
+            --placeholder-opacity: 0;
+          }
+
+          ion-input.has-value[disabled], ion-textarea.has-value[disabled] {
+            border-color: rgba(255, 255, 255, 0.1);
+          }
+        `}</style>
       </IonContent>
     </IonPage>
   );

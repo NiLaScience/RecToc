@@ -164,7 +164,10 @@ export const onCVUploaded = functions.storage
       console.log("Downloading CV file:", object.name);
       // Download the file contents
       const [fileContents] = await file.download();
-      console.log("CV file downloaded successfully, size:", fileContents.length);
+      console.log(
+        "CV file downloaded successfully, size:",
+        fileContents.length
+      );
 
       // Create form data for the parser service
       const formData = new FormData();

@@ -11,6 +11,8 @@ import {
   IonSegmentButton,
   IonSpinner,
   IonAlert,
+  IonAccordionGroup,
+  IonAccordion,
 } from '@ionic/react';
 import { cloudUploadOutline, closeCircleOutline, micOutline } from 'ionicons/icons';
 import { useState, useEffect } from 'react';
@@ -649,69 +651,108 @@ const Upload = () => {
           </IonButton>
 
           {jobDescription && (
-            <IonItem lines="none" className="ion-margin-top">
-              <IonLabel>
-                <h2>Job Description Preview</h2>
-                <div style={{ 
-                  whiteSpace: 'pre-wrap',
-                  maxHeight: '400px',
-                  overflowY: 'auto',
-                  backgroundColor: '#f9fafb',
-                  padding: '1rem',
-                  borderRadius: '0.5rem',
-                  marginTop: '0.5rem',
-                  fontSize: '0.875rem'
-                }}>
-                  <div><strong>Title:</strong> {jobDescription.title}</div>
-                  <div><strong>Company:</strong> {jobDescription.company}</div>
-                  <div><strong>Location:</strong> {jobDescription.location}</div>
-                  <div><strong>Type:</strong> {jobDescription.employmentType}</div>
-                  <div><strong>Level:</strong> {jobDescription.experienceLevel}</div>
-                  
-                  {jobDescription.salary && (
-                    <div>
-                      <strong>Salary:</strong> {jobDescription.salary.min}-{jobDescription.salary.max} {jobDescription.salary.currency} ({jobDescription.salary.period})
-                    </div>
-                  )}
-                  
-                  <div style={{ marginTop: '1rem' }}>
-                    <strong>Skills:</strong>
-                    <ul>
-                      {jobDescription.skills.map((skill, index) => (
-                        <li key={index}>{skill}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  
-                  <div>
-                    <strong>Responsibilities:</strong>
-                    <ul>
-                      {jobDescription.responsibilities.map((resp, index) => (
-                        <li key={index}>{resp}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  
-                  <div>
-                    <strong>Requirements:</strong>
-                    <ul>
-                      {jobDescription.requirements.map((req, index) => (
-                        <li key={index}>{req}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  
-                  <div>
-                    <strong>Benefits:</strong>
-                    <ul>
-                      {jobDescription.benefits.map((benefit, index) => (
-                        <li key={index}>{benefit}</li>
-                      ))}
-                    </ul>
+            <div className="ion-margin-top">
+              <div style={{ 
+                backgroundColor: '#2a2a2a',
+                padding: '1rem',
+                borderRadius: '8px',
+                color: '#fff',
+                border: '2px solid rgba(255, 255, 255, 0.2)'
+              }}>
+                <div style={{ marginBottom: '1rem' }}>
+                  <h2 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '0.5rem' }}>{jobDescription.title}</h2>
+                  <p style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.875rem' }}>
+                    {jobDescription.company} • {jobDescription.location}
+                  </p>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
+                      {jobDescription.employmentType}
+                    </IonChip>
+                    <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
+                      {jobDescription.experienceLevel}
+                    </IonChip>
                   </div>
                 </div>
-              </IonLabel>
-            </IonItem>
+
+                <IonAccordionGroup>
+                  {jobDescription.responsibilities && jobDescription.responsibilities.length > 0 && (
+                    <IonAccordion value="responsibilities">
+                      <IonItem slot="header" style={{ '--background': '#333' }}>
+                        <IonLabel>Responsibilities</IonLabel>
+                      </IonItem>
+                      <div className="ion-padding" slot="content" style={{ background: '#333' }}>
+                        <ul style={{ margin: 0, paddingLeft: '1.5rem', color: '#fff' }}>
+                          {jobDescription.responsibilities.map((item, index) => (
+                            <li key={index} style={{ marginBottom: '0.5rem' }}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </IonAccordion>
+                  )}
+                  
+                  {jobDescription.requirements && jobDescription.requirements.length > 0 && (
+                    <IonAccordion value="requirements">
+                      <IonItem slot="header" style={{ '--background': '#333' }}>
+                        <IonLabel>Requirements</IonLabel>
+                      </IonItem>
+                      <div className="ion-padding" slot="content" style={{ background: '#333' }}>
+                        <ul style={{ margin: 0, paddingLeft: '1.5rem', color: '#fff' }}>
+                          {jobDescription.requirements.map((item, index) => (
+                            <li key={index} style={{ marginBottom: '0.5rem' }}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </IonAccordion>
+                  )}
+                  
+                  {jobDescription.skills && jobDescription.skills.length > 0 && (
+                    <IonAccordion value="skills">
+                      <IonItem slot="header" style={{ '--background': '#333' }}>
+                        <IonLabel>Required Skills</IonLabel>
+                      </IonItem>
+                      <div className="ion-padding" slot="content" style={{ background: '#333' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          {jobDescription.skills.map((skill, index) => (
+                            <IonChip 
+                              key={index}
+                              style={{ '--background': '#444', '--color': '#fff' }}
+                            >
+                              {skill}
+                            </IonChip>
+                          ))}
+                        </div>
+                      </div>
+                    </IonAccordion>
+                  )}
+                  
+                  {jobDescription.benefits && jobDescription.benefits.length > 0 && (
+                    <IonAccordion value="benefits">
+                      <IonItem slot="header" style={{ '--background': '#333' }}>
+                        <IonLabel>Benefits</IonLabel>
+                      </IonItem>
+                      <div className="ion-padding" slot="content" style={{ background: '#333' }}>
+                        <ul style={{ margin: 0, paddingLeft: '1.5rem', color: '#fff' }}>
+                          {jobDescription.benefits.map((item, index) => (
+                            <li key={index} style={{ marginBottom: '0.5rem' }}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </IonAccordion>
+                  )}
+
+                  {jobDescription.salary && (
+                    <IonAccordion value="salary">
+                      <IonItem slot="header" style={{ '--background': '#333' }}>
+                        <IonLabel>Salary</IonLabel>
+                      </IonItem>
+                      <div className="ion-padding" slot="content" style={{ background: '#333', color: '#fff' }}>
+                        {jobDescription.salary.min}-{jobDescription.salary.max} {jobDescription.salary.currency} ({jobDescription.salary.period})
+                      </div>
+                    </IonAccordion>
+                  )}
+                </IonAccordionGroup>
+              </div>
+            </div>
           )}
 
           {error && (
