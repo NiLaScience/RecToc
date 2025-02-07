@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { IonIcon, IonButton, IonAvatar, IonSpinner } from '@ionic/react';
-import { heart, chatbubble, share, informationCircleOutline, volumeHighOutline, volumeMuteOutline } from 'ionicons/icons';
+import { volumeHighOutline, volumeMuteOutline } from 'ionicons/icons';
 import { VideoItem } from '../types/video';
 import type { UserProfile } from '../types/user';
 import SubtitleService from '../services/SubtitleService';
@@ -16,27 +16,69 @@ interface VideoPlayerProps {
   mode?: 'feed' | 'card' | 'modal' | 'details';
 }
 
+const containerStyle: React.CSSProperties = {
+  position: 'relative',
+  width: '100%',
+  height: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  overflow: 'hidden'
+};
+
+const videoStyle: React.CSSProperties = {
+  width: '100%',
+  height: '100%',
+  objectFit: 'cover'
+};
+
 const overlayStyle: React.CSSProperties = {
   position: 'absolute',
-  bottom: 0,
+  top: 0,
   left: 0,
   right: 0,
+  bottom: 0,
   padding: '1rem',
-  background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%)',
-  color: 'white',
   display: 'flex',
   flexDirection: 'column',
-  gap: '1rem'
+  justifyContent: 'space-between',
+  zIndex: 15,
+  pointerEvents: 'none' // Allow clicks to pass through to video
+};
+
+const interactiveStyle: React.CSSProperties = {
+  pointerEvents: 'auto' // Re-enable pointer events for buttons and interactive elements
+};
+
+const upperLeftStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'flex-start',
+  width: '100%'
+};
+
+const upperRightStyle: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '0.5rem',
+  justifyContent: 'flex-end',
+  maxWidth: '40%'
+};
+
+const lowerLeftStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.5rem',
+  maxWidth: '60%',
+  background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0) 100%)',
+  padding: '1rem',
+  borderRadius: '8px'
 };
 
 const actionButtonsStyle: React.CSSProperties = {
-  position: 'absolute',
-  right: '1rem',
-  bottom: '5rem',
   display: 'flex',
   flexDirection: 'column',
-  gap: '1rem',
-  alignItems: 'center'
+  gap: '0.5rem'
 };
 
 const userInfoStyle: React.CSSProperties = {
@@ -60,6 +102,24 @@ const tagsStyle: React.CSSProperties = {
   marginTop: '0.5rem'
 };
 
+const tagContainerStyle: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '0.5rem',
+  marginTop: '0.5rem',
+  zIndex: 11,
+  position: 'relative'
+};
+
+const tagStyle: React.CSSProperties = {
+  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  color: '#fff',
+  padding: '4px 12px',
+  borderRadius: '16px',
+  fontSize: '14px',
+  display: 'inline-block'
+};
+
 export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded, allowSwipe = true, mode = 'feed' }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(autoPlay);
@@ -67,11 +127,10 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const [mouseStart, setMouseStart] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [showDescription, setShowDescription] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
   const [currentSubtitle, setCurrentSubtitle] = useState<string>('');
-  const [showDetails, setShowDetails] = useState(false);
   const [showApplication, setShowApplication] = useState(false);
   const [videoLoading, setVideoLoading] = useState(true);
   const [thumbnailError, setThumbnailError] = useState(false);
@@ -135,7 +194,6 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
   useEffect(() => {
     setIsPlaying(autoPlay);
     setIsMuted(autoPlay);
-    setShowDescription(false);
     setShowDetails(false);
     setCurrentSubtitle('');
   }, [video.id, autoPlay]);
@@ -343,135 +401,153 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
         </div>
       )}
 
-      <video
-        ref={videoRef}
-        src={video.videoUrl}
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'contain',
-          touchAction: mode === 'feed' ? 'none' : 'auto',
-          opacity: videoLoading ? 0 : 1,
-          transition: 'opacity 0.2s ease-in-out'
-        }}
-        onClick={togglePlay}
-        playsInline
-        muted={isMuted}
-        onEnded={onEnded}
-        poster={video.thumbnailUrl}
-      />
-
-      {subtitlesEnabled && currentSubtitle && (
-        <div style={{
-          position: 'absolute',
-          bottom: '80px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          color: 'white',
-          padding: '8px 16px',
-          borderRadius: '4px',
-          maxWidth: '80%',
-          textAlign: 'center',
-          fontSize: '1rem',
-          fontWeight: '500',
-          zIndex: 10
-        }}>
-          {currentSubtitle}
-        </div>
-      )}
-
-      <div style={overlayStyle}>
-        <div style={userInfoStyle}>
-          <IonAvatar style={{ width: '40px', height: '40px' }}>
-            <img
-              src={userProfile?.photoURL || 'https://ionicframework.com/docs/img/demos/avatar.svg'}
-              alt={userProfile?.displayName || 'User'}
-            />
-          </IonAvatar>
-          <div>
-            <div style={{ fontWeight: 600 }}>{userProfile?.displayName || 'Anonymous'}</div>
-            <div style={{ fontSize: '0.875rem', opacity: 0.8 }}>@{userProfile?.username || 'user'}</div>
-          </div>
-        </div>
-
-        <div>
-          <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{video.title}</h3>
-          {video.tags && video.tags.length > 0 && (
-            <div style={tagsStyle}>
-              {video.tags.map(tag => (
-                <span
-                  key={tag}
-                  style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: '1rem',
-                    fontSize: '0.875rem'
-                  }}
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {showDescription && userProfile?.description && (
-          <div style={userDescriptionStyle}>
-            {userProfile.description}
-          </div>
-        )}
-      </div>
-
-      <div style={actionButtonsStyle}>
-        <IonButton
-          fill="clear"
-          color="light"
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleMute();
+      <div style={containerStyle}>
+        <video
+          ref={videoRef}
+          src={video.videoUrl}
+          style={{
+            ...videoStyle,
+            touchAction: mode === 'feed' ? 'none' : 'auto',
+            opacity: videoLoading ? 0 : 1,
+            transition: 'opacity 0.2s ease-in-out'
           }}
-        >
-          <IonIcon icon={isMuted ? volumeMuteOutline : volumeHighOutline} />
-        </IonButton>
-        <IonButton fill="clear" color="light">
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <IonIcon icon={heart} style={{ fontSize: '1.5rem' }} />
-            <span style={{ fontSize: '0.75rem' }}>{video.likes}</span>
-          </div>
-        </IonButton>
-        <IonButton fill="clear" color="light">
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <IonIcon icon={chatbubble} style={{ fontSize: '1.5rem' }} />
-            <span style={{ fontSize: '0.75rem' }}>0</span>
-          </div>
-        </IonButton>
-        <IonButton fill="clear" color="light">
-          <IonIcon icon={share} style={{ fontSize: '1.5rem' }} />
-        </IonButton>
-        <IonButton
-          fill="clear"
-          color="light"
-          onClick={() => setShowDescription(!showDescription)}
-        >
-          <IonIcon icon={informationCircleOutline} style={{ fontSize: '1.5rem' }} />
-        </IonButton>
-        {video.transcript && (
-          <IonButton
-            fill="clear"
-            color="light"
-            onClick={() => setSubtitlesEnabled(!subtitlesEnabled)}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <span style={{ 
-                fontSize: '1.2rem', 
+          onClick={togglePlay}
+          playsInline
+          muted={isMuted}
+          onEnded={onEnded}
+          poster={video.thumbnailUrl}
+        />
+
+        <div style={{
+          ...overlayStyle,
+          paddingTop: mode === 'feed' ? '4rem' : '1rem',
+          paddingBottom: mode === 'feed' ? '4rem' : '1rem'
+        }}>
+          <div style={upperLeftStyle}>
+            {/* Title in upper left */}
+            <div style={{ 
+              maxWidth: '60%',
+              ...interactiveStyle
+            }}>
+              <p style={{ 
+                margin: 0, 
+                fontSize: '1.1rem', 
                 fontWeight: 'bold',
-                opacity: subtitlesEnabled ? 1 : 0.5 
+                color: 'white',
+                textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
+                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                display: 'inline-block'
               }}>
-                CC
-              </span>
+                {video.title}
+              </p>
             </div>
-          </IonButton>
+
+            {/* Tags in upper right */}
+            {Array.isArray(video.tags) && video.tags.length > 0 && (
+              <div style={{
+                ...upperRightStyle,
+                ...interactiveStyle
+              }}>
+                {video.tags.map((tag, index) => (
+                  <span key={index} style={{
+                    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                    color: '#fff',
+                    padding: '4px 12px',
+                    borderRadius: '16px',
+                    fontSize: '14px',
+                    display: 'inline-block',
+                    textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
+                  }}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-end',
+            width: '100%'
+          }}>
+            {/* Profile info in lower left */}
+            <div style={{
+              ...lowerLeftStyle,
+              ...interactiveStyle
+            }}>
+              <IonAvatar style={{ width: '2.5rem', height: '2.5rem', flexShrink: 0 }}>
+                <img 
+                  src={userProfile?.photoURL || 'https://ionicframework.com/docs/img/demos/avatar.svg'} 
+                  alt="Profile" 
+                />
+              </IonAvatar>
+              <div>
+                <p style={{ margin: 0, fontWeight: 'bold', color: 'white' }}>{userProfile?.displayName || 'User'}</p>
+                {userProfile?.description && (
+                  <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem', opacity: 0.8, color: 'white' }}>
+                    {userProfile.description}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div style={{
+              ...actionButtonsStyle,
+              ...interactiveStyle
+            }}>
+              <IonButton
+                fill="clear"
+                color="light"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMute();
+                }}
+              >
+                <IonIcon icon={isMuted ? volumeMuteOutline : volumeHighOutline} />
+              </IonButton>
+              {video.transcript && (
+                <IonButton
+                  fill="clear"
+                  color="light"
+                  onClick={() => setSubtitlesEnabled(!subtitlesEnabled)}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ 
+                      fontSize: '1.2rem', 
+                      fontWeight: 'bold',
+                      opacity: subtitlesEnabled ? 1 : 0.5 
+                    }}>
+                      CC
+                    </span>
+                  </div>
+                </IonButton>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {subtitlesEnabled && currentSubtitle && (
+          <div style={{
+            position: 'absolute',
+            bottom: '80px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            color: 'white',
+            padding: '8px 16px',
+            borderRadius: '4px',
+            maxWidth: '80%',
+            textAlign: 'center',
+            fontSize: '1rem',
+            fontWeight: '500',
+            zIndex: 10
+          }}>
+            {currentSubtitle}
+          </div>
         )}
       </div>
 

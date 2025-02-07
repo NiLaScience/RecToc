@@ -64,7 +64,10 @@ const avatarStyle: React.CSSProperties = {
   width: '48px',
   height: '48px',
   borderRadius: '50%',
-  border: '2px solid #fff'
+  border: '2px solid #fff',
+  objectFit: 'cover',
+  minWidth: '48px', // Prevent shrinking
+  backgroundColor: '#f4f4f4' // Placeholder background while loading
 };
 
 const usernameStyle: React.CSSProperties = {
@@ -88,6 +91,21 @@ const titleStyle: React.CSSProperties = {
   textAlign: 'right',
   flex: '1 1 auto',
   maxWidth: '50%'
+};
+
+const tagContainerStyle: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '4px',
+  marginTop: '4px'
+};
+
+const tagStyle: React.CSSProperties = {
+  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  color: '#fff',
+  padding: '2px 8px',
+  borderRadius: '12px',
+  fontSize: '12px'
 };
 
 const VideoTile: React.FC<VideoTileProps> = ({ video, onClick }) => {
@@ -139,6 +157,18 @@ const VideoTile: React.FC<VideoTileProps> = ({ video, onClick }) => {
               <p style={usernameStyle}>{userProfile?.displayName || 'User'}</p>
             </div>
             <p style={titleStyle}>{video.title}</p>
+            {video.tags && video.tags.length > 0 && (
+              <div style={tagContainerStyle}>
+                {video.tags.slice(0, 3).map((tag, index) => (
+                  <span key={index} style={tagStyle}>
+                    {tag}
+                  </span>
+                ))}
+                {video.tags.length > 3 && (
+                  <span style={tagStyle}>+{video.tags.length - 3}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
