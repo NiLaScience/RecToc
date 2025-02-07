@@ -669,7 +669,7 @@ const Profile = () => {
                         field={edu.field}
                         institution={edu.institution}
                         graduationDate={edu.graduationDate}
-                        gpa={edu.gpa}
+                        gpa={edu.gpa?.toString()}
                       />
                     ))}
                   </AccordionSection>

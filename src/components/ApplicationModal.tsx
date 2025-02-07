@@ -351,10 +351,10 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                               </AccordionSection>
                             )}
 
-                            {profile.cv.skills && profile.cv.skills.length > 0 && (
+                            {profile.cv?.skills && profile.cv.skills.length > 0 && (
                               <AccordionSection value="skills" label="Skills">
                                 {profile.cv.skills.map((skillGroup, index) => (
-                                  <div key={index} style={{ marginBottom: index < (profile.cv.skills?.length || 0) - 1 ? '1rem' : 0 }}>
+                                  <div key={index} style={{ marginBottom: index < (profile.cv?.skills?.length || 0) - 1 ? '1rem' : 0 }}>
                                     <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{skillGroup.category}</h4>
                                     <ChipsContent items={skillGroup.items} />
                                   </div>
