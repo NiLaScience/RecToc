@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { ensureInitialized, callFunction } from '../config/firebase';
+import { Capacitor } from '@capacitor/core';
 
 interface RealtimeMessage {
   type: string;
@@ -68,11 +70,22 @@ export const useRealtimeConnection = (resumeData?: ResumeData) => {
       setIsConnecting(true);
       setError(null);
 
+      // Ensure Firebase is initialized
+      await ensureInitialized();
+
       // Get ephemeral token using Firebase Function
-      const functions = getFunctions();
-      const generateToken = httpsCallable(functions, 'generateRealtimeToken');
-      const result = await generateToken({});
-      const { token } = result.data as { token: string };
+      let token: string;
+      if (Capacitor.isNativePlatform()) {
+        // Use Capacitor Firebase Functions plugin for native platforms
+        const result = await callFunction('generateRealtimeToken') as { token: string };
+        token = result.token;
+      } else {
+        // Use web SDK for browser
+        const functions = getFunctions();
+        const generateToken = httpsCallable(functions, 'generateRealtimeToken');
+        const result = await generateToken({});
+        token = (result.data as { token: string }).token;
+      }
 
       if (!token) {
         throw new Error('Invalid token response from server');

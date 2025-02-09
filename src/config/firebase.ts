@@ -72,11 +72,11 @@ if (typeof window !== 'undefined') {
   initializeFirebase().catch(console.error);
 }
 
-// Ensure Firebase is initialized before any operation
-const ensureInitialized = async () => {
+export const ensureInitialized = async () => {
   if (!isInitialized) {
     await initializeFirebase();
   }
+  return isInitialized;
 };
 
 // Helper function to get the current user's ID token
