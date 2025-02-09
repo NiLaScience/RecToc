@@ -10,11 +10,13 @@ import {
   IonSpinner,
   IonChip,
   IonFooter,
+  IonProgressBar,
 } from '@ionic/react';
 import { useState, useEffect, useRef } from 'react';
-import { useRealtimeConnection } from '../hooks/useRealtimeConnection';
+import { useRealtimeConnection, SessionStatus, InterviewStage } from '../hooks/useRealtimeConnection';
 import ChatMessage from './ChatMessage';
 import '../styles/chat.css';
+import { toast } from 'react-hot-toast';
 
 interface ResumeData {
   experience: Array<{
@@ -40,31 +42,87 @@ interface RealtimeModalProps {
   resumeData?: ResumeData;
 }
 
+const INTERVIEW_STAGES = [
+  InterviewStage.INTRODUCTION,
+  InterviewStage.EXPERIENCE_REVIEW,
+  InterviewStage.SKILLS_ASSESSMENT,
+  InterviewStage.PREFERENCES,
+  InterviewStage.EXPECTATIONS,
+  InterviewStage.WRAP_UP
+];
+
+const stageNames: Record<InterviewStage, string> = {
+  introduction: 'Introduction',
+  experience_review: 'Experience Review',
+  skills_assessment: 'Skills Assessment',
+  preferences: 'Job Preferences',
+  expectations: 'Career Goals',
+  wrap_up: 'Wrap Up',
+  completed: 'Completed'
+};
+
 const RealtimeModal: React.FC<RealtimeModalProps> = ({ isOpen, onClose, resumeData }) => {
-  const contentRef = useRef<HTMLIonContentElement>(null);
+  const contentRef = useRef<HTMLElement>(null);
   const {
-    isConnected,
-    isConnecting,
+    sessionStatus,
     error,
     messages,
     connect,
     disconnect,
+    isCompleting,
+    currentStage,
+    totalStages,
   } = useRealtimeConnection(resumeData);
 
+  const isConnected = sessionStatus === "CONNECTED";
+  const isConnecting = sessionStatus === "CONNECTING";
+
+  // Calculate progress (0 to 1)
+  const progress = Math.min(
+    (INTERVIEW_STAGES.indexOf(currentStage) + 1) / INTERVIEW_STAGES.length,
+    1
+  );
+
+  const stageProgress = currentStage === InterviewStage.COMPLETED 
+    ? 'Interview Complete'
+    : `Stage ${INTERVIEW_STAGES.indexOf(currentStage) + 1}/${INTERVIEW_STAGES.length}: ${stageNames[currentStage]}`;
+
   useEffect(() => {
-    if (isOpen && !isConnected && !isConnecting) {
+    if (isOpen && sessionStatus === "DISCONNECTED") {
       connect();
     }
     return () => {
-      if (isConnected) {
+      if (sessionStatus === "CONNECTED") {
         disconnect();
       }
     };
-  }, [isOpen, isConnected, isConnecting, connect, disconnect]);
+  }, [isOpen, sessionStatus, connect, disconnect]);
 
   useEffect(() => {
-    contentRef.current?.scrollToBottom(300);
+    if (contentRef.current) {
+      contentRef.current.scrollTop = contentRef.current.scrollHeight;
+    }
   }, [messages]);
+
+  // Handle completion state
+  useEffect(() => {
+    if (isCompleting) {
+      const toastId = toast.loading('Completing onboarding interview...', {
+        duration: 5000,
+      });
+
+      const timer = setTimeout(() => {
+        toast.dismiss(toastId);
+        onClose();
+        disconnect();
+      }, 5000);
+
+      return () => {
+        clearTimeout(timer);
+        toast.dismiss(toastId);
+      };
+    }
+  }, [isCompleting, onClose, disconnect]);
 
   return (
     <IonModal 
@@ -79,6 +137,16 @@ const RealtimeModal: React.FC<RealtimeModalProps> = ({ isOpen, onClose, resumeDa
             Close
           </IonButton>
         </IonToolbar>
+        <div className="interview-progress">
+          <IonProgressBar 
+            value={progress} 
+            color="primary"
+            style={{ height: '6px' }}
+          />
+          <div className="stage-info ion-padding-horizontal ion-text-center">
+            <small>{stageProgress}</small>
+          </div>
+        </div>
       </IonHeader>
 
       <IonContent ref={contentRef} scrollEvents={true}>

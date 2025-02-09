@@ -121,3 +121,19 @@ ion-modal ion-footer {
     transform: translateY(0);
   }
 }
+
+.interview-progress {
+  padding: 8px 0;
+  background: var(--ion-color-step-50);
+  border-bottom: 1px solid var(--ion-color-step-100);
+}
+
+.stage-info {
+  margin-top: 8px;
+  color: var(--ion-color-medium);
+  font-size: 0.9em;
+}
+
+.stage-info small {
+  opacity: 0.8;
+}
