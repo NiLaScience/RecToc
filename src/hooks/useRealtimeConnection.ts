@@ -3,12 +3,36 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ensureInitialized, callFunction } from '../config/firebase';
 import { Capacitor } from '@capacitor/core';
 
+// Interview stage definitions
+enum InterviewStage {
+  INTRODUCTION = 'introduction',
+  EXPERIENCE_REVIEW = 'experience_review',
+  SKILLS_ASSESSMENT = 'skills_assessment',
+  PREFERENCES = 'preferences',
+  EXPECTATIONS = 'expectations',
+  WRAP_UP = 'wrap_up',
+  COMPLETED = 'completed'
+}
+
+interface InterviewState {
+  stage: InterviewStage;
+  completedTopics: string[];
+  preferences: {
+    jobTypes?: string[];
+    locations?: string[];
+    salary?: string;
+    remote?: boolean;
+  };
+  keyInsights: string[];
+}
+
 interface RealtimeMessage {
   type: string;
   timestamp?: string;
   isUser: boolean;
   text?: string;
   transcript?: string;
+  stage?: InterviewStage;
   [key: string]: any;
 }
 
@@ -35,6 +59,12 @@ export const useRealtimeConnection = (resumeData?: ResumeData) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<RealtimeMessage[]>([]);
+  const [interviewState, setInterviewState] = useState<InterviewState>({
+    stage: InterviewStage.INTRODUCTION,
+    completedTopics: [],
+    preferences: {},
+    keyInsights: []
+  });
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -49,21 +79,42 @@ export const useRealtimeConnection = (resumeData?: ResumeData) => {
     isComplete: boolean;
   } | null>(null);
 
-  const disconnect = useCallback(() => {
+  const cleanup = useCallback(() => {
+    // Clear all state
+    setMessages([]);
+    setError(null);
+    setIsConnected(false);
+    setIsConnecting(false);
+    setInterviewState({
+      stage: InterviewStage.INTRODUCTION,
+      completedTopics: [],
+      preferences: {},
+      keyInsights: []
+    });
+
+    // Clear refs
+    currentResponseRef.current = null;
+    
+    // Close connections
     if (dataChannelRef.current) {
       dataChannelRef.current.close();
+      dataChannelRef.current = null;
     }
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
     }
     if (audioElementRef.current) {
       const tracks = audioElementRef.current.srcObject as MediaStream;
       tracks?.getTracks().forEach(track => track.stop());
       audioElementRef.current.srcObject = null;
+      audioElementRef.current = null;
     }
-    setIsConnected(false);
-    setMessages([]);
   }, []);
+
+  const disconnect = useCallback(() => {
+    cleanup();
+  }, [cleanup]);
 
   const connect = useCallback(async () => {
     try {
@@ -168,7 +219,7 @@ export const useRealtimeConnection = (resumeData?: ResumeData) => {
 
           // Then, if we have resume data, send it as a system message
           if (resumeData) {
-            const formatResumeForInstructions = (resume: ResumeData) => {
+            const formatSystemPrompt = (resume: ResumeData, state: InterviewState) => {
               const experienceSection = resume.experience.map(exp => 
                 `- ${exp.title} at ${exp.company} (${exp.startDate} to ${exp.endDate || 'Present'})
                    ${exp.description}`
@@ -180,9 +231,48 @@ export const useRealtimeConnection = (resumeData?: ResumeData) => {
 
               const skillsSection = `Skills: ${resume.skills.join(', ')}`;
 
-              return `
-Here is the candidate's resume:
+              const stageInstructions = {
+                [InterviewStage.INTRODUCTION]: `
+                  You are conducting the initial part of a job search onboarding interview.
+                  Start by briefly acknowledging their experience at ${resume.experience[0]?.company} as a ${resume.experience[0]?.title} and their ${resume.education[0]?.degree} in ${resume.education[0]?.field}.
+                  Explain that you'll be helping understand their job preferences based on their background.
+                  Keep the introduction concise and professional.
+                `,
+                [InterviewStage.EXPERIENCE_REVIEW]: `
+                  Focus on understanding their most relevant experience.
+                  Ask about specific achievements and responsibilities.
+                  Identify their core strengths and expertise areas.
+                `,
+                [InterviewStage.SKILLS_ASSESSMENT]: `
+                  Evaluate their technical and soft skills.
+                  Ask about their proficiency levels and recent applications of key skills.
+                  Identify any skill gaps or areas for growth.
+                `,
+                [InterviewStage.PREFERENCES]: `
+                  Gather specific job preferences:
+                  - Preferred job types and roles
+                  - Location preferences and remote work
+                  - Salary expectations
+                  - Work environment preferences
+                `,
+                [InterviewStage.EXPECTATIONS]: `
+                  Understand their career goals:
+                  - Short and long-term career objectives
+                  - Growth expectations
+                  - Type of companies they're interested in
+                `,
+                [InterviewStage.WRAP_UP]: `
+                  Summarize key points discussed.
+                  Confirm their preferences and priorities.
+                  Thank them and explain next steps in their job search.
+                `
+              }[state.stage];
 
+              return `
+You are an AI interviewer conducting a structured job search onboarding interview.
+Current interview stage: ${state.stage}
+
+Candidate's Resume:
 Experience:
 ${experienceSection}
 
@@ -191,9 +281,17 @@ ${educationSection}
 
 ${skillsSection}
 
-You are an AI interviewer. Use this resume information to conduct a professional job interview. 
-Ask relevant questions about the candidate's experience, skills, and education.
-Keep your responses concise and focused on the interview context.
+Stage-specific instructions:
+${stageInstructions}
+
+Previously completed topics: ${state.completedTopics.join(', ')}
+Current preferences: ${JSON.stringify(state.preferences)}
+Key insights gathered: ${state.keyInsights.join(', ')}
+
+Keep responses concise and focused on the current stage.
+Ask one question at a time.
+When a stage is complete, include [NEXT_STAGE] in your response.
+When the entire interview is complete, include [INTERVIEW_COMPLETE].
 `;
             };
 
@@ -205,7 +303,7 @@ Keep your responses concise and focused on the interview context.
                 content: [
                   {
                     type: "input_text",
-                    text: formatResumeForInstructions(resumeData)
+                    text: formatSystemPrompt(resumeData, interviewState)
                   }
                 ]
               }
@@ -282,7 +380,6 @@ Keep your responses concise and focused on the interview context.
               break;
 
             case 'response.done':
-              // Only show the final message when it's complete
               if (currentResponseRef.current) {
                 currentResponseRef.current.isComplete = true;
                 const finalText = realtimeEvent.response?.output?.[0]?.content?.[0]?.text || currentResponseRef.current.text;
@@ -290,20 +387,21 @@ Keep your responses concise and focused on the interview context.
                   type: 'response.done',
                   text: finalText,
                   timestamp: currentResponseRef.current.timestamp,
-                  isUser: false
+                  isUser: false,
+                  stage: interviewState.stage
                 };
                 console.log('Final response:', finalResponse);
                 setMessages(prev => [...prev, finalResponse]);
                 currentResponseRef.current = null;
               } else {
-                // Handle case where we get response.done without a current response
                 const finalText = realtimeEvent.response?.output?.[0]?.content?.[0]?.text;
                 if (finalText) {
                   const finalResponse = {
                     type: 'response.done',
                     text: finalText,
                     timestamp: realtimeEvent.timestamp || new Date().toISOString(),
-                    isUser: false
+                    isUser: false,
+                    stage: interviewState.stage
                   };
                   console.log('Final response (without streaming):', finalResponse);
                   setMessages(prev => [...prev, finalResponse]);
@@ -355,7 +453,7 @@ Keep your responses concise and focused on the interview context.
       setIsConnecting(false);
       disconnect();
     }
-  }, [resumeData, disconnect]);
+  }, [resumeData, interviewState, disconnect]);
 
   const sendMessage = useCallback((message: RealtimeMessage) => {
     if (dataChannelRef.current?.readyState === 'open') {
@@ -393,6 +491,71 @@ Keep your responses concise and focused on the interview context.
     }
   }, []);
 
+  const processAIResponse = useCallback((response: string) => {
+    // Check for stage transition marker
+    if (response.includes('[NEXT_STAGE]')) {
+      // Move to next stage
+      const currentIndex = Object.values(InterviewStage).indexOf(interviewState.stage);
+      const nextStage = Object.values(InterviewStage)[currentIndex + 1];
+      
+      // Add current stage to completed topics
+      setInterviewState(prev => ({
+        ...prev,
+        stage: nextStage,
+        completedTopics: [...prev.completedTopics, prev.stage]
+      }));
+    }
+
+    // Check for interview completion
+    if (response.includes('[INTERVIEW_COMPLETE]')) {
+      setInterviewState(prev => ({
+        ...prev,
+        stage: InterviewStage.COMPLETED
+      }));
+    }
+
+    // Extract and update preferences if in preferences stage
+    if (interviewState.stage === InterviewStage.PREFERENCES) {
+      // Look for specific preference markers in the response
+      const jobTypesMatch = response.match(/Job Types?: (.*?)(?:\[|$)/i);
+      const locationsMatch = response.match(/Locations?: (.*?)(?:\[|$)/i);
+      const salaryMatch = response.match(/Salary?: (.*?)(?:\[|$)/i);
+      const remoteMatch = response.match(/Remote?: (.*?)(?:\[|$)/i);
+
+      setInterviewState(prev => ({
+        ...prev,
+        preferences: {
+          ...prev.preferences,
+          ...(jobTypesMatch && { jobTypes: jobTypesMatch[1].split(',').map(s => s.trim()) }),
+          ...(locationsMatch && { locations: locationsMatch[1].split(',').map(s => s.trim()) }),
+          ...(salaryMatch && { salary: salaryMatch[1].trim() }),
+          ...(remoteMatch && { remote: remoteMatch[1].toLowerCase().includes('yes') })
+        }
+      }));
+    }
+
+    // Extract key insights from AI responses
+    const insights = response
+      .split('\n')
+      .filter(line => line.startsWith('*') || line.startsWith('-'))
+      .map(line => line.replace(/^[*-]\s*/, '').trim());
+
+    if (insights.length > 0) {
+      setInterviewState(prev => ({
+        ...prev,
+        keyInsights: Array.from(new Set([...prev.keyInsights, ...insights]))
+      }));
+    }
+  }, [interviewState.stage]);
+
+  // Update message handling to process AI responses
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && !lastMessage.isUser && lastMessage.text) {
+      processAIResponse(lastMessage.text);
+    }
+  }, [messages, processAIResponse]);
+
   // Clean up
   useEffect(() => {
     return () => {
@@ -410,5 +573,6 @@ Keep your responses concise and focused on the interview context.
     connect,
     disconnect,
     sendMessage,
+    cleanup,
   };
 };
