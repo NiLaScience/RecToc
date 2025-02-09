@@ -44,12 +44,13 @@ import {
 import CVParserService from '../services/CVParserService';
 import { GeminiParserService } from '../services/GeminiParserService';
 import AppHeader from './AppHeader';
-import { pencilOutline } from 'ionicons/icons';
+import { pencilOutline, chatbubbleOutline } from 'ionicons/icons';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
 import '../styles/accordion.css';
 import { FirebaseStorage } from '@capacitor-firebase/storage';
+import RealtimeModal from './RealtimeModal';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -70,6 +71,7 @@ const Profile = () => {
   const [resetting, setResetting] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [useGemini, setUseGemini] = useState(true);
+  const [isRealtimeModalOpen, setIsRealtimeModalOpen] = useState(false);
 
   // Helper function to update all profile-related state
   const updateProfileState = (profileData: UserProfile) => {
@@ -629,7 +631,14 @@ const Profile = () => {
               )}
             </IonButton>
 
-
+            <IonButton
+              expand="block"
+              fill="clear"
+              onClick={() => setIsRealtimeModalOpen(true)}
+            >
+              <IonIcon slot="start" icon={chatbubbleOutline} />
+              Open Realtime Chat
+            </IonButton>
 
             <input
               type="file"
@@ -654,9 +663,28 @@ const Profile = () => {
                 'Upload Resume'
               )}
             </IonButton>
-
-
           </div>
+
+          <RealtimeModal
+            isOpen={isRealtimeModalOpen}
+            onClose={() => setIsRealtimeModalOpen(false)}
+            resumeData={profile?.cv ? {
+              experience: profile.cv.experience?.map(exp => ({
+                company: exp.company,
+                title: exp.title,
+                startDate: exp.startDate,
+                endDate: exp.endDate,
+                description: exp.highlights?.join('\n') || ''
+              })) || [],
+              education: profile.cv.education?.map(edu => ({
+                school: edu.institution,
+                degree: edu.degree,
+                field: edu.field,
+                graduationDate: edu.graduationDate || ''
+              })) || [],
+              skills: profile.cv.skills?.flatMap(skill => skill.items) || []
+            } : undefined}
+          />
 
           {profile?.cv && (
             <div style={{ margin: '1rem 0' }}>
