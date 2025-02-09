@@ -245,3 +245,76 @@ export const onCVUploaded = functions.storage
         });
     }
   });
+
+interface OpenAIRealtimeResponse {
+  client_secret: {
+    value: string;
+  };
+}
+
+export const generateRealtimeToken = functions.https.onCall(async (data, context) => {
+  // Ensure user is authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "The function must be called while authenticated."
+    );
+  }
+
+  // Get OpenAI API key from Firebase config
+  const openaiApiKey = functions.config().openai?.key;
+  if (!openaiApiKey) {
+    console.error("OpenAI API key not configured in Firebase");
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "OpenAI API key not configured"
+    );
+  }
+
+  try {
+    const fetch = await getFetch();
+    const response = await fetch("https://api.openai.com/v1/realtime/sessions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${openaiApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-realtime-preview-2024-12-17",
+        voice: "verse"
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("OpenAI API error:", {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData
+      });
+      
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to generate token from OpenAI"
+      );
+    }
+
+    const responseData = await response.json() as OpenAIRealtimeResponse;
+    
+    if (!responseData?.client_secret?.value) {
+      console.error("Invalid response format from OpenAI:", responseData);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Invalid response format from OpenAI"
+      );
+    }
+
+    return {token: responseData.client_secret.value};
+  } catch (error) {
+    console.error("Error generating token:", error);
+    throw new functions.https.HttpsError(
+      "internal",
+      "Internal error while generating token"
+    );
+  }
+});

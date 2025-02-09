@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface RealtimeMessage {
   type: string;
@@ -46,25 +47,36 @@ export const useRealtimeConnection = (resumeData?: ResumeData) => {
     isComplete: boolean;
   } | null>(null);
 
+  const disconnect = useCallback(() => {
+    if (dataChannelRef.current) {
+      dataChannelRef.current.close();
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+    }
+    if (audioElementRef.current) {
+      const tracks = audioElementRef.current.srcObject as MediaStream;
+      tracks?.getTracks().forEach(track => track.stop());
+      audioElementRef.current.srcObject = null;
+    }
+    setIsConnected(false);
+    setMessages([]);
+  }, []);
+
   const connect = useCallback(async () => {
     try {
       setIsConnecting(true);
       setError(null);
 
-      // Get ephemeral token
-      const tokenResponse = await fetch("/api/realtime");
-      if (!tokenResponse.ok) {
-        const errorData = await tokenResponse.json();
-        throw new Error(errorData.error || 'Failed to get ephemeral token');
-      }
-      
-      const data = await tokenResponse.json();
-      
-      if (!data.client_secret?.value) {
+      // Get ephemeral token using Firebase Function
+      const functions = getFunctions();
+      const generateToken = httpsCallable(functions, 'generateRealtimeToken');
+      const result = await generateToken({});
+      const { token } = result.data as { token: string };
+
+      if (!token) {
         throw new Error('Invalid token response from server');
       }
-
-      const EPHEMERAL_KEY = data.client_secret.value;
 
       // Create peer connection with ICE servers
       const pc = new RTCPeerConnection({
@@ -94,15 +106,19 @@ export const useRealtimeConnection = (resumeData?: ResumeData) => {
         }
       };
 
-      // Add local audio track
+      // Set up audio
       try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: true
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
         });
-        pc.addTrack(mediaStream.getTracks()[0]);
-      } catch (mediaError) {
-        console.warn('Could not access microphone:', mediaError);
-        // Continue without microphone access
+        pc.addTrack(stream.getTracks()[0]);
+      } catch (err) {
+        console.error('Audio setup failed:', err);
+        throw new Error('Failed to setup audio');
       }
 
       // Set up data channel
@@ -121,14 +137,15 @@ export const useRealtimeConnection = (resumeData?: ResumeData) => {
               modalities: ["audio", "text"],
               input_audio_transcription: {
                 model: "whisper-1",
-                language: "en"
+                language: "en",
+                prompt: "This is a job interview conversation."
               },
               turn_detection: {
                 type: "server_vad",
                 threshold: 0.5,
                 prefix_padding_ms: 300,
                 silence_duration_ms: 200,
-                create_response: true,
+                create_response: true
               }
             }
           };
@@ -303,7 +320,7 @@ Keep your responses concise and focused on the interview context.
         method: "POST",
         body: offer.sdp,
         headers: {
-          Authorization: `Bearer ${EPHEMERAL_KEY}`,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/sdp"
         },
       });
@@ -325,23 +342,7 @@ Keep your responses concise and focused on the interview context.
       setIsConnecting(false);
       disconnect();
     }
-  }, [resumeData]);
-
-  const disconnect = useCallback(() => {
-    if (dataChannelRef.current) {
-      dataChannelRef.current.close();
-    }
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-    }
-    if (audioElementRef.current) {
-      const tracks = audioElementRef.current.srcObject as MediaStream;
-      tracks?.getTracks().forEach(track => track.stop());
-      audioElementRef.current.srcObject = null;
-    }
-    setIsConnected(false);
-    setMessages([]);
-  }, []);
+  }, [resumeData, disconnect]);
 
   const sendMessage = useCallback((message: RealtimeMessage) => {
     if (dataChannelRef.current?.readyState === 'open') {
@@ -366,7 +367,7 @@ Keep your responses concise and focused on the interview context.
         const responseCreate = {
           type: "response.create",
           response: {
-            modalities: message.response.modalities || ["text"]
+            modalities: ["text", "audio"]
           }
         };
         dataChannelRef.current.send(JSON.stringify(responseCreate));
@@ -379,12 +380,14 @@ Keep your responses concise and focused on the interview context.
     }
   }, []);
 
-  // Remove the duplicate event handler
+  // Clean up
   useEffect(() => {
     return () => {
-      disconnect();
+      if (isConnected) {
+        disconnect();
+      }
     };
-  }, [disconnect]);
+  }, [isConnected, disconnect]);
 
   return {
     isConnected,
