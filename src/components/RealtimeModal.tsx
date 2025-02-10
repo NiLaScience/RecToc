@@ -62,7 +62,7 @@ const stageNames: Record<InterviewStage, string> = {
 };
 
 const RealtimeModal: React.FC<RealtimeModalProps> = ({ isOpen, onClose, resumeData }) => {
-  const contentRef = useRef<HTMLElement>(null);
+  const contentRef = useRef<HTMLIonContentElement>(null);
   const {
     sessionStatus,
     error,
