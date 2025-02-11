@@ -201,10 +201,10 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
   };
 
   const handleSubmit = async () => {
-    if (!user || !videoFile || !application?.id) {
+    if (!user || (!videoFile && !application?.videoURL) || !application?.id) {
       console.log('Missing required data:', { 
         user: !!user, 
-        videoFile: !!videoFile, 
+        video: !!(videoFile || application?.videoURL), 
         applicationId: application?.id 
       });
       return;
@@ -213,12 +213,17 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     setSubmitting(true);
     setUploadProgress(0);
     try {
-      // Upload video with progress tracking
-      await ApplicationService.uploadApplicationVideo(
-        application.id,
-        videoFile,
-        (progress) => setUploadProgress(progress)
-      );
+      // If we have a new video file, upload it first
+      if (videoFile) {
+        await ApplicationService.uploadApplicationVideo(
+          application.id,
+          videoFile,
+          (progress) => setUploadProgress(progress)
+        );
+      }
+      
+      // Submit the application
+      await ApplicationService.submitApplication(application.id);
       
       presentToast({
         message: 'Application submitted successfully',
@@ -230,6 +235,45 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
       console.error('Error submitting application:', error);
       presentToast({
         message: 'Error submitting application',
+        duration: 3000,
+        color: 'danger',
+      });
+    } finally {
+      setSubmitting(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!user || (!videoFile && !application?.videoURL) || !application?.id) {
+      console.log('Missing required data:', { 
+        user: !!user, 
+        video: !!(videoFile || application?.videoURL), 
+        applicationId: application?.id 
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    setUploadProgress(0);
+    try {
+      // Upload video with progress tracking but keep draft status
+      await ApplicationService.updateApplicationDraft(
+        application.id,
+        videoFile,
+        (progress) => setUploadProgress(progress)
+      );
+      
+      presentToast({
+        message: 'Draft saved successfully',
+        duration: 3000,
+        color: 'success',
+      });
+      onClose();
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      presentToast({
+        message: 'Error saving draft',
         duration: 3000,
         color: 'danger',
       });
@@ -258,7 +302,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
             <IonSpinner />
           </div>
         ) : (
-          <>
+          <div className="ion-padding">
             {/* Job Description */}
             <div>
               {jobPost && (
@@ -538,40 +582,39 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
               )}
             </div>
 
-            {videoFile && !submitting && (
-              <IonButton
-                expand="block"
-                style={{ 
-                  maxWidth: '600px', 
-                  margin: '1.5rem auto',
-                  '--background': '#0055ff',
-                  '--color': '#fff',
-                  '--border-radius': '8px',
-                  '--padding-top': '1rem',
-                  '--padding-bottom': '1rem'
-                }}
-                onClick={handleSubmit}
-              >
-                Submit Application
-              </IonButton>
-            )}
-
-            {submitting && (
-              <div style={{ maxWidth: '600px', margin: '1.5rem auto' }}>
-                <IonProgressBar 
-                  value={uploadProgress / 100}
-                  style={{ '--progress-background': '#0055ff' }}
-                />
-                <p style={{ 
-                  textAlign: 'center', 
-                  marginTop: '0.5rem',
-                  color: 'rgba(255, 255, 255, 0.7)'
-                }}>
-                  Uploading... {Math.round(uploadProgress)}%
-                </p>
-              </div>
-            )}
-          </>
+            <div className="ion-padding-top ion-text-center">
+              {submitting ? (
+                <>
+                  <IonSpinner name="dots" />
+                  {uploadProgress > 0 && (
+                    <IonProgressBar 
+                      value={uploadProgress / 100} 
+                      className="ion-margin-top"
+                    />
+                  )}
+                </>
+              ) : (
+                <div className="ion-margin-top ion-justify-content-between" 
+                     style={{ display: 'flex', gap: '1rem' }}>
+                  <IonButton 
+                    expand="block"
+                    fill="outline"
+                    onClick={handleSaveDraft}
+                    disabled={!videoFile && !application?.videoURL}
+                  >
+                    Save Draft
+                  </IonButton>
+                  <IonButton 
+                    expand="block"
+                    onClick={handleSubmit}
+                    disabled={!videoFile && !application?.videoURL}
+                  >
+                    Submit Application
+                  </IonButton>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </IonContent>
     </IonModal>

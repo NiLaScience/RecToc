@@ -223,6 +223,160 @@ class ApplicationService {
     }
   }
 
+  static async updateApplicationDraft(
+    applicationId: string | { id: string }, 
+    videoFile: File,
+    onProgress?: (progress: number) => void
+  ): Promise<void> {
+    // Extract the ID string whether it's passed directly or as an object
+    const appId = typeof applicationId === 'string' ? applicationId : applicationId.id;
+
+    // Validate applicationId
+    if (!appId || typeof appId !== 'string') {
+      console.error('Invalid applicationId:', applicationId);
+      throw new Error('Invalid application ID');
+    }
+
+    const result = await FirebaseAuthentication.getCurrentUser();
+    console.log('Auth result for draft update:', result);
+    if (!result.user) {
+      throw new Error('User must be authenticated to update application draft');
+    }
+
+    // Generate video ID and set up paths with user ID included
+    const videoId = uuidv4();
+    const userId = result.user.uid;
+    const fileName = `${Date.now()}-${videoId}.${videoFile.type.split('/')[1].split(';')[0]}`; // Get clean extension with timestamp
+    const storagePath = `${this.STORAGE_PATH}/${userId}/application-videos/${fileName}`;
+    
+    try {
+      console.log('Starting video upload for draft:', {
+        applicationId: appId,
+        userId,
+        storagePath
+      });
+
+      // Upload video first
+      let videoURL: string | null = null;
+      const cleanMimeType = videoFile.type.split(';')[0];
+
+      if (Capacitor.isNativePlatform()) {
+        // For native platforms, we need to write to filesystem first
+        const blob = await videoFile.arrayBuffer();
+        await Filesystem.writeFile({
+          path: fileName,
+          data: Buffer.from(blob).toString('base64'),
+          directory: Directory.Cache
+        });
+
+        // Get the file URI
+        const fileInfo = await Filesystem.getUri({
+          path: fileName,
+          directory: Directory.Cache
+        });
+
+        // Upload to Firebase Storage with progress tracking
+        videoURL = await new Promise<string>((resolve, reject) => {
+          FirebaseStorage.uploadFile({
+            path: storagePath,
+            uri: fileInfo.uri,
+            metadata: { contentType: cleanMimeType }
+          }, (progress, error) => {
+            if (error) {
+              reject(error);
+            } else if (progress) {
+              if (onProgress && progress.progress) {
+                onProgress(progress.progress * 100);
+              }
+              if (progress.completed) {
+                FirebaseStorage.getDownloadUrl({ path: storagePath })
+                  .then(result => resolve(result.downloadUrl))
+                  .catch(reject);
+              }
+            }
+          });
+        });
+
+        // Clean up the temporary file
+        await Filesystem.deleteFile({
+          path: fileName,
+          directory: Directory.Cache
+        });
+      } else {
+        // For web, use the blob directly
+        videoURL = await new Promise<string>((resolve, reject) => {
+          FirebaseStorage.uploadFile({
+            path: storagePath,
+            blob: videoFile,
+            metadata: { contentType: cleanMimeType }
+          }, (progress, error) => {
+            if (error) {
+              reject(error);
+            } else if (progress) {
+              if (onProgress && progress.progress) {
+                onProgress(progress.progress * 100);
+              }
+              if (progress.completed) {
+                FirebaseStorage.getDownloadUrl({ path: storagePath })
+                  .then(result => resolve(result.downloadUrl))
+                  .catch(reject);
+              }
+            }
+          });
+        });
+      }
+
+      if (!videoURL) {
+        throw new Error('Failed to get download URL');
+      }
+
+      // Update application with URL but keep draft status
+      const updateData = {
+        videoURL,
+        updatedAt: new Date().toISOString(),
+        candidateId: result.user.uid
+      };
+
+      console.log('Updating draft application with data:', {
+        applicationId: appId,
+        reference: `${this.COLLECTION}/${appId}`,
+        data: updateData
+      });
+
+      // First get the existing application to verify ownership
+      const existingApp = await FirebaseFirestore.getDocument({
+        reference: `${this.COLLECTION}/${appId}`
+      });
+
+      if (!existingApp.snapshot?.data) {
+        throw new Error('Application not found');
+      }
+
+      const appData = existingApp.snapshot.data;
+      if (appData.candidateId !== result.user.uid) {
+        throw new Error('You do not have permission to update this application');
+      }
+
+      // Now update the application
+      await FirebaseFirestore.updateDocument({
+        reference: `${this.COLLECTION}/${appId}`,
+        data: updateData
+      });
+    } catch (error) {
+      console.error('Detailed error:', error);
+      console.error('Error updating application draft:', error);
+      // If we fail, we should try to clean up the uploaded file
+      try {
+        await FirebaseStorage.deleteFile({
+          path: storagePath
+        });
+      } catch (cleanupError) {
+        console.error('Error cleaning up failed upload:', cleanupError);
+      }
+      throw error;
+    }
+  }
+
   static async submitApplication(applicationId: string): Promise<void> {
     const result = await FirebaseAuthentication.getCurrentUser();
     if (!result.user) {
