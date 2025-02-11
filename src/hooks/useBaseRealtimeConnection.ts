@@ -20,6 +20,8 @@ export interface ServerEvent {
   item_id?: string;
   transcript?: string;
   delta?: string;
+  name?: string;
+  arguments?: Record<string, any>;
   session?: {
     id?: string;
     input_audio_transcription?: {
@@ -123,6 +125,16 @@ export const useBaseRealtimeConnection = ({
       setSessionStatus("CONNECTING");
       setError(null);
 
+      // Add timeout for session creation
+      const sessionTimeout = setTimeout(() => {
+        if (sessionStatus === "CONNECTING") {
+          const errorMsg = 'Session creation timed out';
+          setError(errorMsg);
+          onError?.(errorMsg);
+          disconnect();
+        }
+      }, 10000); // 10 second timeout
+
       // Ensure Firebase is initialized
       await ensureInitialized();
 
@@ -195,44 +207,37 @@ export const useBaseRealtimeConnection = ({
       dataChannelRef.current = dc;
 
       dc.onopen = () => {
+        clearTimeout(sessionTimeout);
+        console.log('🔌 Connection established');
+        setSessionStatus("CONNECTED");
         setError(null);
-        onConnect?.();
-
-        try {
-          // Let the consumer configure the session
-          const sessionConfig = onSessionConfig?.() || {
-            type: "session.update",
-            session: {
-              modalities: ["audio", "text"],
-              input_audio_transcription: {
-                model: "whisper-1",
-                language: "en"
-              },
-              turn_detection: {
-                type: "server_vad",
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 200,
-                create_response: true
-              }
-            }
-          };
-
-          console.log('Sending session config:', sessionConfig);
-          dc.send(JSON.stringify(sessionConfig));
-        } catch (err) {
-          console.error('Failed to send session config:', err);
-          const errorMsg = 'Failed to configure session';
-          setError(errorMsg);
-          onError?.(errorMsg);
-          disconnect();
+        
+        // Send session configuration if provided
+        if (onSessionConfig) {
+          const config = onSessionConfig();
+          console.log('📝 Sending session config');
+          dc.send(JSON.stringify(config));
         }
+        
+        onConnect?.();
       };
 
       dc.onmessage = (e) => {
         try {
           const event: ServerEvent = JSON.parse(e.data);
-          console.log('Received event:', event);
+          
+          // Only log specific events
+          if (event.type === 'function_call' && event.name && event.arguments) {
+            console.log('🔧 Function call:', {
+              name: event.name,
+              args: event.arguments
+            });
+          } else if (event.type === 'session.created' || event.type === 'session.updated') {
+            console.log('🔄 Session event:', event.type);
+          } else if (event.error) {
+            console.error('❌ Error:', event.error.message || 'Unknown error');
+          }
+
           onEvent?.(event);
 
           if (event.error) {

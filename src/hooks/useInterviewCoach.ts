@@ -2,6 +2,23 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useBaseRealtimeConnection, type ServerEvent as BaseServerEvent } from './useBaseRealtimeConnection';
 import type { CVSchema, JobDescriptionSchema } from '../services/OpenAIService';
 
+// Extend the base server event type to include function calls
+type ServerEvent = BaseServerEvent | {
+  type: 'function_call';
+  name: string;
+  arguments: {
+    currentStage?: InterviewStage;
+    progress?: number;
+    stageTitle?: string;
+    feedbackType?: 'positive' | 'improvement' | 'neutral';
+    message?: string;
+    details?: {
+      strengths: string[];
+      improvements: string[];
+    };
+  };
+};
+
 export type InterviewStage = 'intro' | 'technical' | 'behavioral' | 'problemSolving' | 'cultureFit' | 'closing';
 
 interface InterviewCoachState {
@@ -65,15 +82,19 @@ export const useInterviewCoach = ({
   const feedbackBuffer = useRef<string | null>(null);
 
   // Handle stage transitions from agent responses
-  const handleServerEvent = useCallback((event: BaseServerEvent) => {
-    console.log('Interview coach received event:', event);
-
-    if (event.type === 'response.text.delta' && event.delta) {
+  const handleServerEvent = useCallback((event: ServerEvent) => {
+    if (event.type === 'response.text.delta' && 'delta' in event && event.delta) {
       // Check for stage transition markers
       if (event.delta.includes('[NEXT_STAGE]')) {
         const currentIndex = INTERVIEW_STAGES.indexOf(state.currentStage);
         const nextStage = INTERVIEW_STAGES[currentIndex + 1] || 'closing';
         const progress = ((currentIndex + 1) / INTERVIEW_STAGES.length) * 100;
+        
+        console.log('🎯 Stage transition:', {
+          from: state.currentStage,
+          to: nextStage,
+          progress: `${progress}%`
+        });
         
         setState(prev => ({
           ...prev,
@@ -87,21 +108,59 @@ export const useInterviewCoach = ({
       
       // Check for feedback markers
       if (event.delta.includes('[FEEDBACK_START]')) {
-        // Start collecting feedback
         feedbackBuffer.current = '';
       } else if (event.delta.includes('[FEEDBACK_END]')) {
         try {
           if (feedbackBuffer.current !== null) {
             const feedback = JSON.parse(feedbackBuffer.current);
+            console.log('💭 Feedback received:', {
+              type: feedback.type,
+              strengths: feedback.details?.strengths?.length || 0,
+              improvements: feedback.details?.improvements?.length || 0
+            });
             setState(prev => ({ ...prev, feedback }));
             onFeedback?.(feedback);
           }
         } catch (err) {
-          console.error('Failed to parse feedback:', err);
+          console.error('❌ Failed to parse feedback:', err);
         }
         feedbackBuffer.current = null;
       } else if (feedbackBuffer.current !== null) {
         feedbackBuffer.current += event.delta;
+      }
+    } else if (event.type === 'function_call' && 'name' in event && 'arguments' in event) {
+      // Handle function calls from the LLM
+      console.log('🔧 Function call:', {
+        name: event.name,
+        args: event.arguments
+      });
+
+      switch (event.name) {
+        case 'updateInterviewProgress':
+          const { currentStage, progress, stageTitle } = event.arguments;
+          if (currentStage && progress && stageTitle) {
+            setState(prev => ({
+              ...prev,
+              currentStage,
+              progress,
+              stageTitle
+            }));
+            onProgressUpdate?.(currentStage, progress, stageTitle);
+          }
+          break;
+          
+        case 'showFeedback':
+          const { feedbackType, message, details } = event.arguments;
+          if (feedbackType && message && details) {
+            const feedback = {
+              type: feedbackType,
+              message,
+              details
+            };
+            setState(prev => ({ ...prev, feedback }));
+            onFeedback?.(feedback);
+          }
+          break;
       }
     }
   }, [state.currentStage, onProgressUpdate, onFeedback]);

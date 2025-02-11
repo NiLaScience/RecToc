@@ -38,7 +38,7 @@ import AppHeader from './AppHeader';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
-import { useInterviewCoach } from '../hooks/useInterviewCoach';
+import { useInterviewCoach, INTERVIEW_STAGES, type InterviewStage } from '../hooks/useInterviewCoach';
 import type { CVSchema, JobDescriptionSchema } from '../services/OpenAIService';
 
 interface ApplicationModalProps {
@@ -321,15 +321,147 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
             <IonProgressBar
               value={interviewState.progress / 100}
               color={interviewState.feedback?.type === 'positive' ? 'success' : 'primary'}
+              style={{ 
+                height: '6px',
+                transition: 'all 0.3s ease-in-out'
+              }}
             />
 
-            {/* Stage Title */}
+            {/* Stage Timeline */}
+            <div className="ion-padding-horizontal" style={{ marginBottom: '1rem' }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                position: 'relative',
+                paddingTop: '20px'
+              }}>
+                {/* Progress line */}
+                <div style={{
+                  position: 'absolute',
+                  top: '30px',
+                  left: '0',
+                  right: '0',
+                  height: '2px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  zIndex: 0
+                }} />
+                <div style={{
+                  position: 'absolute',
+                  top: '30px',
+                  left: '0',
+                  height: '2px',
+                  backgroundColor: '#0055ff',
+                  width: `${interviewState.progress}%`,
+                  transition: 'width 0.3s ease-in-out',
+                  zIndex: 1
+                }} />
+                
+                {/* Stage markers */}
+                {INTERVIEW_STAGES.map((stage, index) => {
+                  const isCompleted = INTERVIEW_STAGES.indexOf(interviewState.currentStage) > index;
+                  const isCurrent = interviewState.currentStage === stage;
+                  return (
+                    <div key={stage} style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      position: 'relative',
+                      zIndex: 2
+                    }}>
+                      <div style={{
+                        width: '12px',
+                        height: '12px',
+                        borderRadius: '50%',
+                        backgroundColor: isCompleted ? '#0055ff' : isCurrent ? '#fff' : 'rgba(255, 255, 255, 0.3)',
+                        border: `2px solid ${isCurrent ? '#0055ff' : 'transparent'}`,
+                        transition: 'all 0.3s ease-in-out'
+                      }} />
+                      <span style={{
+                        fontSize: '0.75rem',
+                        color: isCompleted || isCurrent ? '#fff' : 'rgba(255, 255, 255, 0.5)',
+                        marginTop: '0.5rem',
+                        transition: 'all 0.3s ease-in-out'
+                      }}>
+                        {stage.charAt(0).toUpperCase() + stage.slice(1)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Stage Title and Status */}
             <div className="ion-padding">
-              <h2>{interviewState.stageTitle}</h2>
-              {sessionStatus === 'CONNECTING' && (
-                <div className="ion-text-center">
-                  <IonSpinner name="dots" />
-                  <p>Connecting to interview coach...</p>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginBottom: '1rem'
+              }}>
+                <h2 style={{ 
+                  margin: 0,
+                  transition: 'opacity 0.3s ease-in-out',
+                  opacity: sessionStatus === 'CONNECTING' ? 0.7 : 1
+                }}>{interviewState.stageTitle}</h2>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  transition: 'opacity 0.3s ease-in-out'
+                }}>
+                  {sessionStatus === 'CONNECTING' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <IonSpinner name="dots" />
+                      <span>Connecting to interview coach...</span>
+                    </div>
+                  )}
+                  {sessionStatus === 'CONNECTED' && (
+                    <IonChip color="success">
+                      Connected
+                    </IonChip>
+                  )}
+                  {interviewState.currentStage === 'closing' && (
+                    <IonChip color="primary">
+                      Interview Complete
+                    </IonChip>
+                  )}
+                </div>
+              </div>
+
+              {/* Feedback Display */}
+              {interviewState.feedback && (
+                <div className={`feedback-box ${interviewState.feedback.type}`} style={{
+                  padding: '1rem',
+                  borderRadius: '8px',
+                  backgroundColor: interviewState.feedback.type === 'positive' ? 'rgba(45, 211, 111, 0.1)' : 'rgba(235, 68, 90, 0.1)',
+                  border: `1px solid ${interviewState.feedback.type === 'positive' ? '#2dd36f' : '#eb445a'}`,
+                  marginTop: '1rem'
+                }}>
+                  <p style={{ margin: '0 0 0.5rem 0', color: '#fff' }}>{interviewState.feedback.message}</p>
+                  {interviewState.feedback.details && (
+                    <div>
+                      {interviewState.feedback.details.strengths.length > 0 && (
+                        <div style={{ marginTop: '0.5rem' }}>
+                          <strong style={{ color: '#2dd36f' }}>Strengths:</strong>
+                          <ul style={{ margin: '0.25rem 0', paddingLeft: '1.5rem' }}>
+                            {interviewState.feedback.details.strengths.map((strength, i) => (
+                              <li key={i}>{strength}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {interviewState.feedback.details.improvements.length > 0 && (
+                        <div style={{ marginTop: '0.5rem' }}>
+                          <strong style={{ color: '#eb445a' }}>Areas for Improvement:</strong>
+                          <ul style={{ margin: '0.25rem 0', paddingLeft: '1.5rem' }}>
+                            {interviewState.feedback.details.improvements.map((improvement, i) => (
+                              <li key={i}>{improvement}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
