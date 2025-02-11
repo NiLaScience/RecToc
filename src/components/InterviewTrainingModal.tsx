@@ -17,11 +17,9 @@ import {
   IonButtons,
   IonIcon,
 } from '@ionic/react';
-import { Capacitor } from '@capacitor/core';
 import { closeOutline } from 'ionicons/icons';
 
 import { useAuth } from '../context/AuthContext';
-import VideoRecorder from './VideoRecorder';
 import type { JobApplication } from '../types/application';
 import type { VideoItem } from '../types/video';
 import type { UserProfile } from '../types/user';
@@ -33,8 +31,8 @@ import CVAccordion from './shared/CVAccordion';
 
 import ApplicationService from '../services/ApplicationService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
-import { useInterviewCoach, INTERVIEW_STAGES } from '../hooks/useInterviewCoach';
-import type { CVSchema, JobDescriptionSchema } from '../services/OpenAIService';
+import { useInterviewCoach } from '../hooks/useInterviewCoach';
+import type { JobDescriptionSchema } from '../services/OpenAIService';
 
 interface InterviewTrainingModalProps {
   isOpen: boolean;
@@ -59,14 +57,6 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
   const [loading, setLoading] = useState(true);
   const [jobPost, setJobPost] = useState<VideoItem | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [application, setApplication] = useState<JobApplication | null>(null);
-
-  // For video
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [uploadMode, setUploadMode] = useState<'record' | 'file'>('record');
 
   // Set up the interview coach
   const {
@@ -135,55 +125,6 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
       startInterview();
     }
   }, [jobPost, profile, sessionStatus, startInterview]);
-
-  const handleSubmit = async () => {
-    if (!videoFile || !user) return;
-    setSubmitting(true);
-    setUploadProgress(0);
-    try {
-      let applicationId = application?.id;
-      if (!applicationId) {
-        const newApp = await ApplicationService.createApplication(jobId);
-        applicationId = newApp.id;
-        setApplication(newApp);
-      }
-      await ApplicationService.uploadApplicationVideo(applicationId, videoFile, (prog) =>
-        setUploadProgress(prog)
-      );
-      onClose();
-    } catch (err) {
-      console.error('Error uploading video:', err);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Example handleVideoRecorded
-  const handleVideoRecorded = async (uri: string, format: string) => {
-    try {
-      if (Capacitor.isNativePlatform()) {
-        // Native
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        const file = new File([blob], `application-video.${format}`, { type: `video/${format}` });
-        setVideoFile(file);
-        setPreviewUrl(uri);
-      } else {
-        // Web
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        const cleanFormat = format.split(';')[0].replace('video/', '') || 'mp4';
-        const cleanBlob = new Blob([blob], { type: `video/${cleanFormat}` });
-        const file = new File([cleanBlob], `application-video.${cleanFormat}`, {
-          type: `video/${cleanFormat}`,
-        });
-        setVideoFile(file);
-        setPreviewUrl(URL.createObjectURL(cleanBlob));
-      }
-    } catch (error) {
-      console.error('Error handling recorded video:', error);
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -309,74 +250,6 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
                 </AccordionSection>
               </AccordionGroup>
             )}
-
-            {/* Video section */}
-            <div className="ion-padding">
-              {!previewUrl ? (
-                uploadMode === 'file' ? (
-                  <>
-                    <input
-                      type="file"
-                      id="videoSelect"
-                      style={{ display: 'none' }}
-                      accept="video/*"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) {
-                          setVideoFile(f);
-                          setPreviewUrl(URL.createObjectURL(f));
-                        }
-                      }}
-                    />
-                    <IonButton
-                      onClick={() => {
-                        const sel = document.getElementById('videoSelect');
-                        sel?.click();
-                      }}
-                    >
-                      Select a Video
-                    </IonButton>
-                  </>
-                ) : (
-                  <VideoRecorder
-                    onVideoRecorded={handleVideoRecorded}
-                    onError={(err) => console.error('Recorder error:', err)}
-                  />
-                )
-              ) : (
-                <div style={{ marginTop: '1rem' }}>
-                  <video
-                    src={previewUrl}
-                    style={{ width: '100%', maxHeight: '300px' }}
-                    controls
-                  ></video>
-                  <IonButton
-                    fill="clear"
-                    onClick={() => {
-                      setVideoFile(null);
-                      if (previewUrl) {
-                        URL.revokeObjectURL(previewUrl);
-                        setPreviewUrl(null);
-                      }
-                    }}
-                  >
-                    Record Again
-                  </IonButton>
-                </div>
-              )}
-
-              {videoFile && !submitting && (
-                <IonButton expand="block" onClick={handleSubmit}>
-                  Submit Application
-                </IonButton>
-              )}
-              {submitting && (
-                <>
-                  <IonProgressBar value={uploadProgress / 100}></IonProgressBar>
-                  <p>Uploading: {Math.round(uploadProgress)}%</p>
-                </>
-              )}
-            </div>
 
             {/* End Interview */}
             {sessionStatus === 'CONNECTED' && (

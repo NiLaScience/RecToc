@@ -438,16 +438,7 @@ class ApplicationService {
     }
 
     return new Promise((resolve, reject) => {
-      let listenerCallbackId: string | undefined;
-
       const callback: AddCollectionSnapshotListenerCallback<DocumentData> = (event, error) => {
-        // Clean up the listener
-        if (listenerCallbackId) {
-          FirebaseFirestore.removeSnapshotListener({
-            callbackId: listenerCallbackId
-          });
-        }
-
         if (error) {
           reject(error);
           return;
@@ -478,13 +469,11 @@ class ApplicationService {
         resolve(applications);
       };
 
-      // Add the listener and store the callback ID
+      // Add the listener but don't remove it immediately
       FirebaseFirestore.addCollectionSnapshotListener(
         { reference: this.COLLECTION },
         callback
-      ).then(result => {
-        listenerCallbackId = result;
-      }).catch(reject);
+      ).catch(reject);
     });
   }
 
@@ -494,17 +483,6 @@ class ApplicationService {
       where?: [string, string, any][];
     }
   ): Promise<string> {
-    if (!Capacitor.isNativePlatform()) {
-      // For web, just do a one-time fetch
-      const response = await FirebaseFirestore.getDocument({
-        reference: this.COLLECTION
-      });
-      if (response.snapshot?.data) {
-        callback(response.snapshot.data);
-      }
-      return this.COLLECTION;
-    }
-
     let query = `${this.COLLECTION}`;
     if (options?.where) {
       // Add where clauses to the query
@@ -513,19 +491,33 @@ class ApplicationService {
       }, query);
     }
 
-    const response = await FirebaseFirestore.getDocument({
-      reference: query
+    // Use real-time listeners for both web and native platforms
+    return new Promise((resolve, reject) => {
+      FirebaseFirestore.addCollectionSnapshotListener(
+        { reference: query },
+        (event, error) => {
+          if (error) {
+            console.error('Snapshot listener error:', error);
+            return;
+          }
+          if (event?.snapshots?.[0]?.data) {
+            callback(event.snapshots[0].data);
+          }
+        }
+      ).then(resolve).catch(reject);
     });
-
-    if (response.snapshot?.data) {
-      callback(response.snapshot.data);
-    }
-
-    return query;
   }
 
   static async removeSnapshotListener(id: string): Promise<void> {
-    // No-op since we're not using real-time listeners anymore
+    if (!id) return;
+    
+    try {
+      await FirebaseFirestore.removeSnapshotListener({
+        callbackId: id
+      });
+    } catch (error) {
+      console.error('Error removing snapshot listener:', error);
+    }
   }
 
   static async refreshApplications(): Promise<void> {
