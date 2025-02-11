@@ -1,0 +1,562 @@
+```md
+# OpenAI Realtime Agent Demo with Next.js
+
+This repository demonstrates how to build sophisticated, **live voice/chat** agents using OpenAI's Realtime API in a Next.js application. It shows how to:
+
+1. Connect to OpenAI's Realtime API via a WebRTC PeerConnection and RTCDataChannel.
+2. Implement multi-agent "handoffs" (transferring conversations between specialized agents).
+3. Define agent personalities, state machines, and tool calls for advanced or domain-specific logic (e.g., authentication, returns, booking, etc.).
+4. Handle push-to-talk vs. automatic voice-activity detection, partial transcription, and real-time streaming of TTS (Text-to-Speech) responses.
+5. Store and display conversation transcripts, function calls, and event logs on the client side.
+
+The project is a **Next.js 15** TypeScript app. Below is an overview of the architecture, important files, and patterns, along with relevant code snippets.
+
+---
+
+## 1. Project Structure
+
+Here is a simplified look at the repo’s main structure:
+
+```
+.
+├── src
+│   ├── app
+│   │   ├── api
+│   │   │   ├── chat/completions/route.ts
+│   │   │   └── session/route.ts
+│   │   ├── agentConfigs
+│   │   │   ├── customerServiceRetail
+│   │   │   ├── frontDeskAuthentication
+│   │   │   ├── simpleExample.ts
+│   │   │   ├── utils.ts
+│   │   │   └── index.ts
+│   │   ├── components
+│   │   ├── contexts
+│   │   ├── hooks
+│   │   ├── lib
+│   │   ├── App.tsx
+│   │   ├── page.tsx
+│   │   └── ...
+│   └── ...
+├── package.json
+├── README.md
+├── tailwind.config.ts
+├── tsconfig.json
+└── ...
+```
+
+Below we highlight major areas of the code.
+
+---
+
+## 2. Connecting to the Realtime API
+
+### 2.1 Session Token Endpoints
+
+This demo uses a helper Next.js endpoint (`src/app/api/session/route.ts`) to fetch an **ephemeral** `client_secret` from an OpenAI-provided session. We store the result in the front end to set up a PeerConnection.
+
+```ts
+// /api/session/route.ts
+
+export async function GET() {
+  try {
+    const response = await fetch(
+      "https://api.openai.com/v1/realtime/sessions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-realtime-preview-2024-12-17",
+        }),
+      }
+    );
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Error in /session:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+```
+
+- **Summary:**  
+  - Posts to `https://api.openai.com/v1/realtime/sessions`.
+  - Returns a JSON payload containing the ephemeral `client_secret` (a short-lived credential).
+
+### 2.2 Establishing the WebRTC Connection
+
+In the front end, we call `createRealtimeConnection()` to:
+1. Create a PeerConnection.
+2. Add our microphone track to that PeerConnection.
+3. Create a `dataChannel` for event-based JSON messages.
+4. Send a local offer to the Realtime API to receive an answer.
+
+```ts
+// /src/app/lib/realtimeConnection.ts
+
+export async function createRealtimeConnection(
+  EPHEMERAL_KEY: string,
+  audioElement: RefObject<HTMLAudioElement | null>
+) {
+  const pc = new RTCPeerConnection();
+
+  pc.ontrack = (e) => {
+    // The streamed voice from the agent is appended to an <audio> element
+    if (audioElement.current) {
+      audioElement.current.srcObject = e.streams[0];
+    }
+  };
+
+  // Use your mic as local track
+  const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
+  pc.addTrack(ms.getTracks()[0]);
+
+  // Create a data channel to send + receive JSON messages
+  const dc = pc.createDataChannel("oai-events");
+
+  // Create an offer, post to the Realtime API, and set the remote description
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  const baseUrl = "https://api.openai.com/v1/realtime";
+  const model = "gpt-4o-realtime-preview-2024-12-17";
+
+  const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
+    method: "POST",
+    body: offer.sdp,
+    headers: {
+      Authorization: `Bearer ${EPHEMERAL_KEY}`,
+      "Content-Type": "application/sdp",
+    },
+  });
+
+  const answerSdp = await sdpResponse.text();
+  const answer: RTCSessionDescriptionInit = {
+    type: "answer",
+    sdp: answerSdp,
+  };
+  await pc.setRemoteDescription(answer);
+
+  return { pc, dc };
+}
+```
+
+**Key points:**
+- This uses standard WebRTC calls (`createOffer()`, `setLocalDescription()`, etc.), except the signaling server is replaced by OpenAI’s Realtime endpoint.
+- The Realtime API returns an `answer` with media for the agent's TTS output.
+- The `dc` (DataChannel) is used to **send** user text or actions and **receive** JSON events from the model.
+
+---
+
+## 3. Handling Client & Server Events
+
+### 3.1 DataChannel Event Flow
+
+Once the PeerConnection is established, your `dataChannel` is open. You can:
+- **Send** JSON messages describing new user input or session updates.
+- **Receive** JSON messages describing new partial transcripts, function call requests, or TTS completions.
+
+In this app, we store and display all events using React context providers:
+
+- **TranscriptProvider**  
+  Stores conversation messages (assistant or user text) and “breadcrumbs” about function calls.
+
+- **EventProvider**  
+  Stores raw client or server events for debugging.
+
+### 3.2 Example: Sending a "User Text" Message
+
+In `App.tsx`, we have a helper:
+
+```ts
+function sendSimulatedUserMessage(text: string) {
+  const eventObj = {
+    type: "conversation.item.create",
+    item: {
+      id,
+      type: "message",
+      role: "user",
+      content: [{ type: "input_text", text }],
+    },
+  };
+
+  // `dcRef.current` is the RTCDataChannel
+  dcRef.current.send(JSON.stringify(eventObj));
+
+  // Then trigger the agent to respond
+  dcRef.current.send(JSON.stringify({ type: "response.create" }));
+}
+```
+
+### 3.3 Handling Server Events
+
+We parse JSON messages from the data channel in `useHandleServerEvent.ts`:
+
+```ts
+// Pseudocode from useHandleServerEvent
+
+function handleServerEvent(serverEvent: ServerEvent) {
+  switch (serverEvent.type) {
+    case "session.created":
+      // Realtime session established
+      break;
+
+    case "conversation.item.created":
+      // A new piece of user or assistant text
+      // Update the TranscriptContext
+      break;
+
+    case "response.audio_transcript.delta":
+      // The TTS for the assistant is streaming
+      // We append partial text to the transcript
+      break;
+
+    case "response.done":
+      // The assistant has completed the turn
+      // Possibly call a function, etc.
+      break;
+
+    case "response.output_item.done":
+      // That chunk of TTS is done
+      break;
+
+    ...
+  }
+}
+```
+
+**Important**: The agent can also request function calls by returning `"function_call"` items. Those are handled in real-time, then we respond back with the function results.
+
+---
+
+## 4. Multi-Agent Handoffs
+
+One of the main features in this repo is a **multi-agent** system. Each agent has:
+
+- **Name & Public Description** (seen in the "transferAgents" tool).
+- **Instructions** describing personality, constraints, or state machine steps.
+- **Optional Tools** with JSON schema parameters.
+
+When one agent wants to hand off to another, it calls a special function named `"transferAgents"`. The front end sees this and updates `selectedAgentName`, causing all subsequent instructions and conversation to be guided by the new agent.
+
+### 4.1 Example: A Customer Service Flow
+
+Look at `customerServiceRetail/index.ts`:
+
+```ts
+import authentication from "./authentication";
+import returns from "./returns";
+import sales from "./sales";
+import simulatedHuman from "./simulatedHuman";
+import { injectTransferTools } from "../utils";
+
+// Each agent can list which other agents it can hand off to
+authentication.downstreamAgents = [returns, sales, simulatedHuman];
+returns.downstreamAgents = [authentication, sales, simulatedHuman];
+sales.downstreamAgents = [authentication, returns, simulatedHuman];
+simulatedHuman.downstreamAgents = [authentication, returns, sales];
+
+// "injectTransferTools" adds a 'transferAgents' function
+const agents = injectTransferTools([
+  authentication,
+  returns,
+  sales,
+  simulatedHuman,
+]);
+
+export default agents;
+```
+
+- `injectTransferTools` automatically appends a `transferAgents` function to each agent.  
+- Each agent has a `tools: []` array for custom tool calls.  
+
+When the agent says `"I want to transfer you to the returns department"`, it will produce a function call:
+
+```json
+{
+  "type": "function_call",
+  "name": "transferAgents",
+  "arguments": "{ \"destination_agent\": \"returns\", ... }"
+}
+```
+
+Upon receiving this, the client sets `selectedAgentName = "returns"`, effectively switching to that agent’s instructions.
+
+---
+
+## 5. Defining an Agent
+
+Every agent is an `AgentConfig` with properties:
+- `name`
+- `publicDescription` (used in the `transferAgents` menu)
+- `instructions` (the prompt for the model)
+- `tools` (array of JSON-serializable function definitions)
+- `toolLogic` (optional server-side code to handle actual logic)
+- `downstreamAgents` (list of other agents it can hand off to)
+
+**Example**: `authentication.ts`:
+
+```ts
+// A snippet from src/app/agentConfigs/customerServiceRetail/authentication.ts
+
+import { AgentConfig } from "@/app/types";
+
+const authentication: AgentConfig = {
+  name: "authentication",
+  publicDescription:
+    "The initial agent that greets the user, does authentication and routes them to the correct downstream agent.",
+  instructions: `
+# Personality and Tone
+## Identity
+You are a calm, approachable online store assistant ...
+... more instructions ...
+
+# Context
+- Business name: Snowy Peak Boards
+- Hours: Monday to Friday, ...
+...
+
+# Overall Instructions
+- Your capabilities are limited ...
+- Must verify user identity ...
+... entire multi-step instructions and conversation state machine ...
+`,
+  tools: [
+    {
+      type: "function",
+      name: "authenticate_user_information",
+      description: "Look up a user's information ...",
+      parameters: {
+        type: "object",
+        properties: {
+          phone_number: { type: "string" },
+          last_4_digits: { type: "string" },
+          ...
+        },
+        required: [...]
+      },
+    },
+    {
+      type: "function",
+      name: "save_or_update_address",
+      ...
+    },
+    ...
+  ],
+  toolLogic: {
+    // This can be executed in the front end or in a separate server environment
+  },
+};
+
+export default authentication;
+```
+
+**Key**: The `instructions` block can contain personality, tone, disclaimers, and even a step-by-step state machine. The agent is expected to follow these steps precisely, verifying phone, DOB, etc. The front-end "honors" that instruction by letting the LLM produce partial text and function calls.
+
+---
+
+## 6. Tools & Function Calls
+
+Every tool is declared in the agent’s `tools: []` array with a JSON schema. The LLM can call them by returning an object with `"type": "function_call"` in its output.
+
+**Example**: The `checkEligibilityAndPossiblyInitiateReturn` tool in `returns.ts`:
+
+```ts
+// partial snippet from returns agent
+tools: [
+  {
+    type: "function",
+    name: "checkEligibilityAndPossiblyInitiateReturn",
+    description: "Check the eligibility of a proposed action ...",
+    parameters: {
+      type: "object",
+      properties: {
+        userDesiredAction: { type: "string" },
+        question: { type: "string" },
+      },
+      required: ["userDesiredAction", "question"],
+    },
+  },
+],
+toolLogic: {
+  checkEligibilityAndPossiblyInitiateReturn: async (args, transcriptLogs) => {
+    // Possibly call a background LLM to interpret the policies
+    // Return a JSON object that includes eligibility or next steps
+  },
+},
+```
+
+**In practice**:
+1. The LLM returns an object with `"type": "function_call"`, specifying this function name and arguments.
+2. The front end sees that request, looks up `toolLogic.checkEligibilityAndPossiblyInitiateReturn`, and calls it with `args`.
+3. The result is appended to the conversation as a `function_call_output`, and the LLM is triggered to continue.
+
+---
+
+## 7. The User Interface
+
+### 7.1 `App.tsx`
+
+The main page is in `App.tsx`. Important highlights:
+
+- **`sessionStatus`** tracks whether we’re DISCONNECTED, CONNECTING, or CONNECTED to the Realtime API.
+- **`useEffect`** calls to fetch a new ephemeral session token and sets up the PeerConnection via `createRealtimeConnection`.
+- **`dataChannel.onmessage`** => calls `handleServerEventRef.current(JSON.parse(e.data))`.
+- The UI has:
+  - A transcript panel (`Transcript.tsx`) for messages, partial text, function calls, etc.
+  - A logs panel (`Events.tsx`) for raw event logs.
+  - A bottom toolbar with connect/disconnect, push-to-talk toggles, and audio playback toggles.
+
+### 7.2 Transcript & Events
+
+- `Transcript.tsx` uses `TranscriptContext` to show user messages, assistant messages, or “breadcrumbs” about tool calls.
+- `Events.tsx` uses `EventContext` to show low-level logs like `conversation.item.create`, `response.delta`, or tool calls.
+
+---
+
+## 8. Push-to-Talk vs. Automatic Voice Activity Detection
+
+The code allows two ways to handle the user’s microphone input:
+
+1. **Automatic VAD** – The user speaks freely, the system automatically detects silence, and triggers `response.create`.
+2. **Push-to-Talk** – The user holds down a button, speaks, then on release we send the audio buffer for transcription.
+
+**Implementation:**
+- In `App.tsx`, we have a checkbox for “Push to talk.”
+- If it’s off (VAD mode), the Realtime session is updated with `turn_detection` settings:
+  ```ts
+  turn_detection: {
+    type: "server_vad",
+    threshold: 0.5,
+    prefix_padding_ms: 300,
+    silence_duration_ms: 200,
+    create_response: true,
+  }
+  ```
+- If it’s on, we explicitly call:
+  ```ts
+  sendClientEvent({ type: "input_audio_buffer.clear" });
+  // record while button is held...
+  sendClientEvent({ type: "input_audio_buffer.commit" });
+  sendClientEvent({ type: "response.create" });
+  ```
+- The event logs show when the user started and ended talking, plus transcripts.
+
+---
+
+## 9. A Minimal Example: `simpleExample.ts`
+
+See `src/app/agentConfigs/simpleExample.ts` for the simplest demonstration:
+
+```ts
+import { AgentConfig } from "@/app/types";
+import { injectTransferTools } from "./utils";
+
+// The "haiku" agent
+const haiku: AgentConfig = {
+  name: "haiku",
+  publicDescription: "Agent that writes haikus.",
+  instructions: "Ask the user for a topic, then reply with a haiku.",
+  tools: [],
+};
+
+// The "greeter" agent
+const greeter: AgentConfig = {
+  name: "greeter",
+  publicDescription: "Agent that greets the user.",
+  instructions:
+    "Greet the user and ask if they'd like a Haiku. If yes, transfer them to the 'haiku' agent.",
+  tools: [],
+  downstreamAgents: [haiku],
+};
+
+const agents = injectTransferTools([greeter, haiku]);
+export default agents;
+```
+
+**How it works**:
+1. By default, `greeter` welcomes the user and can call `transferAgents` to send them to `haiku`.
+2. `haiku` just writes a short poem about the user’s requested topic.
+
+---
+
+## 10. The Metaprompt Reference (Optional)
+
+For more advanced use, there’s a reference in `voiceAgentMetaprompt.txt` that describes a style for building agent instructions that follow a “state machine.” It includes a JSON-based schema with states, transitions, and instructions that you can prompt your model to adopt. For instance, one might define:
+
+```js
+[
+  {
+    "id": "1_greeting",
+    "description": "Greet the caller and explain verification process.",
+    "instructions": ["Greet warmly", "Explain you'll collect personal info"],
+    "examples": [...],
+    "transitions": [
+      { "next_step": "2_get_first_name", "condition": "After greeting" }
+    ]
+  },
+  ...
+]
+```
+
+Though usage is not strictly mandatory, it’s a helpful pattern to keep your agent strictly on-script.
+
+---
+
+## 11. Running the Demo Locally
+
+1. **Install** dependencies:
+   ```bash
+   npm install
+   ```
+2. **Set** your `OPENAI_API_KEY` in an environment variable or `.env`.
+3. **Run** locally:
+   ```bash
+   npm run dev
+   ```
+4. In your browser, go to `http://localhost:3000`.
+   - The app will try to connect to the Realtime API.
+   - You’ll be prompted for microphone access. Once allowed, you can speak or type messages.
+   - By default, `agentConfig=simpleExample` is selected. To try others like `customerServiceRetail`, switch in the “Scenario” dropdown.
+
+---
+
+## 12. Creating a New Agent Scenario
+
+1. **Create** a new file in `src/app/agentConfigs/yourNewAgentSet.ts`.
+2. **Define** each `AgentConfig`. Possibly link them with `downstreamAgents`.
+3. **Export** an array of agents:
+   ```ts
+   export default [myAgent, anotherAgent];
+   ```
+4. **Add** the scenario to `allAgentSets` in `src/app/agentConfigs/index.ts`:
+   ```ts
+   import yourNewAgentSet from "./yourNewAgentSet";
+
+   export const allAgentSets: AllAgentConfigsType = {
+     simpleExample,
+     frontDeskAuthentication,
+     customerServiceRetail,
+     yourNewAgentSet,
+   };
+   ```
+5. **Reload** the page. A new “Scenario” option appears, letting you pick your set.
+
+---
+
+## 13. Conclusion
+
+This project shows a flexible pattern for building real-time, multi-step, voice-first agents with Next.js. You can:
+- **Collect** user data with confidence, verifying each piece carefully.
+- **Perform** function calls or policy checks behind the scenes.
+- **Route** users to different specialized personalities (like “returns” or “sales”).
+- **Incorporate** streaming transcription and TTS, plus optional “push-to-talk.”
+
+We hope this codebase helps you explore advanced usage of the OpenAI Realtime API. Happy hacking!
+```

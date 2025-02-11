@@ -28,6 +28,7 @@
     "@google/generative-ai": "^0.21.0",
     "@ionic/react": "^7.8.6",
     "@ionic/react-router": "^7.8.6",
+    "@openai/realtime-api-beta": "github:openai/openai-realtime-api-beta",
     "axios": "^1.7.9",
     "dotenv": "^16.4.7",
     "firebase": "^11.2.0",
@@ -39,6 +40,7 @@
     "react-router-dom": "^5.3.4",
     "swiper": "^11.2.2",
     "uuid": "^11.0.5",
+    "zod": "^3.24.1",
     "zustand": "^4.5.0"
   },
   "devDependencies": {

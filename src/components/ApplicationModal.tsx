@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   IonContent,
   IonHeader,
@@ -22,8 +22,10 @@ import {
   useIonToast,
   IonModal,
   IonProgressBar,
+  IonFab,
+  IonFabButton,
 } from '@ionic/react';
-import { closeOutline, videocamOutline, documentTextOutline, cameraOutline } from 'ionicons/icons';
+import { closeOutline, videocamOutline, documentTextOutline, cameraOutline, stopOutline } from 'ionicons/icons';
 import { useAuth } from '../context/AuthContext';
 import VideoRecorder from './VideoRecorder';
 import type { JobApplication } from '../types/application';
@@ -36,6 +38,8 @@ import AppHeader from './AppHeader';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
+import { useInterviewCoach } from '../hooks/useInterviewCoach';
+import type { CVSchema, JobDescriptionSchema } from '../services/OpenAIService';
 
 interface ApplicationModalProps {
   isOpen: boolean;
@@ -56,6 +60,41 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadMode, setUploadMode] = useState<'record' | 'file'>('record');
 
+  // Interview coach integration
+  const {
+    state: interviewState,
+    sessionStatus,
+    error: interviewError,
+    messages: interviewMessages,
+    startInterview,
+    stopInterview,
+    toggleRecording,
+  } = useInterviewCoach({
+    resumeData: profile?.cv || {
+      personalInfo: {},
+      experience: [],
+      education: [],
+      skills: [],
+    },
+    jobDescription: jobPost?.jobDescription || {
+      title: '',
+      company: '',
+      location: '',
+      employmentType: '',
+      experienceLevel: '',
+      skills: [],
+      responsibilities: [],
+      requirements: [],
+      benefits: [],
+    },
+    onProgressUpdate: (stage, progress, title) => {
+      // Progress updates are handled internally by the hook
+    },
+    onFeedback: (feedback) => {
+      // Feedback is handled internally by the hook
+    },
+  });
+
   useEffect(() => {
     let jobUnsubscribeId: string | null = null;
     let profileUnsubscribeId: string | null = null;
@@ -70,6 +109,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
           (data) => {
             if (data) {
               setJobPost(data as VideoItem);
+              setLoading(false); // Set loading to false once we have job data
             }
           }
         );
@@ -93,8 +133,6 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
             setPreviewUrl(jobApplication.videoURL);
           }
         }
-
-        setLoading(false);
       } catch (error) {
         console.error('Error in loadData:', error);
         presentToast({
@@ -102,6 +140,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
           duration: 3000,
           color: 'danger',
         });
+        setLoading(false); // Set loading to false even if there's an error
       }
     };
 
@@ -114,6 +153,18 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
       if (profileUnsubscribeId) removeSnapshotListener(profileUnsubscribeId);
     };
   }, [user, jobId, isOpen, presentToast]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setLoading(true);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (jobPost && profile && sessionStatus === 'CONNECTED') {
+      startInterview();
+    }
+  }, [jobPost, profile, sessionStatus, startInterview]);
 
   const handleVideoRecorded = async (uri: string, format: string) => {
     try {
@@ -221,230 +272,251 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     }
   };
 
-  return (
-    <IonModal 
-      isOpen={isOpen} 
-      onDidDismiss={onClose}
-      style={{ '--height': '100%', '--background': '#1a1a1a' }}
-    >
-      <IonContent scrollY={true} style={{ '--background': '#1a1a1a', '--overflow': 'hidden' }}>
-        <AppHeader
-          title="Apply for Position"
-          mode="apply"
-          onClose={onClose}
-        />
+  const handleStartInterview = async () => {
+    if (!profile || !jobPost) {
+      presentToast({
+        message: 'Please wait for profile and job data to load',
+        duration: 3000,
+        color: 'warning',
+      });
+      return;
+    }
+    await startInterview();
+  };
 
-        <div style={{ 
-          height: '100%', 
-          overflowY: 'auto',
-          WebkitOverflowScrolling: 'touch',
-          color: '#fff'
-        }}>
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <IonSpinner />
+  useEffect(() => {
+    if (interviewError) {
+      presentToast({
+        message: `Interview error: ${interviewError}`,
+        duration: 3000,
+        color: 'danger',
+      });
+    }
+  }, [interviewError, presentToast]);
+
+  return (
+    <IonModal isOpen={isOpen} onDidDismiss={onClose} className="application-modal">
+      <IonContent>
+        {loading ? (
+          <div className="ion-padding ion-text-center">
+            <IonSpinner />
+          </div>
+        ) : (
+          <>
+            {/* Progress Bar */}
+            <IonProgressBar
+              value={interviewState.progress / 100}
+              color={interviewState.feedback?.type === 'positive' ? 'success' : 'primary'}
+            />
+
+            {/* Stage Title */}
+            <div className="ion-padding">
+              <h2>{interviewState.stageTitle}</h2>
+              {sessionStatus === 'CONNECTING' && (
+                <div className="ion-text-center">
+                  <IonSpinner name="dots" />
+                  <p>Connecting to interview coach...</p>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="p-4" style={{ touchAction: 'pan-y' }}>
-              <div style={{ 
-                display: 'flex', 
-                flexDirection: 'column',
-                gap: '1rem',
-                maxWidth: '100%'
-              }}>
-                {/* Job Description */}
-                <div>
-                  {jobPost && (
-                    <IonCard style={{ 
-                      '--background': '#2a2a2a',
-                      '--color': '#fff',
-                      margin: 0,
-                      borderRadius: '8px',
-                      border: '2px solid rgba(255, 255, 255, 0.1)'
-                    }}>
-                      <IonCardHeader>
-                        <IonCardTitle style={{ color: '#fff' }}>{jobPost.title}</IonCardTitle>
-                        <IonCardSubtitle style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                          {jobPost.jobDescription?.company || 'Company not specified'}
-                          {jobPost.jobDescription?.location && ` • ${jobPost.jobDescription.location}`}
-                        </IonCardSubtitle>
-                      </IonCardHeader>
-                      <IonCardContent>
-                        {jobPost.jobDescription?.employmentType && (
-                          <div style={{ marginBottom: '1rem' }}>
-                            <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
-                              {jobPost.jobDescription.employmentType}
-                            </IonChip>
-                            {jobPost.jobDescription.experienceLevel && (
-                              <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
-                                {jobPost.jobDescription.experienceLevel}
-                              </IonChip>
-                            )}
-                          </div>
+
+            {/* Job Description */}
+            <div>
+              {jobPost && (
+                <IonCard style={{ 
+                  '--background': '#2a2a2a',
+                  '--color': '#fff',
+                  margin: 0,
+                  borderRadius: '8px',
+                  border: '2px solid rgba(255, 255, 255, 0.1)'
+                }}>
+                  <IonCardHeader>
+                    <IonCardTitle style={{ color: '#fff' }}>{jobPost.title}</IonCardTitle>
+                    <IonCardSubtitle style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                      {jobPost.jobDescription?.company || 'Company not specified'}
+                      {jobPost.jobDescription?.location && ` • ${jobPost.jobDescription.location}`}
+                    </IonCardSubtitle>
+                  </IonCardHeader>
+                  <IonCardContent>
+                    {jobPost.jobDescription?.employmentType && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
+                          {jobPost.jobDescription.employmentType}
+                        </IonChip>
+                        {jobPost.jobDescription.experienceLevel && (
+                          <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
+                            {jobPost.jobDescription.experienceLevel}
+                          </IonChip>
+                        )}
+                      </div>
+                    )}
+
+                    <div style={{ marginBottom: '2rem' }}>
+                      <h3 style={{ color: '#fff', marginBottom: '1rem' }}>Job Details</h3>
+                      <AccordionGroup>
+                        {jobPost.jobDescription?.responsibilities && jobPost.jobDescription.responsibilities.length > 0 && (
+                          <AccordionSection value="responsibilities" label="Responsibilities">
+                            <ListContent items={jobPost.jobDescription.responsibilities} />
+                          </AccordionSection>
+                        )}
+                        
+                        {jobPost.jobDescription?.requirements && jobPost.jobDescription.requirements.length > 0 && (
+                          <AccordionSection value="requirements" label="Requirements">
+                            <ListContent items={jobPost.jobDescription.requirements} />
+                          </AccordionSection>
+                        )}
+                        
+                        {jobPost.jobDescription?.skills && jobPost.jobDescription.skills.length > 0 && (
+                          <AccordionSection value="skills" label="Required Skills">
+                            <ChipsContent items={jobPost.jobDescription.skills} />
+                          </AccordionSection>
                         )}
 
-                        <div style={{ marginBottom: '2rem' }}>
-                          <h3 style={{ color: '#fff', marginBottom: '1rem' }}>Job Details</h3>
-                          <AccordionGroup>
-                            {jobPost.jobDescription?.responsibilities && jobPost.jobDescription.responsibilities.length > 0 && (
-                              <AccordionSection value="responsibilities" label="Responsibilities">
-                                <ListContent items={jobPost.jobDescription.responsibilities} />
-                              </AccordionSection>
-                            )}
-                            
-                            {jobPost.jobDescription?.requirements && jobPost.jobDescription.requirements.length > 0 && (
-                              <AccordionSection value="requirements" label="Requirements">
-                                <ListContent items={jobPost.jobDescription.requirements} />
-                              </AccordionSection>
-                            )}
-                            
-                            {jobPost.jobDescription?.skills && jobPost.jobDescription.skills.length > 0 && (
-                              <AccordionSection value="skills" label="Required Skills">
-                                <ChipsContent items={jobPost.jobDescription.skills} />
-                              </AccordionSection>
-                            )}
+                        {jobPost.jobDescription?.benefits && jobPost.jobDescription.benefits.length > 0 && (
+                          <AccordionSection value="benefits" label="Benefits">
+                            <ListContent items={jobPost.jobDescription.benefits} />
+                          </AccordionSection>
+                        )}
+                      </AccordionGroup>
+                    </div>
+                  </IonCardContent>
+                </IonCard>
+              )}
+            </div>
 
-                            {jobPost.jobDescription?.benefits && jobPost.jobDescription.benefits.length > 0 && (
-                              <AccordionSection value="benefits" label="Benefits">
-                                <ListContent items={jobPost.jobDescription.benefits} />
-                              </AccordionSection>
-                            )}
-                          </AccordionGroup>
-                        </div>
-                      </IonCardContent>
-                    </IonCard>
+            {/* User CV */}
+            <div>
+              <IonCard style={{ 
+                '--background': '#2a2a2a',
+                '--color': '#fff',
+                margin: 0,
+                borderRadius: '8px',
+                border: '2px solid rgba(255, 255, 255, 0.1)'
+              }}>
+                <IonCardHeader>
+                  <IonCardTitle style={{ color: '#fff' }}>Your Profile</IonCardTitle>
+                  {profile && (
+                    <IonCardSubtitle style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                      {profile.displayName}
+                      {profile.cv?.personalInfo.location && ` • ${profile.cv.personalInfo.location}`}
+                    </IonCardSubtitle>
                   )}
-                </div>
+                </IonCardHeader>
+                <IonCardContent>
+                  {profile?.cv ? (
+                    <div>
+                      <h3 style={{ color: '#fff', marginBottom: '1rem' }}>Candidate Details</h3>
+                      <AccordionGroup>
+                        {profile.cv.experience && profile.cv.experience.length > 0 && (
+                          <AccordionSection value="experience" label="Experience">
+                            {profile.cv.experience.map((exp: { title: string; company: string; location?: string; startDate: string; endDate?: string; current?: boolean; highlights: string[] }, index: number) => (
+                              <ExperienceContent
+                                key={index}
+                                title={exp.title}
+                                company={exp.company}
+                                startDate={exp.startDate}
+                                endDate={exp.endDate}
+                                current={exp.current}
+                                location={exp.location}
+                                highlights={exp.highlights}
+                              />
+                            ))}
+                          </AccordionSection>
+                        )}
 
-                {/* User CV */}
-                <div>
-                  <IonCard style={{ 
-                    '--background': '#2a2a2a',
-                    '--color': '#fff',
-                    margin: 0,
-                    borderRadius: '8px',
-                    border: '2px solid rgba(255, 255, 255, 0.1)'
-                  }}>
-                    <IonCardHeader>
-                      <IonCardTitle style={{ color: '#fff' }}>Your Profile</IonCardTitle>
-                      {profile && (
-                        <IonCardSubtitle style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                          {profile.displayName}
-                          {profile.cv?.personalInfo.location && ` • ${profile.cv.personalInfo.location}`}
-                        </IonCardSubtitle>
-                      )}
-                    </IonCardHeader>
-                    <IonCardContent>
-                      {profile?.cv ? (
-                        <div>
-                          <h3 style={{ color: '#fff', marginBottom: '1rem' }}>Candidate Details</h3>
-                          <AccordionGroup>
-                            {profile.cv.experience && profile.cv.experience.length > 0 && (
-                              <AccordionSection value="experience" label="Experience">
-                                {profile.cv.experience.map((exp: { title: string; company: string; location?: string; startDate: string; endDate?: string; current?: boolean; highlights: string[] }, index: number) => (
-                                  <ExperienceContent
-                                    key={index}
-                                    title={exp.title}
-                                    company={exp.company}
-                                    startDate={exp.startDate}
-                                    endDate={exp.endDate}
-                                    current={exp.current}
-                                    location={exp.location}
-                                    highlights={exp.highlights}
-                                  />
-                                ))}
-                              </AccordionSection>
-                            )}
+                        {profile.cv.education && profile.cv.education.length > 0 && (
+                          <AccordionSection value="education" label="Education">
+                            {profile.cv.education.map((edu: { institution: string; degree: string; field: string; graduationDate?: string; gpa?: number }, index: number) => (
+                              <EducationContent
+                                key={index}
+                                degree={edu.degree}
+                                field={edu.field}
+                                institution={edu.institution}
+                                graduationDate={edu.graduationDate}
+                                gpa={edu.gpa?.toString()}
+                              />
+                            ))}
+                          </AccordionSection>
+                        )}
 
-                            {profile.cv.education && profile.cv.education.length > 0 && (
-                              <AccordionSection value="education" label="Education">
-                                {profile.cv.education.map((edu: { institution: string; degree: string; field: string; graduationDate?: string; gpa?: number }, index: number) => (
-                                  <EducationContent
-                                    key={index}
-                                    degree={edu.degree}
-                                    field={edu.field}
-                                    institution={edu.institution}
-                                    graduationDate={edu.graduationDate}
-                                    gpa={edu.gpa?.toString()}
-                                  />
-                                ))}
-                              </AccordionSection>
-                            )}
+                        {profile.cv?.skills && profile.cv.skills.length > 0 && (
+                          <AccordionSection value="skills" label="Skills">
+                            {profile.cv.skills.map((skillGroup: { category: string; items: string[] }, index: number) => (
+                              <div key={index} style={{ marginBottom: index < (profile.cv?.skills?.length || 0) - 1 ? '1rem' : 0 }}>
+                                <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{skillGroup.category}</h4>
+                                <ChipsContent items={skillGroup.items} />
+                              </div>
+                            ))}
+                          </AccordionSection>
+                        )}
+                      </AccordionGroup>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255, 255, 255, 0.7)' }}>
+                      <p>CV not available</p>
+                    </div>
+                  )}
+                </IonCardContent>
+              </IonCard>
+            </div>
 
-                            {profile.cv?.skills && profile.cv.skills.length > 0 && (
-                              <AccordionSection value="skills" label="Skills">
-                                {profile.cv.skills.map((skillGroup: { category: string; items: string[] }, index: number) => (
-                                  <div key={index} style={{ marginBottom: index < (profile.cv?.skills?.length || 0) - 1 ? '1rem' : 0 }}>
-                                    <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{skillGroup.category}</h4>
-                                    <ChipsContent items={skillGroup.items} />
-                                  </div>
-                                ))}
-                              </AccordionSection>
-                            )}
-                          </AccordionGroup>
-                        </div>
-                      ) : (
-                        <div style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255, 255, 255, 0.7)' }}>
-                          <p>CV not available</p>
-                        </div>
-                      )}
-                    </IonCardContent>
-                  </IonCard>
-                </div>
-              </div>
+            {/* Interview Controls */}
+            <div className="ion-padding">
+              {sessionStatus === 'DISCONNECTED' ? (
+                <IonButton
+                  expand="block"
+                  onClick={handleStartInterview}
+                  disabled={submitting || !profile || !jobPost}
+                >
+                  Start Interview Practice
+                </IonButton>
+              ) : (
+                <IonButton
+                  expand="block"
+                  color="danger"
+                  onClick={stopInterview}
+                >
+                  End Interview
+                </IonButton>
+              )}
+            </div>
 
-              {/* Video Recording Section */}
-              <div style={{ maxWidth: '600px', margin: '1.5rem auto' }}>
-                <h2 style={{ color: '#fff', marginBottom: '1rem', fontSize: '1.25rem' }}>
-                  Pitch yourself!
-                </h2>
-                {!previewUrl ? (
-                  <>
-                    {(uploadMode === 'file' || Capacitor.isNativePlatform()) ? (
-                      <div className="ion-padding-vertical">
-                        {/* Input for camera recording */}
-                        <input
-                          type="file"
-                          accept="video/*"
-                          capture="environment"
-                          onChange={handleFileChange}
-                          style={{ display: 'none' }}
-                          id="video-record"
-                        />
-                        
-                        {/* Input for file selection */}
-                        <input
-                          type="file"
-                          accept="video/*"
-                          onChange={handleFileChange}
-                          style={{ display: 'none' }}
-                          id="video-select"
-                        />
+            {/* Video Recording Section */}
+            <div style={{ maxWidth: '600px', margin: '1.5rem auto' }}>
+              <h2 style={{ color: '#fff', marginBottom: '1rem', fontSize: '1.25rem' }}>
+                Pitch yourself!
+              </h2>
+              {!previewUrl ? (
+                <>
+                  {(uploadMode === 'file' || Capacitor.isNativePlatform()) ? (
+                    <div className="ion-padding-vertical">
+                      {/* Input for camera recording */}
+                      <input
+                        type="file"
+                        accept="video/*"
+                        capture="environment"
+                        onChange={handleFileChange}
+                        style={{ display: 'none' }}
+                        id="video-record"
+                      />
+                      
+                      {/* Input for file selection */}
+                      <input
+                        type="file"
+                        accept="video/*"
+                        onChange={handleFileChange}
+                        style={{ display: 'none' }}
+                        id="video-select"
+                      />
 
-                        <div style={{ 
-                          display: 'flex', 
-                          flexDirection: Capacitor.isNativePlatform() ? 'column' : 'row',
-                          gap: '1rem', 
-                          justifyContent: 'center',
-                          width: '100%'
-                        }}>
-                          {Capacitor.isNativePlatform() && (
-                            <IonButton
-                              expand="block"
-                              style={{
-                                '--background': '#0055ff',
-                                '--color': '#fff',
-                                '--border-radius': '8px'
-                              }}
-                              onClick={() => {
-                                const input = document.getElementById('video-record');
-                                input?.click();
-                              }}
-                            >
-                              <IonIcon slot="start" icon={cameraOutline} />
-                              Record Pitch
-                            </IonButton>
-                          )}
+                      <div style={{ 
+                        display: 'flex', 
+                        flexDirection: Capacitor.isNativePlatform() ? 'column' : 'row',
+                        gap: '1rem', 
+                        justifyContent: 'center',
+                        width: '100%'
+                      }}>
+                        {Capacitor.isNativePlatform() && (
                           <IonButton
                             expand="block"
                             style={{
@@ -453,121 +525,136 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                               '--border-radius': '8px'
                             }}
                             onClick={() => {
-                              const input = document.getElementById('video-select');
+                              const input = document.getElementById('video-record');
                               input?.click();
                             }}
                           >
-                            <IonIcon slot="start" icon={videocamOutline} />
-                            Select Video
+                            <IonIcon slot="start" icon={cameraOutline} />
+                            Record Pitch
                           </IonButton>
-                        </div>
+                        )}
+                        <IonButton
+                          expand="block"
+                          style={{
+                            '--background': '#0055ff',
+                            '--color': '#fff',
+                            '--border-radius': '8px'
+                          }}
+                          onClick={() => {
+                            const input = document.getElementById('video-select');
+                            input?.click();
+                          }}
+                        >
+                          <IonIcon slot="start" icon={videocamOutline} />
+                          Select Video
+                        </IonButton>
                       </div>
-                    ) : (
-                      <div style={{ maxWidth: '100%', margin: '0 auto' }}>
-                        <VideoRecorder
-                          onVideoRecorded={handleVideoRecorded}
-                          onError={handleVideoError}
-                        />
-                        <div style={{ 
-                          display: 'flex', 
-                          justifyContent: 'center',
-                          marginTop: '1rem' 
-                        }}>
-                          <IonButton
-                            fill="clear"
-                            style={{ '--color': '#fff' }}
-                            onClick={() => setUploadMode('file')}
-                          >
-                            <IonIcon slot="start" icon={videocamOutline} />
-                            Or select a video file
-                          </IonButton>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div style={{ 
-                    width: '100%',
-                    maxWidth: '600px',
-                    margin: '0 auto'
-                  }}>
-                    <div style={{
-                      width: '100%',
-                      paddingTop: '56.25%',
-                      position: 'relative',
-                      backgroundColor: '#000',
-                      borderRadius: '8px',
-                      overflow: 'hidden'
-                    }}>
-                      <video
-                        src={previewUrl}
-                        controls
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'contain'
-                        }}
-                      />
                     </div>
-                    <IonButton
-                      expand="block"
-                      fill="clear"
-                      style={{ '--color': '#fff' }}
-                      className="mt-4"
-                      onClick={() => {
-                        setVideoFile(null);
-                        if (previewUrl) {
-                          URL.revokeObjectURL(previewUrl);
-                          setPreviewUrl(null);
-                        }
-                        setUploadMode('record');
-                      }}
-                    >
-                      Record Again
-                    </IonButton>
-                  </div>
-                )}
-              </div>
-
-              {videoFile && !submitting && (
-                <IonButton
-                  expand="block"
-                  style={{ 
-                    maxWidth: '600px', 
-                    margin: '1.5rem auto',
-                    '--background': '#0055ff',
-                    '--color': '#fff',
-                    '--border-radius': '8px',
-                    '--padding-top': '1rem',
-                    '--padding-bottom': '1rem'
-                  }}
-                  onClick={handleSubmit}
-                >
-                  Submit Application
-                </IonButton>
-              )}
-
-              {submitting && (
-                <div style={{ maxWidth: '600px', margin: '1.5rem auto' }}>
-                  <IonProgressBar 
-                    value={uploadProgress / 100}
-                    style={{ '--progress-background': '#0055ff' }}
-                  />
-                  <p style={{ 
-                    textAlign: 'center', 
-                    marginTop: '0.5rem',
-                    color: 'rgba(255, 255, 255, 0.7)'
+                  ) : (
+                    <div style={{ maxWidth: '100%', margin: '0 auto' }}>
+                      <VideoRecorder
+                        onVideoRecorded={handleVideoRecorded}
+                        onError={handleVideoError}
+                      />
+                      <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'center',
+                        marginTop: '1rem' 
+                      }}>
+                        <IonButton
+                          fill="clear"
+                          style={{ '--color': '#fff' }}
+                          onClick={() => setUploadMode('file')}
+                        >
+                          <IonIcon slot="start" icon={videocamOutline} />
+                          Or select a video file
+                        </IonButton>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ 
+                  width: '100%',
+                  maxWidth: '600px',
+                  margin: '0 auto'
+                }}>
+                  <div style={{
+                    width: '100%',
+                    paddingTop: '56.25%',
+                    position: 'relative',
+                    backgroundColor: '#000',
+                    borderRadius: '8px',
+                    overflow: 'hidden'
                   }}>
-                    Uploading... {Math.round(uploadProgress)}%
-                  </p>
+                    <video
+                      src={previewUrl}
+                      controls
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain'
+                      }}
+                    />
+                  </div>
+                  <IonButton
+                    expand="block"
+                    fill="clear"
+                    style={{ '--color': '#fff' }}
+                    className="mt-4"
+                    onClick={() => {
+                      setVideoFile(null);
+                      if (previewUrl) {
+                        URL.revokeObjectURL(previewUrl);
+                        setPreviewUrl(null);
+                      }
+                      setUploadMode('record');
+                    }}
+                  >
+                    Record Again
+                  </IonButton>
                 </div>
               )}
             </div>
-          )}
-        </div>
+
+            {videoFile && !submitting && (
+              <IonButton
+                expand="block"
+                style={{ 
+                  maxWidth: '600px', 
+                  margin: '1.5rem auto',
+                  '--background': '#0055ff',
+                  '--color': '#fff',
+                  '--border-radius': '8px',
+                  '--padding-top': '1rem',
+                  '--padding-bottom': '1rem'
+                }}
+                onClick={handleSubmit}
+              >
+                Submit Application
+              </IonButton>
+            )}
+
+            {submitting && (
+              <div style={{ maxWidth: '600px', margin: '1.5rem auto' }}>
+                <IonProgressBar 
+                  value={uploadProgress / 100}
+                  style={{ '--progress-background': '#0055ff' }}
+                />
+                <p style={{ 
+                  textAlign: 'center', 
+                  marginTop: '0.5rem',
+                  color: 'rgba(255, 255, 255, 0.7)'
+                }}>
+                  Uploading... {Math.round(uploadProgress)}%
+                </p>
+              </div>
+            )}
+          </>
+        )}
       </IonContent>
     </IonModal>
   );

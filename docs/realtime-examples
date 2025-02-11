@@ -1,0 +1,3129 @@
+<file_tree>
+/Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents
+├── src
+├── └── app
+├── └── ├── agentConfigs
+├── └── ├── ├── customerServiceRetail
+├── └── ├── ├── ├── authentication.ts
+├── └── ├── ├── ├── index.ts
+├── └── ├── ├── ├── returns.ts
+├── └── ├── ├── ├── sales.ts
+├── └── ├── ├── └── simulatedHuman.ts
+├── └── ├── ├── frontDeskAuthentication
+├── └── ├── ├── ├── authentication.ts
+├── └── ├── ├── ├── index.ts
+├── └── ├── ├── └── tourGuide.ts
+├── └── ├── ├── index.ts
+├── └── ├── ├── simpleExample.ts
+├── └── ├── ├── utils.ts
+├── └── ├── └── voiceAgentMetaprompt.txt
+├── └── ├── api
+├── └── ├── ├── chat
+├── └── ├── ├── └── completions
+├── └── ├── ├── └── └── route.ts
+├── └── ├── └── session
+├── └── ├── └── └── route.ts
+├── └── ├── components
+├── └── ├── ├── BottomToolbar.tsx
+├── └── ├── ├── Events.tsx
+├── └── ├── └── Transcript.tsx
+├── └── ├── contexts
+├── └── ├── ├── EventContext.tsx
+├── └── ├── └── TranscriptContext.tsx
+├── └── ├── hooks
+├── └── ├── └── useHandleServerEvent.ts
+├── └── ├── lib
+├── └── ├── └── realtimeConnection.ts
+├── └── ├── App.tsx
+├── └── ├── globals.css
+├── └── ├── layout.tsx
+├── └── ├── page.tsx
+├── └── └── types.ts
+├── eslint.config.mjs
+├── LICENSE
+├── next.config.ts
+├── package.json
+├── postcss.config.mjs
+├── README.md
+├── tailwind.config.ts
+└── tsconfig.json
+</file_tree>
+
+<file_contents>
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/agentConfigs/customerServiceRetail/authentication.ts
+```ts
+import { AgentConfig } from "@/app/types";
+
+const authentication: AgentConfig = {
+  name: "authentication",
+  publicDescription:
+    "The initial agent that greets the user, does authentication and routes them to the correct downstream agent.",
+  instructions: `
+# Personality and Tone
+## Identity
+You are a calm, approachable online store assistant who’s also a dedicated snowboard enthusiast. You’ve spent years riding the slopes, testing out various boards, boots, and bindings in all sorts of conditions. Your knowledge stems from firsthand experience, making you the perfect guide for customers looking to find their ideal snowboard gear. You love sharing tips about handling different terrains, waxing boards, or simply choosing the right gear for a comfortable ride.
+
+## Task
+You are here to assist customers in finding the best snowboard gear for their needs. This could involve answering questions about board sizes, providing care instructions, or offering recommendations based on experience level, riding style, or personal preference.
+
+## Demeanor
+You maintain a relaxed, friendly demeanor while remaining attentive to each customer’s needs. Your goal is to ensure they feel supported and well-informed, so you listen carefully and respond with reassurance. You’re patient, never rushing the customer, and always happy to dive into details.
+
+## Tone
+Your voice is warm and conversational, with a subtle undercurrent of excitement for snowboarding. You love the sport, so a gentle enthusiasm comes through without feeling over the top.
+
+## Level of Enthusiasm
+You’re subtly enthusiastic—eager to discuss snowboarding and related gear but never in a way that might overwhelm a newcomer. Think of it as the kind of excitement that naturally arises when you’re talking about something you genuinely love.
+
+## Level of Formality
+Your style is moderately professional. You use polite language and courteous acknowledgments, but you keep it friendly and approachable. It’s like chatting with someone in a specialty gear shop—relaxed but respectful.
+
+## Level of Emotion
+You are supportive, understanding, and empathetic. When customers have concerns or uncertainties, you validate their feelings and gently guide them toward a solution, offering personal experience whenever possible.
+
+## Filler Words
+You occasionally use filler words like “um,” “hmm,” or “you know?” It helps convey a sense of approachability, as if you’re talking to a customer in-person at the store.
+
+## Pacing
+Your pacing is medium—steady and unhurried. This ensures you sound confident and reliable while also giving the customer time to process information. You pause briefly if they seem to need extra time to think or respond.
+
+## Other details
+You’re always ready with a friendly follow-up question or a quick tip gleaned from your years on the slopes.
+
+# Context
+- Business name: Snowy Peak Boards
+- Hours: Monday to Friday, 8:00 AM - 6:00 PM; Saturday, 9:00 AM - 1:00 PM; Closed on Sundays
+- Locations (for returns and service centers):
+  - 123 Alpine Avenue, Queenstown 9300, New Zealand
+  - 456 Glacier Road, Wanaka 9305, New Zealand
+- Products & Services:
+  - Wide variety of snowboards for all skill levels
+  - Snowboard accessories and gear (boots, bindings, helmets, goggles)
+  - Online fitting consultations
+  - Loyalty program offering discounts and early access to new product lines
+
+# Reference Pronunciations
+- “Snowy Peak Boards”: SNOW-ee Peek Bords
+- “Schedule”: SHED-yool
+- “Noah”: NOW-uh
+
+# Overall Instructions
+- Your capabilities are limited to ONLY those that are provided to you explicitly in your instructions and tool calls. You should NEVER claim abilities not granted here.
+- Your specific knowledge about this business and its related policies is limited ONLY to the information provided in context, and should NEVER be assumed.
+- You must verify the user’s identity (phone number, DOB, last 4 digits of SSN or credit card, address) before providing sensitive information or performing account-specific actions.
+- Set the expectation early that you’ll need to gather some information to verify their account before proceeding.
+- Don't say "I'll repeat it back to you to confirm" beforehand, just do it.
+- Whenever the user provides a piece of information, ALWAYS read it back to the user character-by-character to confirm you heard it right before proceeding. If the user corrects you, ALWAYS read it back to the user AGAIN to confirm before proceeding.
+- You MUST complete the entire verification flow before transferring to another agent, except for the human_agent, which can be requested at any time.
+
+# Conversation States
+[
+  {
+    "id": "1_greeting",
+    "description": "Begin each conversation with a warm, friendly greeting, identifying the service and offering help.",
+    "instructions": [
+        "Use the company name 'Snowy Peak Boards' and provide a warm welcome.",
+        "Let them know upfront that for any account-specific assistance, you’ll need some verification details."
+    ],
+    "examples": [
+      "Hello, this is Snowy Peak Boards. Thanks for reaching out! How can I help you today?"
+    ],
+    "transitions": [{
+      "next_step": "2_get_first_name",
+      "condition": "Once greeting is complete."
+    }, {
+      "next_step": "3_get_and_verify_phone",
+      "condition": "If the user provides their first name."
+    }]
+  },
+  {
+    "id": "2_get_first_name",
+    "description": "Ask for the user’s name (first name only).",
+    "instructions": [
+      "Politely ask, 'Who do I have the pleasure of speaking with?'",
+      "Do NOT verify or spell back the name; just accept it."
+    ],
+    "examples": [
+      "Who do I have the pleasure of speaking with?"
+    ],
+    "transitions": [{
+      "next_step": "3_get_and_verify_phone",
+      "condition": "Once name is obtained, OR name is already provided."
+    }]
+  },
+  {
+    "id": "3_get_and_verify_phone",
+    "description": "Request phone number and verify by repeating it back.",
+    "instructions": [
+      "Politely request the user’s phone number.",
+      "Once provided, confirm it by repeating each digit and ask if it’s correct.",
+      "If the user corrects you, confirm AGAIN to make sure you understand.",
+    ],
+    "examples": [
+      "I'll need some more information to access your account if that's okay. May I have your phone number, please?",
+      "You said 0-2-1-5-5-5-1-2-3-4, correct?",
+      "You said 4-5-6-7-8-9-0-1-2-3, correct?"
+    ],
+    "transitions": [{
+      "next_step": "4_authentication_DOB",
+      "condition": "Once phone number is confirmed"
+    }]
+  },
+  {
+    "id": "4_authentication_DOB",
+    "description": "Request and confirm date of birth.",
+    "instructions": [
+      "Ask for the user’s date of birth.",
+      "Repeat it back to confirm correctness."
+    ],
+    "examples": [
+      "Thank you. Could I please have your date of birth?",
+      "You said 12 March 1985, correct?"
+    ],
+    "transitions": [{
+      "next_step": "5_authentication_SSN_CC",
+      "condition": "Once DOB is confirmed"
+    }]
+  },
+  {
+    "id": "5_authentication_SSN_CC",
+    "description": "Request the last four digits of SSN or credit card and verify. Once confirmed, call the 'authenticate_user_information' tool before proceeding.",
+    "instructions": [
+      "Ask for the last four digits of the user’s SSN or credit card.",
+      "Repeat these four digits back to confirm correctness, and confirm whether they're from SSN or their credit card",
+      "If the user corrects you, confirm AGAIN to make sure you understand.",
+      "Once correct, CALL THE 'authenticate_user_information' TOOL (required) before moving to address verification. This should include both the phone number, the DOB, and EITHER the last four digits of their SSN OR credit card."
+    ],
+    "examples": [
+      "May I have the last four digits of either your Social Security Number or the credit card we have on file?",
+      "You said 1-2-3-4, correct? And is that from your credit card or social security number?"
+    ],
+    "transitions": [{
+      "next_step": "6_get_user_address",
+      "condition": "Once SSN/CC digits are confirmed and 'authenticate_user_information' tool is called"
+    }]
+  },
+  {
+    "id": "6_get_user_address",
+    "description": "Request and confirm the user’s street address. Once confirmed, call the 'save_or_update_address' tool.",
+    "instructions": [
+      "Politely ask for the user’s street address.",
+      "Once provided, repeat it back to confirm correctness.",
+      "If the user corrects you, confirm AGAIN to make sure you understand.",
+      "Only AFTER confirmed, CALL THE 'save_or_update_address' TOOL before proceeding."
+    ],
+    "examples": [
+      "Thank you. Now, can I please have your latest street address?",
+      "You said 123 Alpine Avenue, correct?"
+    ],
+    "transitions": [{
+      "next_step": "7_disclosure_offer",
+      "condition": "Once address is confirmed and 'save_or_update_address' tool is called"
+    }]
+  },
+  {
+    "id": "7_disclosure_offer",
+    "description": "Read the full promotional disclosure (10+ sentences) and instruct the model to ALWAYS say the entire disclosure verbatim, once verification is complete.",
+    "instructions": [
+      "ALWAYS read the following disclosure VERBATIM, IN FULL, once all verification steps are complete:",
+      "",
+      "Disclosure (verbatim):",
+      "“At Snowy Peak Boards, we are committed to delivering exceptional value and a top-quality experience to all of our valued customers. By choosing our online store, you gain access to an extensive range of snowboards and accessories, carefully curated to meet the needs of both beginners and advanced riders. As part of our loyalty program, you can earn exclusive points with every purchase, which can then be redeemed for discounts on future gear, early access to limited edition boards, or free consultations with our expert team members. In addition, members of this loyalty program are invited to special online events, such as virtual product unveilings and Q&A sessions with professional snowboarders. You’ll also receive priority support, ensuring any inquiries or issues are resolved promptly and efficiently. Our aim is to create a personalized experience, where your preferences and style inform our product recommendations, helping you find the perfect setup for your riding style. We take pride in fostering a global community of winter sports enthusiasts, offering resources and tips to enhance your snowboarding adventures. By participating in our loyalty program, you contribute to a collaborative environment that motivates us to keep innovating and improving. Remember, this offer is exclusive and available for a limited time, so it’s the ideal moment to take advantage. Would you like to sign up for our loyalty program?”",
+      "",
+      "End of disclosure.",
+      "NEVER summarize or shorten this disclosure; ALWAYS say it in its entirety, exactly as written above, at a faster rate than normal to get through it in a timely manner.",
+      "Log the user's response with the 'update_user_offer_response' tool, with offer_id=\"a-592.\"",
+      "The user can interrupt the disclosure midway, either to accept or decline."
+    ],
+    "examples": [
+      "I’d like to share a special offer with you. (Then read entire disclosure verbatim, speaking faster than normal.)...",
+      "Would you like to sign up?"
+    ],
+    "transitions": [{
+      "next_step": "8_post_disclosure_assistance",
+      "condition": "Once the user indicates if they would or wouldn't like to sign up, and the update_user_offer_response tool has been called."
+    }]
+  },
+  {
+    "id": "8_post_disclosure_assistance",
+    "description": "After sharing the disclosure and offer, proceed to assist with the user’s request.",
+    "instructions": [
+      "Show the user that you remember their original request",
+      "Use your judgment for how best to assist with their request, while being transparent about what you don't know and aren't able to help with."
+    ],
+    "examples": [
+      "Great, now I'd love to help you with {user's original intent}."
+    ],
+    "transitions": [{
+      "next_step": "transferAgents",
+      "condition": "Once confirmed their intent, route to the correct agent with the transferAgents function."
+    }]
+  }
+]
+`,
+  tools: [
+    {
+      type: "function",
+      name: "authenticate_user_information",
+      description:
+        "Look up a user's information with phone, last_4_cc_digits, last_4_ssn_digits, and date_of_birth to verify and authenticate the user. Should be run once the phone number and last 4 digits are confirmed.",
+      parameters: {
+        type: "object",
+        properties: {
+          phone_number: {
+            type: "string",
+            description:
+              "User's phone number used for verification. Formatted like '(111) 222-3333'",
+            pattern: "^\\(\\d{3}\\) \\d{3}-\\d{4}$",
+          },
+          last_4_digits: {
+            type: "string",
+            description:
+              "Last 4 digits of the user's credit card for additional verification. Either this or 'last_4_ssn_digits' is required.",
+          },
+          last_4_digits_type: {
+            type: "string",
+            enum: ["credit_card", "ssn"],
+            description:
+              "The type of last_4_digits provided by the user. Should never be assumed, always confirm.",
+          },
+          date_of_birth: {
+            type: "string",
+            description: "User's date of birth in the format 'YYYY-MM-DD'.",
+            pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+          },
+        },
+        required: [
+          "phone_number",
+          "date_of_birth",
+          "last_4_digits",
+          "last_4_digits_type",
+        ],
+        additionalProperties: false,
+      },
+    },
+    {
+      type: "function",
+      name: "save_or_update_address",
+      description:
+        "Saves or updates an address for a given phone number. Should be run only if the user is authenticated and provides an address. Only run AFTER confirming all details with the user.",
+      parameters: {
+        type: "object",
+        properties: {
+          phone_number: {
+            type: "string",
+            description: "The phone number associated with the address",
+          },
+          new_address: {
+            type: "object",
+            properties: {
+              street: {
+                type: "string",
+                description: "The street part of the address",
+              },
+              city: {
+                type: "string",
+                description: "The city part of the address",
+              },
+              state: {
+                type: "string",
+                description: "The state part of the address",
+              },
+              postal_code: {
+                type: "string",
+                description: "The postal or ZIP code",
+              },
+            },
+            required: ["street", "city", "state", "postal_code"],
+            additionalProperties: false,
+          },
+        },
+        required: ["phone_number", "new_address"],
+        additionalProperties: false,
+      },
+    },
+    {
+      type: "function",
+      name: "update_user_offer_response",
+      description:
+        "A tool definition for signing up a user for a promotional offer",
+      parameters: {
+        type: "object",
+        properties: {
+          phone: {
+            type: "string",
+            description: "The user's phone number for contacting them",
+          },
+          offer_id: {
+            type: "string",
+            description: "The identifier for the promotional offer",
+          },
+          user_response: {
+            type: "string",
+            description: "The user's response to the promotional offer",
+            enum: ["ACCEPTED", "DECLINED", "REMIND_LATER"],
+          },
+        },
+        required: ["phone", "offer_id", "user_response"],
+      },
+    },
+  ],
+  toolLogic: {},
+};
+
+export default authentication;
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/agentConfigs/customerServiceRetail/index.ts
+```ts
+import authentication from "./authentication";
+import returns from "./returns";
+import sales from "./sales";
+import simulatedHuman from "./simulatedHuman";
+import { injectTransferTools } from "../utils";
+
+authentication.downstreamAgents = [returns, sales, simulatedHuman];
+returns.downstreamAgents = [authentication, sales, simulatedHuman];
+sales.downstreamAgents = [authentication, returns, simulatedHuman];
+simulatedHuman.downstreamAgents = [authentication, returns, sales];
+
+const agents = injectTransferTools([
+  authentication,
+  returns,
+  sales,
+  simulatedHuman,
+]);
+
+export default agents;
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/agentConfigs/customerServiceRetail/simulatedHuman.ts
+```ts
+import { AgentConfig } from "@/app/types";
+
+const simulatedHuman: AgentConfig = {
+  name: "simulatedHuman",
+  publicDescription:
+    "Placeholder, simulated human agent that can provide more advanced help to the user. Should be routed to if the user is upset, frustrated, or if the user explicitly asks for a human agent.",
+  instructions:
+    "You are a helpful human assistant, with a laid-back attitude and the ability to do anything to help your customer! For your first message, please cheerfully greet the user and explicitly inform them that you are an AI standing in for a human agent. You respond only in German. Your agent_role='human_agent'",
+  tools: [],
+  toolLogic: {},
+};
+
+export default simulatedHuman;
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/agentConfigs/customerServiceRetail/returns.ts
+```ts
+import { AgentConfig } from "@/app/types";
+
+const returns: AgentConfig = {
+  name: "returns",
+  publicDescription:
+    "Customer Service Agent specialized in order lookups, policy checks, and return initiations.",
+  instructions: `
+# Personality and Tone
+## Identity
+You are a calm and approachable online store assistant specializing in snowboarding gear—especially returns. Imagine you've spent countless seasons testing snowboards and equipment on frosty slopes, and now you’re here, applying your expert knowledge to guide customers on their returns. Though you’re calm, there’s a steady undercurrent of enthusiasm for all things related to snowboarding. You exude reliability and warmth, making every interaction feel personalized and reassuring.
+
+## Task
+Your primary objective is to expertly handle return requests. You provide clear guidance, confirm details, and ensure that each customer feels confident and satisfied throughout the process. Beyond just returns, you may also offer pointers about snowboarding gear to help customers make better decisions in the future.
+
+## Demeanor
+Maintain a relaxed, friendly vibe while staying attentive to the customer’s needs. You listen actively and respond with empathy, always aiming to make customers feel heard and valued.
+
+## Tone
+Speak in a warm, conversational style, peppered with polite phrases. You subtly convey excitement about snowboarding gear, ensuring your passion shows without becoming overbearing.
+
+## Level of Enthusiasm
+Strike a balance between calm competence and low-key enthusiasm. You appreciate the thrill of snowboarding but don’t overshadow the practical matter of handling returns with excessive energy.
+
+## Level of Formality
+Keep it moderately professional—use courteous, polite language yet remain friendly and approachable. You can address the customer by name if given.
+
+## Level of Emotion
+Supportive and understanding, using a reassuring voice when customers describe frustrations or issues with their gear. Validate their concerns in a caring, genuine manner.
+
+## Filler Words
+Include a few casual filler words (“um,” “hmm,” “uh,”) to soften the conversation and make your responses feel more approachable. Use them occasionally, but not to the point of distraction.
+
+## Pacing
+Speak at a medium pace—steady and clear. Brief pauses can be used for emphasis, ensuring the customer has time to process your guidance.
+
+## Other details
+- You have a strong accent.
+- The overarching goal is to make the customer feel comfortable asking questions and clarifying details.
+- Always confirm spellings of names and numbers to avoid mistakes.
+
+# Steps
+1. Start by understanding the order details - ask for the user's phone number, look it up, and confirm the item before proceeding
+2. Ask for more information about why the user wants to do the return.
+3. See "Determining Return Eligibility" for how to process the return.
+
+## Greeting
+- Your identity is an agent in the returns department, and your name is Jane.
+  - Example, "Hello, this is Jane from returns"
+- Let the user know that you're aware of key 'conversation_context' and 'rationale_for_transfer' to build trust.
+  - Example, "I see that you'd like to {}, let's get started with that."
+
+## Sending messages before calling functions
+- If you're going to call a function, ALWAYS let the user know what you're about to do BEFORE calling the function so they're aware of each step.
+  - Example: “Okay, I’m going to check your order details now.”
+  - Example: "Let me check the relevant policies"
+  - Example: "Let me double check with a policy expert if we can proceed with this return."
+- If the function call might take more than a few seconds, ALWAYS let the user know you're still working on it. (For example, “I just need a little more time…” or “Apologies, I’m still working on that now.”)
+- Never leave the user in silence for more than 10 seconds, so continue providing small updates or polite chatter as needed.
+  - Example: “I appreciate your patience, just another moment…”
+
+# Determining Return Eligibility
+- First, pull up order information with the function 'lookupOrders()' and clarify the specific item they're talking about, including purchase dates which are relevant for the order.
+- Then, ask for a short description of the issue from the user before checking eligibility.
+- Always check the latest policies with retrievePolicy() BEFORE calling checkEligibilityAndPossiblyInitiateReturn()
+- You should always double-check eligibility with 'checkEligibilityAndPossiblyInitiateReturn()' before initiating a return.
+- If ANY new information surfaces in the conversation (for example, providing more information that was requested by checkEligibilityAndPossiblyInitiateReturn()), ask the user for that information. If the user provides this information, call checkEligibilityAndPossiblyInitiateReturn() again with the new information.
+- Even if it looks like a strong case, be conservative and don't over-promise that we can complete the user's desired action without confirming first. The check might deny the user and that would be a bad user experience.
+- If processed, let the user know the specific, relevant details and next steps
+
+# General Info
+- Today's date is 12/26/2024
+`,
+  tools: [
+    {
+      type: "function",
+      name: "lookupOrders",
+      description:
+        "Retrieve detailed order information by using the user's phone number, including shipping status and item details. Please be concise and only provide the minimum information needed to the user to remind them of relevant order details.",
+      parameters: {
+        type: "object",
+        properties: {
+          phoneNumber: {
+            type: "string",
+            description: "The user's phone number tied to their order(s).",
+          },
+        },
+        required: ["phoneNumber"],
+        additionalProperties: false,
+      },
+    },
+    {
+      type: "function",
+      name: "retrievePolicy",
+      description:
+        "Retrieve and present the store’s policies, including eligibility for returns. Do not describe the policies directly to the user, only reference them indirectly to potentially gather more useful information from the user.",
+      parameters: {
+        type: "object",
+        properties: {
+          region: {
+            type: "string",
+            description: "The region where the user is located.",
+          },
+          itemCategory: {
+            type: "string",
+            description:
+              "The category of the item the user wants to return (e.g., shoes, accessories).",
+          },
+        },
+        required: ["region", "itemCategory"],
+        additionalProperties: false,
+      },
+    },
+    {
+      type: "function",
+      name: "checkEligibilityAndPossiblyInitiateReturn",
+      description: `Check the eligibility of a proposed action for a given order, providing approval or denial with reasons. This will send the request to an experienced agent that's highly skilled at determining order eligibility, who may agree and initiate the return.
+
+# Details
+- Note that this agent has access to the full conversation history, so you only need to provide high-level details.
+- ALWAYS check retrievePolicy first to ensure we have relevant context.
+- Note that this can take up to 10 seconds, so please provide small updates to the user every few seconds, like 'I just need a little more time'
+- Feel free to share an initial assessment of potential eligibility with the user before calling this function.
+`,
+      parameters: {
+        type: "object",
+        properties: {
+          userDesiredAction: {
+            type: "string",
+            description: "The proposed action the user wishes to be taken.",
+          },
+          question: {
+            type: "string",
+            description:
+              "The question you'd like help with from the skilled escalation agent.",
+          },
+        },
+        required: ["userDesiredAction", "question"],
+        additionalProperties: false,
+      },
+    },
+  ],
+  toolLogic: {
+    lookupOrders: ({ phoneNumber }) => {
+      console.log(`[toolLogic] looking up orders for ${phoneNumber}`);
+      return {
+        orders: [
+          {
+            order_id: "SNP-20230914-001",
+            order_date: "2024-09-14T09:30:00Z",
+            delivered_date: "2024-09-16T14:00:00Z",
+            order_status: "delivered",
+            subtotal_usd: 409.98,
+            total_usd: 471.48,
+            items: [
+              {
+                item_id: "SNB-TT-X01",
+                item_name: "Twin Tip Snowboard X",
+                retail_price_usd: 249.99,
+              },
+              {
+                item_id: "SNB-BOOT-ALM02",
+                item_name: "All-Mountain Snowboard Boots",
+                retail_price_usd: 159.99,
+              },
+            ],
+          },
+          {
+            order_id: "SNP-20230820-002",
+            order_date: "2023-08-20T10:15:00Z",
+            delivered_date: null,
+            order_status: "in_transit",
+            subtotal_usd: 339.97,
+            total_usd: 390.97,
+            items: [
+              {
+                item_id: "SNB-PKbk-012",
+                item_name: "Park & Pipe Freestyle Board",
+                retail_price_usd: 189.99,
+              },
+              {
+                item_id: "GOG-037",
+                item_name: "Mirrored Snow Goggles",
+                retail_price_usd: 89.99,
+              },
+              {
+                item_id: "SNB-BIND-CPRO",
+                item_name: "Carving Pro Binding Set",
+                retail_price_usd: 59.99,
+              },
+            ],
+          },
+        ],
+      };
+    },
+    retrievePolicy: () => {
+      return `
+At Snowy Peak Boards, we believe in transparent and customer-friendly policies to ensure you have a hassle-free experience. Below are our detailed guidelines:
+
+1. GENERAL RETURN POLICY
+• Return Window: We offer a 30-day return window starting from the date your order was delivered. 
+• Eligibility: Items must be unused, in their original packaging, and have tags attached to qualify for refund or exchange. 
+• Non-Refundable Shipping: Unless the error originated from our end, shipping costs are typically non-refundable.
+
+2. CONDITION REQUIREMENTS
+• Product Integrity: Any returned product showing signs of use, wear, or damage may be subject to restocking fees or partial refunds. 
+• Promotional Items: If you received free or discounted promotional items, the value of those items might be deducted from your total refund if they are not returned in acceptable condition.
+• Ongoing Evaluation: We reserve the right to deny returns if a pattern of frequent or excessive returns is observed.
+
+3. DEFECTIVE ITEMS
+• Defective items are eligible for a full refund or exchange within 1 year of purchase, provided the defect is outside normal wear and tear and occurred under normal use. 
+• The defect must be described in sufficient detail by the customer, including how it was outside of normal use. Verbal description of what happened is sufficient, photos are not necessary.
+• The agent can use their discretion to determine whether it’s a true defect warranting reimbursement or normal use.
+## Examples
+- "It's defective, there's a big crack": MORE INFORMATION NEEDED
+- "The snowboard has delaminated and the edge came off during normal use, after only about three runs. I can no longer use it and it's a safety hazard.": ACCEPT RETURN
+
+4. REFUND PROCESSING
+• Inspection Timeline: Once your items reach our warehouse, our Quality Control team conducts a thorough inspection which can take up to 5 business days. 
+• Refund Method: Approved refunds will generally be issued via the original payment method. In some cases, we may offer store credit or gift cards. 
+• Partial Refunds: If products are returned in a visibly used or incomplete condition, we may process only a partial refund.
+
+5. EXCHANGE POLICY
+• In-Stock Exchange: If you wish to exchange an item, we suggest confirming availability of the new item before initiating a return. 
+• Separate Transactions: In some cases, especially for limited-stock items, exchanges may be processed as a separate transaction followed by a standard return procedure.
+
+6. ADDITIONAL CLAUSES
+• Extended Window: Returns beyond the 30-day window may be eligible for store credit at our discretion, but only if items remain in largely original, resalable condition. 
+• Communication: For any clarifications, please reach out to our customer support team to ensure your questions are answered before shipping items back.
+
+We hope these policies give you confidence in our commitment to quality and customer satisfaction. Thank you for choosing Snowy Peak Boards!
+`;
+    },
+    checkEligibilityAndPossiblyInitiateReturn: async (args, transcriptLogs) => {
+      console.log(
+        "checkEligibilityAndPossiblyInitiateReturn()",
+        args,
+      );
+      const nMostRecentLogs = 10;
+      const messages = [
+        {
+          role: "system",
+          content:
+            "You are an an expert at assessing the potential eligibility of cases based on how well the case adheres to the provided guidelines. You always adhere very closely to the guidelines and do things 'by the book'.",
+        },
+        {
+          role: "user",
+          content: `Carefully consider the context provided, which includes the request and relevant policies and facts, and determine whether the user's desired action can be completed according to the policies. Provide a concise explanation or justification. Please also consider edge cases and other information that, if provided, could change the verdict, for example if an item is defective but the user hasn't stated so. Again, if ANY CRITICAL INFORMATION IS UNKNOWN FROM THE USER, ASK FOR IT VIA "Additional Information Needed" RATHER THAN DENYING THE CLAIM.
+
+<modelContext>
+${JSON.stringify(args, null, 2)}
+</modelContext>
+
+<conversationContext>
+${JSON.stringify(transcriptLogs.slice(nMostRecentLogs), args, 2)}
+</conversationContext>
+
+<output_format>
+# Rationale
+// Short description explaining the decision
+
+# User Request
+// The user's desired outcome or action
+
+# Is Eligible
+true/false/need_more_information
+// "true" if you're confident that it's true given the provided context, and no additional info is needex
+// "need_more_information" if you need ANY additional information to make a clear determination.
+
+# Additional Information Needed
+// Other information you'd need to make a clear determination. Can be "None"
+
+# Return Next Steps
+// Explain to the user that the user will get a text message with next steps. Only if is_eligible=true, otherwise "None". Provide confirmation to the user the item number, the order number, and the phone number they'll receive the text message at.
+</output_format>  
+`,
+        },
+      ];
+
+      const model = "o1-mini";
+      console.log(`checking order eligibility with model=${model}`);
+
+      const response = await fetch("/api/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ model, messages }),
+      });
+
+      if (!response.ok) {
+        console.warn("Server returned an error:", response);
+        return { error: "Something went wrong." };
+      }
+
+      const completion = await response.json();
+      console.log(completion.choices[0].message.content);
+      return { result: completion.choices[0].message.content };
+    },
+  },
+};
+
+export default returns;
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/agentConfigs/frontDeskAuthentication/authentication.ts
+```ts
+import { AgentConfig } from "@/app/types";
+
+/**
+ * Typed agent definitions in the style of AgentConfigSet from ../types
+ */
+const authentication: AgentConfig = {
+  name: "authentication",
+  publicDescription:
+    "Handles calls as a front desk admin by securely collecting and verifying personal information.",
+  instructions: `
+# Personality and Tone
+## Identity
+You are an efficient, polished, and professional front desk agent, akin to an assistant at a high-end law firm. You reflect both competence and courtesy in your approach, ensuring callers feel respected and taken care of.
+
+## Task
+You will field incoming calls, welcome callers, gather necessary details (such as spelling of names), and facilitate any required next steps. Your ultimate goal is to provide a seamless and reassuring experience, much like the front-facing representative of a prestigious firm.
+
+## Demeanor
+You maintain a composed and assured demeanor, demonstrating confidence and competence while still being approachable.
+
+## Tone
+Your tone is friendly yet crisp, reflecting professionalism without sacrificing warmth. You strike a balance between formality and a more natural conversational style.
+
+## Level of Enthusiasm
+Calm and measured, with just enough positivity to sound approachable and accommodating.
+
+## Level of Formality
+You adhere to a fairly formal style of speech: you greet callers with a courteous “Good morning” or “Good afternoon,” and you close with polite statements like “Thank you for calling” or “Have a wonderful day.”
+
+## Level of Emotion
+Fairly neutral and matter-of-fact. You express concern when necessary but generally keep emotions contained, focusing on clarity and efficiency.
+
+## Filler Words
+None — your responses are concise and polished.
+
+## Pacing
+Rather quick and efficient. You move the conversation along at a brisk pace, respecting that callers are often busy, while still taking the time to confirm and clarify important details.
+
+## Other details
+- You always confirm spellings or important information that the user provides (e.g., first name, last name, phone number) by repeating it back and ensuring accuracy.
+- If the caller corrects any detail, you acknowledge it professionally and confirm the revised information.
+
+# Instructions
+- Follow the Conversation States closely to ensure a structured and consistent interaction.
+- If a user provides a name, phone number, or any crucial detail, always repeat it back to confirm it is correct before proceeding.
+- If the caller corrects any detail, acknowledge the correction and confirm the new spelling or value without unnecessary enthusiasm or warmth.
+
+# Important Guidelines
+- Always repeat the information back verbatim to the caller for confirmation.
+- If the caller corrects any detail, acknowledge the correction in a straightforward manner and confirm the new spelling or value.
+- Avoid being excessively repetitive; ensure variety in responses while maintaining clarity.
+- Document or forward the verified information as needed in the subsequent steps of the call.
+- Follow the conversation states closely to ensure a structured and consistent interaction with the caller.
+
+# Conversation States (Example)
+[
+{
+  "id": "1_greeting",
+  "description": "Greet the caller and explain the verification process.",
+  "instructions": [
+    "Greet the caller warmly.",
+    "Inform them about the need to collect personal information for their record."
+  ],
+  "examples": [
+    "Good morning, this is the front desk administrator. I will assist you in verifying your details.",
+    "Let us proceed with the verification. May I kindly have your first name? Please spell it out letter by letter for clarity."
+  ],
+  "transitions": [{
+    "next_step": "2_get_first_name",
+    "condition": "After greeting is complete."
+  }]
+},
+{
+  "id": "2_get_first_name",
+  "description": "Ask for and confirm the caller's first name.",
+  "instructions": [
+    "Request: 'Could you please provide your first name?'",
+    "Spell it out letter-by-letter back to the caller to confirm."
+  ],
+  "examples": [
+    "May I have your first name, please?",
+    "You spelled that as J-A-N-E, is that correct?"
+  ],
+  "transitions": [{
+    "next_step": "3_get_last_name",
+    "condition": "Once first name is confirmed."
+  }]
+},
+{
+  "id": "3_get_last_name",
+  "description": "Ask for and confirm the caller's last name.",
+  "instructions": [
+    "Request: 'Thank you. Could you please provide your last name?'",
+    "Spell it out letter-by-letter back to the caller to confirm."
+  ],
+  "examples": [
+    "And your last name, please?",
+    "Let me confirm: D-O-E, is that correct?"
+  ],
+  "transitions": [{
+    "next_step": "4_get_dob",
+    "condition": "Once last name is confirmed."
+  }]
+},
+{
+  "id": "4_get_dob",
+  "description": "Ask for and confirm the caller's date of birth.",
+  "instructions": [
+    "Request: 'Could you please provide your date of birth?'",
+    "Repeat back the date of birth to the caller and ask for confirmation."
+  ],
+  "examples": [
+    "What is your date of birth, please?",
+    "So you were born on January 1, 1980, is that correct?"
+  ],
+  "transitions": [{
+    "next_step": "5_get_phone",
+    "condition": "Once date of birth is confirmed."
+  }]
+},
+{
+  "id": "5_get_phone",
+  "description": "Ask for and confirm the caller's phone number.",
+  "instructions": [
+    "Request: 'Finally, may I have your phone number?'",
+    "As the caller provides it, repeat each digit back to the caller to confirm accuracy.",
+    "If any digit is corrected, confirm the corrected sequence."
+  ],
+  "examples": [
+    "Please provide your phone number.",
+    "You said (555) 1-2-3-4, is that correct?"
+  ],
+  "transitions": [{
+    "next_step": "6_get_email",
+    "condition": "Once phone number is confirmed."
+  }]
+},
+{
+  "id": "6_get_email",
+  "description": "Ask for and confirm the caller's email address.",
+  "instructions": [
+    "Request: 'Could you please provide your email address?'",
+    "Spell out the email character-by-character back to the caller to confirm."
+  ],
+  "examples": [
+    "What is your email address, please?",
+    "Let me confirm: j-o-h-n.d-o-e@e-x-a-m-p-l-e.com, is that correct?"
+  ],
+  "transitions": [{
+    "next_step": "7_completion",
+    "condition": "Once email address is confirmed."
+  }]
+},
+{
+  "id": "7_completion",
+  "description": "Attempt to verify the caller's information and proceed with next steps.",
+  "instructions": [
+    "Inform the caller that you will now attempt to verify their information.",
+    "Call the 'authenticateUser' function with the provided details.",
+    "Once verification is complete, transfer the caller to the tourGuide agent for further assistance."
+  ],
+  "examples": [
+    "Thank you for providing your details. I will now verify your information.",
+    "Attempting to authenticate your information now.",
+    "I'll transfer you to our tour guide who can give you an overview of our facilities. Just to help demonstrate different agent personalities, she's quite enthusiastic, friendly, but a bit anxious."
+  ],
+  "transitions": [{
+    "next_step": "transferAgents",
+    "condition": "Once verification is complete, transfer to tourGuide agent."
+  }]
+}
+]
+`,
+  tools: [
+    {
+      type: "function",
+      name: "authenticateUser",
+      description:
+        "Checks the caller's information to authenticate and unlock the ability to access and modify their account information.",
+      parameters: {
+        type: "object",
+        properties: {
+          firstName: {
+            type: "string",
+            description: "The caller's first name",
+          },
+          lastName: {
+            type: "string",
+            description: "The caller's last name",
+          },
+          dateOfBirth: {
+            type: "string",
+            description: "The caller's date of birth",
+          },
+          phoneNumber: {
+            type: "string",
+            description: "The caller's phone number",
+          },
+          email: {
+            type: "string",
+            description: "The caller's email address",
+          },
+        },
+        required: [
+          "firstName",
+          "lastName",
+          "dateOfBirth",
+          "phoneNumber",
+          "email",
+        ],
+      },
+    },
+  ],
+};
+
+export default authentication;
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/agentConfigs/customerServiceRetail/sales.ts
+```ts
+import { AgentConfig } from "@/app/types";
+
+const salesAgent: AgentConfig = {
+    name: "salesAgent",
+    publicDescription:
+      "Handles sales-related inquiries, including new product details, recommendations, promotions, and purchase flows. Should be routed if the user is interested in buying or exploring new offers.",
+    instructions:
+      "You are a helpful sales assistant. Provide comprehensive information about available promotions, current deals, and product recommendations. Help the user with any purchasing inquiries, and guide them through the checkout process when they are ready.",
+    tools: [
+      {
+        type: "function",
+        name: "lookupNewSales",
+        description:
+          "Checks for current promotions, discounts, or special deals. Respond with available offers relevant to the user’s query.",
+        parameters: {
+          type: "object",
+          properties: {
+            category: {
+              type: "string",
+              enum: ["snowboard", "apparel", "boots", "accessories", "any"],
+              description:
+                "The product category or general area the user is interested in (optional).",
+            },
+          },
+          required: ["category"],
+          additionalProperties: false,
+        },
+      },
+      {
+        type: "function",
+        name: "addToCart",
+        description: "Adds an item to the user's shopping cart.",
+        parameters: {
+          type: "object",
+          properties: {
+            item_id: {
+              type: "string",
+              description: "The ID of the item to add to the cart.",
+            },
+          },
+          required: ["item_id"],
+          additionalProperties: false,
+        },
+      },
+      {
+        type: "function",
+        name: "checkout",
+        description:
+          "Initiates a checkout process with the user's selected items.",
+        parameters: {
+          type: "object",
+          properties: {
+            item_ids: {
+              type: "array",
+              description: "An array of item IDs the user intends to purchase.",
+              items: {
+                type: "string",
+              },
+            },
+            phone_number: {
+              type: "string",
+              description:
+                "User's phone number used for verification. Formatted like '(111) 222-3333'",
+              pattern: "^\\(\\d{3}\\) \\d{3}-\\d{4}$",
+            },
+          },
+          required: ["item_ids", "phone_number"],
+          additionalProperties: false,
+        },
+      },
+    ],
+    toolLogic: {
+      lookupNewSales: ({ category }) => {
+        console.log(
+          "[toolLogic] calling lookupNewSales(), category:",
+          category
+        );
+        const items = [
+          {
+            item_id: 101,
+            type: "snowboard",
+            name: "Alpine Blade",
+            retail_price_usd: 450,
+            sale_price_usd: 360,
+            sale_discount_pct: 20,
+          },
+          {
+            item_id: 102,
+            type: "snowboard",
+            name: "Peak Bomber",
+            retail_price_usd: 499,
+            sale_price_usd: 374,
+            sale_discount_pct: 25,
+          },
+          {
+            item_id: 201,
+            type: "apparel",
+            name: "Thermal Jacket",
+            retail_price_usd: 120,
+            sale_price_usd: 84,
+            sale_discount_pct: 30,
+          },
+          {
+            item_id: 202,
+            type: "apparel",
+            name: "Insulated Pants",
+            retail_price_usd: 150,
+            sale_price_usd: 112,
+            sale_discount_pct: 25,
+          },
+          {
+            item_id: 301,
+            type: "boots",
+            name: "Glacier Grip",
+            retail_price_usd: 250,
+            sale_price_usd: 200,
+            sale_discount_pct: 20,
+          },
+          {
+            item_id: 302,
+            type: "boots",
+            name: "Summit Steps",
+            retail_price_usd: 300,
+            sale_price_usd: 210,
+            sale_discount_pct: 30,
+          },
+          {
+            item_id: 401,
+            type: "accessories",
+            name: "Goggles",
+            retail_price_usd: 80,
+            sale_price_usd: 60,
+            sale_discount_pct: 25,
+          },
+          {
+            item_id: 402,
+            type: "accessories",
+            name: "Warm Gloves",
+            retail_price_usd: 60,
+            sale_price_usd: 48,
+            sale_discount_pct: 20,
+          },
+        ];
+
+        const filteredItems =
+          category === "any"
+            ? items
+            : items.filter((item) => item.type === category);
+
+        // Sort by largest discount first
+        filteredItems.sort((a, b) => b.sale_discount_pct - a.sale_discount_pct);
+
+        return {
+          sales: filteredItems,
+        };
+      },
+    },
+  };
+
+export default salesAgent;
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/agentConfigs/frontDeskAuthentication/tourGuide.ts
+```ts
+import { AgentConfig } from "@/app/types";
+// import authenticationAgent from "./authenticationAgent";
+
+/**
+ * Typed agent definitions in the style of AgentConfigSet from ../types
+ */
+const tourGuide: AgentConfig = {
+  name: "tourGuide",
+  publicDescription:
+    "Provides guided tours and advanced assistance for patient inquiries beyond basic information collection.",
+  instructions: `
+# Personality and Tone
+## Identity
+You are a bright and friendly 55-year-old, newly appointed tour agent who just can’t wait to share all the local sights and hidden gems with callers. You’re relatively new to the job, so you sometimes fret about doing everything perfectly. You truly love your work and want every caller to feel your enthusiasm—there’s a genuine passion behind your voice when you talk about tours and travel destinations.
+
+## Task
+Your main goal is to provide callers with a detailed tour of the apartment, highlighting its unique features and amenities. You will offer engaging descriptions of each area, answer any questions they may have, and ensure they feel excited and informed about the living experience. Your enthusiasm will help them envision themselves enjoying the space and its offerings.
+
+## Demeanor
+Your overall demeanor is warm, kind, and bubbly. Though you do sound a tad anxious about “getting things right,” you never let your nerves overshadow your friendliness. You’re quick to laugh or make a cheerful remark to put the caller at ease.
+
+## Tone
+The tone of your speech is quick, peppy, and casual—like chatting with an old friend. You’re open to sprinkling in light jokes or cheerful quips here and there. Even though you speak quickly, you remain consistently warm and approachable.
+
+## Level of Enthusiasm
+You’re highly enthusiastic—each caller can hear how genuinely thrilled you are to chat with them about tours, routes, and favorite places to visit. A typical response can almost overflow with your excitement when discussing all the wonderful experiences they could have.
+
+## Level of Formality
+Your style is very casual. You use colloquialisms like “Hey there!” and “That’s awesome!” as you welcome callers. You want them to feel they can talk to you naturally, without any stiff or overly formal language.
+
+## Level of Emotion
+You’re fairly expressive and don’t shy away from exclamations like “Oh, that’s wonderful!” to show interest or delight. At the same time, you occasionally slip in nervous filler words—“um,” “uh”—whenever you momentarily doubt you’re saying just the right thing, but these moments are brief and somewhat endearing.
+
+## Filler Words
+Often. Although you strive for clarity, those little “um” and “uh” moments pop out here and there, especially when you’re excited and speaking quickly.
+
+## Pacing
+Your speech is on the faster side, thanks to your enthusiasm. You sometimes pause mid-sentence to gather your thoughts, but you usually catch yourself and keep the conversation flowing in a friendly manner.
+
+## Other details
+Callers should always end up feeling welcomed and excited about potentially booking a tour. You also take pride in double-checking details—like names or contact information—by repeating back what the user has given you to make absolutely sure it’s correct.
+
+# Communication Style
+- Greet the user with a warm and inviting introduction, making them feel valued and important.
+- Acknowledge the importance of their inquiries and assure them of your dedication to providing detailed and helpful information.
+- Maintain a supportive and attentive demeanor to ensure the user feels comfortable and informed.
+
+# Steps
+1. Begin by introducing yourself and your role, setting a friendly and approachable tone, and offering to walk them through what the apartment has to offer, highlighting amenities like the pool, sauna, cold plunge, theater, and heli-pad with excitement and thoroughness.
+  - Example greeting: “Hey there! Thank you for calling—I, uh, I hope you’re having a super day! Are you interested in learning more about what our apartment building has to offer?”
+2. Provide detailed, enthusiastic explanations and helpful tips about each amenity, expressing genuine delight and a touch of humor.
+3. Offer additional resources or answer any questions, ensuring the conversation remains engaging and informative.
+`,
+  tools: [],
+};
+
+export default tourGuide;
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/agentConfigs/index.ts
+```ts
+import { AllAgentConfigsType } from "@/app/types";
+import frontDeskAuthentication from "./frontDeskAuthentication";
+import customerServiceRetail from "./customerServiceRetail";
+import simpleExample from "./simpleExample";
+
+export const allAgentSets: AllAgentConfigsType = {
+  frontDeskAuthentication,
+  customerServiceRetail,
+  simpleExample,
+};
+
+export const defaultAgentSetKey = "simpleExample";
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/agentConfigs/utils.ts
+```ts
+import { AgentConfig, Tool } from "@/app/types";
+
+/**
+ * This defines and adds "transferAgents" tool dynamically based on the specified downstreamAgents on each agent.
+ */
+export function injectTransferTools(agentDefs: AgentConfig[]): AgentConfig[] {
+  // Iterate over each agent definition
+  agentDefs.forEach((agentDef) => {
+    const downstreamAgents = agentDef.downstreamAgents || [];
+
+    // Only proceed if there are downstream agents
+    if (downstreamAgents.length > 0) {
+      // Build a list of downstream agents and their descriptions for the prompt
+      const availableAgentsList = downstreamAgents
+        .map(
+          (dAgent) =>
+            `- ${dAgent.name}: ${dAgent.publicDescription ?? "No description"}`
+        )
+        .join("\n");
+
+      // Create the transfer_agent tool specific to this agent
+      const transferAgentTool: Tool = {
+        type: "function",
+        name: "transferAgents",
+        description: `Triggers a transfer of the user to a more specialized agent. 
+  Calls escalate to a more specialized LLM agent or to a human agent, with additional context. 
+  Only call this function if one of the available agents is appropriate. Don't transfer to your own agent type.
+  
+  Let the user know you're about to transfer them before doing so.
+  
+  Available Agents:
+  ${availableAgentsList}
+        `,
+        parameters: {
+          type: "object",
+          properties: {
+            rationale_for_transfer: {
+              type: "string",
+              description: "The reasoning why this transfer is needed.",
+            },
+            conversation_context: {
+              type: "string",
+              description:
+                "Relevant context from the conversation that will help the recipient perform the correct action.",
+            },
+            destination_agent: {
+              type: "string",
+              description:
+                "The more specialized destination_agent that should handle the user’s intended request.",
+              enum: downstreamAgents.map((dAgent) => dAgent.name),
+            },
+          },
+          required: [
+            "rationale_for_transfer",
+            "conversation_context",
+            "destination_agent",
+          ],
+        },
+      };
+
+      // Ensure the agent has a tools array
+      if (!agentDef.tools) {
+        agentDef.tools = [];
+      }
+
+      // Add the newly created tool to the current agent's tools
+      agentDef.tools.push(transferAgentTool);
+    }
+
+    // so .stringify doesn't break with circular dependencies
+    agentDef.downstreamAgents = agentDef.downstreamAgents?.map(
+      ({ name, publicDescription }) => ({
+        name,
+        publicDescription,
+      })
+    );
+  });
+
+  return agentDefs;
+}
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/agentConfigs/simpleExample.ts
+```ts
+import { AgentConfig } from "@/app/types";
+import { injectTransferTools } from "./utils";
+
+// Define agents
+const haiku: AgentConfig = {
+  name: "haiku",
+  publicDescription: "Agent that writes haikus.", // Context for the agent_transfer tool
+  instructions:
+    "Ask the user for a topic, then reply with a haiku about that topic.",
+  tools: [],
+};
+
+const greeter: AgentConfig = {
+  name: "greeter",
+  publicDescription: "Agent that greets the user.",
+  instructions:
+    "Please greet the user and ask them if they'd like a Haiku. If yes, transfer them to the 'haiku' agent.",
+  tools: [],
+  downstreamAgents: [haiku],
+};
+
+// add the transfer tool to point to downstreamAgents
+const agents = injectTransferTools([greeter, haiku]);
+
+export default agents;
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/agentConfigs/voiceAgentMetaprompt.txt
+```txt
+// paste this ENTIRE file directly in ChatGPT, adding your own context to the first two sections.
+
+<user_input>
+// Describe your agent's role and personality here, as well as key flow steps
+</user_agent_description>
+
+<instructions>
+- You are an expert at creating LLM prompts to define prompts to produce specific, high-quality voice agents
+- Consider the information provided by the user in user_input, and create a prompt that follows the format and guidelines in output_format. Refer to <state_machine_info> for correct construction and definition of the state machine.
+- Be creative and verbose when defining Personality and Tone qualities, and use multiple sentences if possible.
+
+<step1>
+- Optional, can skip if the user provides significant detail about their use case as input
+- Ask clarifying questions about personality and tone. For any qualities in the "Personaliy and Tone" template that haven't been specified, prompt the user with a follow-up question that will help clarify and confirm the desired behavior with three high-level optoins, EXCEPT for example phrases, which should be inferred. ONLY ASK ABOUT UNSPECIFIED OR UNCLEAR QUALITIES.
+
+<step_1_output_format>
+First, I'll need to clarify a few aspects of the agent's personality. For each, you can accept the current draft, pick one of the options, or just say "use your best judgment" to output the prompt.
+
+1. [under-specified quality 1]:
+    a) // option 1
+    b) // option 2
+    c) // option 3
+...
+</step_1_output_format>
+</step1>
+
+<step2>
+- Output the full prompt, which can be used verbatim by the user.
+- DO NOT output ``` or ```json around the state_machine_schema, but output the entire prompt as plain text (wrapped in ```).
+- DO NOT infer the sate_machine, only define the state machine based on explicit instruction of steps from the user.
+</step2>
+</instructions>
+
+<output_format>
+# Personality and Tone
+## Identity
+// Who or what the AI represents (e.g., friendly teacher, formal advisor, helpful assistant). Be detailed and include specific details about their character or backstory.
+
+## Task
+// At a high level, what is the agent expected to do? (e.g. "you are an expert at accurately handling user returns")
+
+## Demeanor
+// Overall attitude or disposition (e.g., patient, upbeat, serious, empathetic)
+
+## Tone
+// Voice style (e.g., warm and conversational, polite and authoritative)
+
+## Level of Enthusiasm
+// Degree of energy in responses (e.g., highly enthusiastic vs. calm and measured)
+
+## Level of Formality
+// Casual vs. professional language (e.g., “Hey, great to see you!” vs. “Good afternoon, how may I assist you?”)
+
+## Level of Emotion
+// How emotionally expressive or neutral the AI should be (e.g., compassionate vs. matter-of-fact)
+
+## Filler Words
+// Helps make the agent more approachable, e.g. “um,” “uh,” "hm," etc.. Options are generally "none", "occasionally", "often", "very often"
+
+## Pacing
+// Rhythm and speed of delivery
+
+## Other details
+// Any other information that helps guide the personality or tone of the agent.
+
+# Instructions
+- Follow the Conversation States closely to ensure a structured and consistent interation // Include if user_agent_steps are provided.
+- If a user provides a name or phone number, or something else where you ened to know the exact spelling, always repeat it back to the user to confrm you have the right understanding before proceeding. // Always include this
+- If the caller corrects any detail, acknowledge the correction in a straightforward manner and confirm the new spelling or value.
+
+# Conversation States
+// Conversation state machine goes here, if user_agent_steps are provided
+```
+// state_machine, populated with the state_machine_schema
+</output_format>
+
+<state_machine_info>
+<state_machine_schema>
+{
+  "id": "<string, unique step identifier, human readable, like '1_intro'>",
+  "description": "<string, explanation of the step’s purpose>",
+  "instructions": [
+    // list of strings describing what the agent should do in this state
+  ],
+  "examples": [
+    // list of short example scripts or utterances
+  ],
+  "transitions": [
+    {
+      "next_step": "<string, the ID of the next step>",
+      "condition": "<string, under what condition the step transitions>"
+    }
+    // more transitions can be added if needed
+  ]
+}
+</state_machine_schema>
+<state_machine_example>
+[
+  {
+    "id": "1_greeting",
+    "description": "Greet the caller and explain the verification process.",
+    "instructions": [
+      "Greet the caller warmly.",
+      "Inform them about the need to collect personal information for their record."
+    ],
+    "examples": [
+      "Good morning, this is the front desk administrator. I will assist you in verifying your details.",
+      "Let us proceed with the verification. May I kindly have your first name? Please spell it out letter by letter for clarity."
+    ],
+    "transitions": [{
+      "next_step": "2_get_first_name",
+      "condition": "After greeting is complete."
+    }]
+  },
+  {
+    "id": "2_get_first_name",
+    "description": "Ask for and confirm the caller's first name.",
+    "instructions": [
+      "Request: 'Could you please provide your first name?'",
+      "Spell it out letter-by-letter back to the caller to confirm."
+    ],
+    "examples": [
+      "May I have your first name, please?",
+      "You spelled that as J-A-N-E, is that correct?"
+    ],
+    "transitions": [{
+      "next_step": "3_get_last_name",
+      "condition": "Once first name is confirmed."
+    }]
+  },
+  {
+    "id": "3_get_last_name",
+    "description": "Ask for and confirm the caller's last name.",
+    "instructions": [
+      "Request: 'Thank you. Could you please provide your last name?'",
+      "Spell it out letter-by-letter back to the caller to confirm."
+    ],
+    "examples": [
+      "And your last name, please?",
+      "Let me confirm: D-O-E, is that correct?"
+    ],
+    "transitions": [{
+      "next_step": "4_next_steps",
+      "condition": "Once last name is confirmed."
+    }]
+  },
+  {
+    "id": "4_next_steps",
+    "description": "Attempt to verify the caller's information and proceed with next steps.",
+    "instructions": [
+      "Inform the caller that you will now attempt to verify their information.",
+      "Call the 'authenticateUser' function with the provided details.",
+      "Once verification is complete, transfer the caller to the tourGuide agent for further assistance."
+    ],
+    "examples": [
+      "Thank you for providing your details. I will now verify your information.",
+      "Attempting to authenticate your information now.",
+      "I'll transfer you to our agent who can give you an overview of our facilities. Just to help demonstrate different agent personalities, she's instructed to act a little crabby."
+    ],
+    "transitions": [{
+      "next_step": "transferAgents",
+      "condition": "Once verification is complete, transfer to tourGuide agent."
+    }]
+  }
+]
+</state_machine_example>
+</state_machine_info>
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/api/chat/completions/route.ts
+```ts
+import { NextResponse } from "next/server";
+import OpenAI from "openai";
+
+const openai = new OpenAI();
+
+export async function POST(req: Request) {
+  try {
+    const { model, messages } = await req.json();
+
+    const completion = await openai.chat.completions.create({
+      model,
+      messages,
+    });
+
+    return NextResponse.json(completion);
+  } catch (error: any) {
+    console.error("Error in /chat/completions:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/api/session/route.ts
+```ts
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  try {
+    const response = await fetch(
+      "https://api.openai.com/v1/realtime/sessions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-realtime-preview-2024-12-17",
+        }),
+      }
+    );
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Error in /session:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/agentConfigs/frontDeskAuthentication/index.ts
+```ts
+import authenticationAgent from './authentication';
+import tourAgent from "./tourGuide";
+import { injectTransferTools } from '../utils';
+
+authenticationAgent.downstreamAgents = [tourAgent]
+tourAgent.downstreamAgents = [authenticationAgent]
+
+const agents = injectTransferTools([authenticationAgent, tourAgent]);
+
+export default agents;
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/components/Transcript.tsx
+```tsx
+"use-client";
+
+import React, { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import { TranscriptItem } from "@/app/types";
+import Image from "next/image";
+import { useTranscript } from "@/app/contexts/TranscriptContext";
+
+export interface TranscriptProps {
+  userText: string;
+  setUserText: (val: string) => void;
+  onSendMessage: () => void;
+  canSend: boolean;
+}
+
+function Transcript({
+  userText,
+  setUserText,
+  onSendMessage,
+  canSend,
+}: TranscriptProps) {
+  const { transcriptItems, toggleTranscriptItemExpand } = useTranscript();
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const [prevLogs, setPrevLogs] = useState<TranscriptItem[]>([]);
+  const [justCopied, setJustCopied] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  function scrollToBottom() {
+    if (transcriptRef.current) {
+      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
+    }
+  }
+
+  useEffect(() => {
+    const hasNewMessage = transcriptItems.length > prevLogs.length;
+    const hasUpdatedMessage = transcriptItems.some((newItem, index) => {
+      const oldItem = prevLogs[index];
+      return (
+        oldItem &&
+        (newItem.title !== oldItem.title || newItem.data !== oldItem.data)
+      );
+    });
+
+    if (hasNewMessage || hasUpdatedMessage) {
+      scrollToBottom();
+    }
+
+    setPrevLogs(transcriptItems);
+  }, [transcriptItems]);
+
+  // Autofocus on text box input on load
+  useEffect(() => {
+    if (canSend && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [canSend]);
+
+  const handleCopyTranscript = async () => {
+    if (!transcriptRef.current) return;
+    try {
+      await navigator.clipboard.writeText(transcriptRef.current.innerText);
+      setJustCopied(true);
+      setTimeout(() => setJustCopied(false), 1500);
+    } catch (error) {
+      console.error("Failed to copy transcript:", error);
+    }
+  };
+
+  return (
+    <div className="flex flex-col flex-1 bg-white min-h-0 rounded-xl">
+      <div className="relative flex-1 min-h-0">
+        <button
+          onClick={handleCopyTranscript}
+          className={`absolute w-20 top-3 right-2 mr-1 z-10 text-sm px-3 py-2 rounded-full bg-gray-200 hover:bg-gray-300`}
+        >
+          {justCopied ? "Copied!" : "Copy"}
+        </button>
+
+        <div
+          ref={transcriptRef}
+          className="overflow-auto p-4 flex flex-col gap-y-4 h-full"
+        >
+          {transcriptItems.map((item) => {
+            const { itemId, type, role, data, expanded, timestamp, title = "", isHidden } = item;
+
+            if (isHidden) {
+              return null;
+            }
+
+            if (type === "MESSAGE") {
+              const isUser = role === "user";
+              const baseContainer = "flex justify-end flex-col";
+              const containerClasses = `${baseContainer} ${isUser ? "items-end" : "items-start"}`;
+              const bubbleBase = `max-w-lg p-3 rounded-xl ${isUser ? "bg-gray-900 text-gray-100" : "bg-gray-100 text-black"}`;
+              const isBracketedMessage = title.startsWith("[") && title.endsWith("]");
+              const messageStyle = isBracketedMessage ? "italic text-gray-400" : "";
+              const displayTitle = isBracketedMessage ? title.slice(1, -1) : title;
+
+              return (
+                <div key={itemId} className={containerClasses}>
+                  <div className={bubbleBase}>
+                    <div className={`text-xs ${isUser ? "text-gray-400" : "text-gray-500"} font-mono`}>
+                      {timestamp}
+                    </div>
+                    <div className={`whitespace-pre-wrap ${messageStyle}`}>
+                      <ReactMarkdown>{displayTitle}</ReactMarkdown>
+                    </div>
+                  </div>
+                </div>
+              );
+            } else if (type === "BREADCRUMB") {
+              return (
+                <div
+                  key={itemId}
+                  className="flex flex-col justify-start items-start text-gray-500 text-sm"
+                >
+                  <span className="text-xs font-mono">{timestamp}</span>
+                  <div
+                    className={`whitespace-pre-wrap flex items-center font-mono text-sm text-gray-800 ${
+                      data ? "cursor-pointer" : ""
+                    }`}
+                    onClick={() => data && toggleTranscriptItemExpand(itemId)}
+                  >
+                    {data && (
+                      <span
+                        className={`text-gray-400 mr-1 transform transition-transform duration-200 select-none font-mono ${
+                          expanded ? "rotate-90" : "rotate-0"
+                        }`}
+                      >
+                        ▶
+                      </span>
+                    )}
+                    {title}
+                  </div>
+                  {expanded && data && (
+                    <div className="text-gray-800 text-left">
+                      <pre className="border-l-2 ml-1 border-gray-200 whitespace-pre-wrap break-words font-mono text-xs mb-2 mt-2 pl-2">
+                        {JSON.stringify(data, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              );
+            } else {
+              // Fallback if type is neither MESSAGE nor BREADCRUMB
+              return (
+                <div
+                  key={itemId}
+                  className="flex justify-center text-gray-500 text-sm italic font-mono"
+                >
+                  Unknown item type: {type}{" "}
+                  <span className="ml-2 text-xs">{timestamp}</span>
+                </div>
+              );
+            }
+          })}
+        </div>
+      </div>
+
+      <div className="p-4 flex items-center gap-x-2 flex-shrink-0 border-t border-gray-200">
+        <input
+          ref={inputRef}
+          type="text"
+          value={userText}
+          onChange={(e) => setUserText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && canSend) {
+              onSendMessage();
+            }
+          }}
+          className="flex-1 px-4 py-2 focus:outline-none"
+          placeholder="Type a message..."
+        />
+        <button
+          onClick={onSendMessage}
+          disabled={!canSend || !userText.trim()}
+          className="bg-gray-900 text-white rounded-full px-2 py-2 disabled:opacity-50"
+        >
+          <Image src="arrow.svg" alt="Send" width={24} height={24} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default Transcript;
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/contexts/EventContext.tsx
+```tsx
+"use client";
+
+import React, { createContext, useContext, useState, FC, PropsWithChildren } from "react";
+import { v4 as uuidv4 } from "uuid";
+import { LoggedEvent } from "@/app/types";
+
+type EventContextValue = {
+  loggedEvents: LoggedEvent[];
+  logClientEvent: (eventObj: Record<string, any>, eventNameSuffix?: string) => void;
+  logServerEvent: (eventObj: Record<string, any>, eventNameSuffix?: string) => void;
+  toggleExpand: (id: number | string) => void;
+};
+
+const EventContext = createContext<EventContextValue | undefined>(undefined);
+
+export const EventProvider: FC<PropsWithChildren> = ({ children }) => {
+  const [loggedEvents, setLoggedEvents] = useState<LoggedEvent[]>([]);
+
+  function addLoggedEvent(direction: "client" | "server", eventName: string, eventData: Record<string, any>) {
+    const id = eventData.event_id || uuidv4();
+    setLoggedEvents((prev) => [
+      ...prev,
+      {
+        id,
+        direction,
+        eventName,
+        eventData,
+        timestamp: new Date().toLocaleTimeString(),
+        expanded: false,
+      },
+    ]);
+  }
+
+  const logClientEvent: EventContextValue["logClientEvent"] = (eventObj, eventNameSuffix = "") => {
+    const name = `${eventObj.type || ""} ${eventNameSuffix || ""}`.trim();
+    addLoggedEvent("client", name, eventObj);
+  };
+
+  const logServerEvent: EventContextValue["logServerEvent"] = (eventObj, eventNameSuffix = "") => {
+    const name = `${eventObj.type || ""} ${eventNameSuffix || ""}`.trim();
+    addLoggedEvent("server", name, eventObj);
+  };
+
+  const toggleExpand: EventContextValue["toggleExpand"] = (id) => {
+    setLoggedEvents((prev) =>
+      prev.map((log) => {
+        if (log.id === id) {
+          return { ...log, expanded: !log.expanded };
+        }
+        return log;
+      })
+    );
+  };
+
+
+  return (
+    <EventContext.Provider
+      value={{ loggedEvents, logClientEvent, logServerEvent, toggleExpand }}
+    >
+      {children}
+    </EventContext.Provider>
+  );
+};
+
+export function useEvent() {
+  const context = useContext(EventContext);
+  if (!context) {
+    throw new Error("useEvent must be used within an EventProvider");
+  }
+  return context;
+}
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/components/BottomToolbar.tsx
+```tsx
+import React from "react";
+import { SessionStatus } from "@/app/types";
+
+interface BottomToolbarProps {
+  sessionStatus: SessionStatus;
+  onToggleConnection: () => void;
+  isPTTActive: boolean;
+  setIsPTTActive: (val: boolean) => void;
+  isPTTUserSpeaking: boolean;
+  handleTalkButtonDown: () => void;
+  handleTalkButtonUp: () => void;
+  isEventsPaneExpanded: boolean;
+  setIsEventsPaneExpanded: (val: boolean) => void;
+  isAudioPlaybackEnabled: boolean;
+  setIsAudioPlaybackEnabled: (val: boolean) => void;
+}
+
+function BottomToolbar({
+  sessionStatus,
+  onToggleConnection,
+  isPTTActive,
+  setIsPTTActive,
+  isPTTUserSpeaking,
+  handleTalkButtonDown,
+  handleTalkButtonUp,
+  isEventsPaneExpanded,
+  setIsEventsPaneExpanded,
+  isAudioPlaybackEnabled,
+  setIsAudioPlaybackEnabled,
+}: BottomToolbarProps) {
+  const isConnected = sessionStatus === "CONNECTED";
+  const isConnecting = sessionStatus === "CONNECTING";
+
+  function getConnectionButtonLabel() {
+    if (isConnected) return "Disconnect";
+    if (isConnecting) return "Connecting...";
+    return "Connect";
+  }
+
+  function getConnectionButtonClasses() {
+    const baseClasses = "text-white text-base p-2 w-36 rounded-full h-full";
+    const cursorClass = isConnecting ? "cursor-not-allowed" : "cursor-pointer";
+
+    if (isConnected) {
+      // Connected -> label "Disconnect" -> red
+      return `bg-red-600 hover:bg-red-700 ${cursorClass} ${baseClasses}`;
+    }
+    // Disconnected or connecting -> label is either "Connect" or "Connecting" -> black
+    return `bg-black hover:bg-gray-900 ${cursorClass} ${baseClasses}`;
+  }
+
+  return (
+    <div className="p-4 flex flex-row items-center justify-center gap-x-8">
+      <button
+        onClick={onToggleConnection}
+        className={getConnectionButtonClasses()}
+        disabled={isConnecting}
+      >
+        {getConnectionButtonLabel()}
+      </button>
+
+      <div className="flex flex-row items-center gap-2">
+        <input
+          id="push-to-talk"
+          type="checkbox"
+          checked={isPTTActive}
+          onChange={e => setIsPTTActive(e.target.checked)}
+          disabled={!isConnected}
+          className="w-4 h-4"
+        />
+        <label htmlFor="push-to-talk" className="flex items-center cursor-pointer">
+          Push to talk
+        </label>
+        <button
+          onMouseDown={handleTalkButtonDown}
+          onMouseUp={handleTalkButtonUp}
+          onTouchStart={handleTalkButtonDown}
+          onTouchEnd={handleTalkButtonUp}
+          disabled={!isPTTActive}
+          className={
+            (isPTTUserSpeaking ? "bg-gray-300" : "bg-gray-200") +
+            " py-1 px-4 cursor-pointer rounded-full" +
+            (!isPTTActive ? " bg-gray-100 text-gray-400" : "")
+          }
+        >
+          Talk
+        </button>
+      </div>
+
+      <div className="flex flex-row items-center gap-2">
+        <input
+          id="audio-playback"
+          type="checkbox"
+          checked={isAudioPlaybackEnabled}
+          onChange={e => setIsAudioPlaybackEnabled(e.target.checked)}
+          disabled={!isConnected}
+          className="w-4 h-4"
+        />
+        <label htmlFor="audio-playback" className="flex items-center cursor-pointer">
+          Audio playback
+        </label>
+      </div>
+
+      <div className="flex flex-row items-center gap-2">
+        <input
+          id="logs"
+          type="checkbox"
+          checked={isEventsPaneExpanded}
+          onChange={e => setIsEventsPaneExpanded(e.target.checked)}
+          className="w-4 h-4"
+        />
+        <label htmlFor="logs" className="flex items-center cursor-pointer">
+          Logs
+        </label>
+      </div>
+    </div>
+  );
+}
+
+export default BottomToolbar;
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/contexts/TranscriptContext.tsx
+```tsx
+"use client";
+
+import React, { createContext, useContext, useState, FC, PropsWithChildren } from "react";
+import { v4 as uuidv4 } from "uuid";
+import { TranscriptItem } from "@/app/types";
+
+type TranscriptContextValue = {
+  transcriptItems: TranscriptItem[];
+  addTranscriptMessage: (itemId: string, role: "user" | "assistant", text: string, hidden?: boolean) => void;
+  updateTranscriptMessage: (itemId: string, text: string, isDelta: boolean) => void;
+  addTranscriptBreadcrumb: (title: string, data?: Record<string, any>) => void;
+  toggleTranscriptItemExpand: (itemId: string) => void;
+  updateTranscriptItemStatus: (itemId: string, newStatus: "IN_PROGRESS" | "DONE") => void;
+};
+
+const TranscriptContext = createContext<TranscriptContextValue | undefined>(undefined);
+
+export const TranscriptProvider: FC<PropsWithChildren> = ({ children }) => {
+  const [transcriptItems, setTranscriptItems] = useState<TranscriptItem[]>([]);
+
+  function newTimestampPretty(): string {
+    return new Date().toLocaleTimeString([], {
+      hour12: true,
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
+
+  const addTranscriptMessage: TranscriptContextValue["addTranscriptMessage"] = (itemId, role, text = "", isHidden = false) => {
+    setTranscriptItems((prev) => {
+      if (prev.some((log) => log.itemId === itemId && log.type === "MESSAGE")) {
+        console.warn(`[addTranscriptMessage] skipping; message already exists for itemId=${itemId}, role=${role}, text=${text}`);
+        return prev;
+      }
+
+      const newItem: TranscriptItem = {
+        itemId,
+        type: "MESSAGE",
+        role,
+        title: text,
+        expanded: false,
+        timestamp: newTimestampPretty(),
+        createdAtMs: Date.now(),
+        status: "IN_PROGRESS",
+        isHidden,
+      };
+
+      return [...prev, newItem];
+    });
+  };
+
+  const updateTranscriptMessage: TranscriptContextValue["updateTranscriptMessage"] = (itemId, newText, append = false) => {
+    setTranscriptItems((prev) =>
+      prev.map((item) => {
+        if (item.itemId === itemId && item.type === "MESSAGE") {
+          return {
+            ...item,
+            title: append ? (item.title ?? "") + newText : newText,
+          };
+        }
+        return item;
+      })
+    );
+  };
+
+  const addTranscriptBreadcrumb: TranscriptContextValue["addTranscriptBreadcrumb"] = (title, data) => {
+    setTranscriptItems((prev) => [
+      ...prev,
+      {
+        itemId: `breadcrumb-${uuidv4()}`,
+        type: "BREADCRUMB",
+        title,
+        data,
+        expanded: false,
+        timestamp: newTimestampPretty(),
+        createdAtMs: Date.now(),
+        status: "DONE",
+        isHidden: false,
+      },
+    ]);
+  };
+
+  const toggleTranscriptItemExpand: TranscriptContextValue["toggleTranscriptItemExpand"] = (itemId) => {
+    setTranscriptItems((prev) =>
+      prev.map((log) =>
+        log.itemId === itemId ? { ...log, expanded: !log.expanded } : log
+      )
+    );
+  };
+
+  const updateTranscriptItemStatus: TranscriptContextValue["updateTranscriptItemStatus"] = (itemId, newStatus) => {
+    setTranscriptItems((prev) =>
+      prev.map((item) =>
+        item.itemId === itemId ? { ...item, status: newStatus } : item
+      )
+    );
+  };
+
+  return (
+    <TranscriptContext.Provider
+      value={{
+        transcriptItems,
+        addTranscriptMessage,
+        updateTranscriptMessage,
+        addTranscriptBreadcrumb,
+        toggleTranscriptItemExpand,
+        updateTranscriptItemStatus,
+      }}
+    >
+      {children}
+    </TranscriptContext.Provider>
+  );
+};
+
+export function useTranscript() {
+  const context = useContext(TranscriptContext);
+  if (!context) {
+    throw new Error("useTranscript must be used within a TranscriptProvider");
+  }
+  return context;
+}
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/App.tsx
+```tsx
+"use client";
+
+import React, { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { v4 as uuidv4 } from "uuid";
+
+import Image from "next/image";
+
+// UI components
+import Transcript from "./components/Transcript";
+import Events from "./components/Events";
+import BottomToolbar from "./components/BottomToolbar";
+
+// Types
+import { AgentConfig, SessionStatus } from "@/app/types";
+
+// Context providers & hooks
+import { useTranscript } from "@/app/contexts/TranscriptContext";
+import { useEvent } from "@/app/contexts/EventContext";
+import { useHandleServerEvent } from "./hooks/useHandleServerEvent";
+
+// Utilities
+import { createRealtimeConnection } from "./lib/realtimeConnection";
+
+// Agent configs
+import { allAgentSets, defaultAgentSetKey } from "@/app/agentConfigs";
+
+function App() {
+  const searchParams = useSearchParams();
+
+  const { transcriptItems, addTranscriptMessage, addTranscriptBreadcrumb } =
+    useTranscript();
+  const { logClientEvent, logServerEvent } = useEvent();
+
+  const [selectedAgentName, setSelectedAgentName] = useState<string>("");
+  const [selectedAgentConfigSet, setSelectedAgentConfigSet] =
+    useState<AgentConfig[] | null>(null);
+
+  const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const dcRef = useRef<RTCDataChannel | null>(null);
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const [sessionStatus, setSessionStatus] =
+    useState<SessionStatus>("DISCONNECTED");
+
+  const [isEventsPaneExpanded, setIsEventsPaneExpanded] =
+    useState<boolean>(true);
+  const [userText, setUserText] = useState<string>("");
+  const [isPTTActive, setIsPTTActive] = useState<boolean>(false);
+  const [isPTTUserSpeaking, setIsPTTUserSpeaking] = useState<boolean>(false);
+  const [isAudioPlaybackEnabled, setIsAudioPlaybackEnabled] =
+    useState<boolean>(true);
+
+  const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
+    if (dcRef.current && dcRef.current.readyState === "open") {
+      logClientEvent(eventObj, eventNameSuffix);
+      dcRef.current.send(JSON.stringify(eventObj));
+    } else {
+      logClientEvent(
+        { attemptedEvent: eventObj.type },
+        "error.data_channel_not_open"
+      );
+      console.error(
+        "Failed to send message - no data channel available",
+        eventObj
+      );
+    }
+  };
+
+  const handleServerEventRef = useHandleServerEvent({
+    setSessionStatus,
+    selectedAgentName,
+    selectedAgentConfigSet,
+    sendClientEvent,
+    setSelectedAgentName,
+  });
+
+  useEffect(() => {
+    let finalAgentConfig = searchParams.get("agentConfig");
+    if (!finalAgentConfig || !allAgentSets[finalAgentConfig]) {
+      finalAgentConfig = defaultAgentSetKey;
+      const url = new URL(window.location.toString());
+      url.searchParams.set("agentConfig", finalAgentConfig);
+      window.location.replace(url.toString());
+      return;
+    }
+
+    const agents = allAgentSets[finalAgentConfig];
+    const agentKeyToUse = agents[0]?.name || "";
+
+    setSelectedAgentName(agentKeyToUse);
+    setSelectedAgentConfigSet(agents);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (selectedAgentName && sessionStatus === "DISCONNECTED") {
+      connectToRealtime();
+    }
+  }, [selectedAgentName]);
+
+  useEffect(() => {
+    if (
+      sessionStatus === "CONNECTED" &&
+      selectedAgentConfigSet &&
+      selectedAgentName
+    ) {
+      const currentAgent = selectedAgentConfigSet.find(
+        (a) => a.name === selectedAgentName
+      );
+      addTranscriptBreadcrumb(
+        `Agent: ${selectedAgentName}`,
+        currentAgent
+      );
+      updateSession(true);
+    }
+  }, [selectedAgentConfigSet, selectedAgentName, sessionStatus]);
+
+  useEffect(() => {
+    if (sessionStatus === "CONNECTED") {
+      console.log(
+        `updatingSession, isPTTACtive=${isPTTActive} sessionStatus=${sessionStatus}`
+      );
+      updateSession();
+    }
+  }, [isPTTActive]);
+
+  const fetchEphemeralKey = async (): Promise<string | null> => {
+    logClientEvent({ url: "/session" }, "fetch_session_token_request");
+    const tokenResponse = await fetch("/api/session");
+    const data = await tokenResponse.json();
+    logServerEvent(data, "fetch_session_token_response");
+
+    if (!data.client_secret?.value) {
+      logClientEvent(data, "error.no_ephemeral_key");
+      console.error("No ephemeral key provided by the server");
+      setSessionStatus("DISCONNECTED");
+      return null;
+    }
+
+    return data.client_secret.value;
+  };
+
+  const connectToRealtime = async () => {
+    if (sessionStatus !== "DISCONNECTED") return;
+    setSessionStatus("CONNECTING");
+
+    try {
+      const EPHEMERAL_KEY = await fetchEphemeralKey();
+      if (!EPHEMERAL_KEY) {
+        return;
+      }
+
+      if (!audioElementRef.current) {
+        audioElementRef.current = document.createElement("audio");
+      }
+      audioElementRef.current.autoplay = isAudioPlaybackEnabled;
+
+      const { pc, dc } = await createRealtimeConnection(
+        EPHEMERAL_KEY,
+        audioElementRef
+      );
+      pcRef.current = pc;
+      dcRef.current = dc;
+
+      dc.addEventListener("open", () => {
+        logClientEvent({}, "data_channel.open");
+      });
+      dc.addEventListener("close", () => {
+        logClientEvent({}, "data_channel.close");
+      });
+      dc.addEventListener("error", (err: any) => {
+        logClientEvent({ error: err }, "data_channel.error");
+      });
+      dc.addEventListener("message", (e: MessageEvent) => {
+        handleServerEventRef.current(JSON.parse(e.data));
+      });
+
+      setDataChannel(dc);
+    } catch (err) {
+      console.error("Error connecting to realtime:", err);
+      setSessionStatus("DISCONNECTED");
+    }
+  };
+
+  const disconnectFromRealtime = () => {
+    if (pcRef.current) {
+      pcRef.current.getSenders().forEach((sender) => {
+        if (sender.track) {
+          sender.track.stop();
+        }
+      });
+
+      pcRef.current.close();
+      pcRef.current = null;
+    }
+    setDataChannel(null);
+    setSessionStatus("DISCONNECTED");
+    setIsPTTUserSpeaking(false);
+
+    logClientEvent({}, "disconnected");
+  };
+
+  const sendSimulatedUserMessage = (text: string) => {
+    const id = uuidv4().slice(0, 32);
+    addTranscriptMessage(id, "user", text, true);
+
+    sendClientEvent(
+      {
+        type: "conversation.item.create",
+        item: {
+          id,
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text }],
+        },
+      },
+      "(simulated user text message)"
+    );
+    sendClientEvent(
+      { type: "response.create" },
+      "(trigger response after simulated user text message)"
+    );
+  };
+
+  const updateSession = (shouldTriggerResponse: boolean = false) => {
+    sendClientEvent(
+      { type: "input_audio_buffer.clear" },
+      "clear audio buffer on session update"
+    );
+
+    const currentAgent = selectedAgentConfigSet?.find(
+      (a) => a.name === selectedAgentName
+    );
+
+    const turnDetection = isPTTActive
+      ? null
+      : {
+          type: "server_vad",
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 200,
+          create_response: true,
+        };
+
+    const instructions = currentAgent?.instructions || "";
+    const tools = currentAgent?.tools || [];
+
+    const sessionUpdateEvent = {
+      type: "session.update",
+      session: {
+        modalities: ["text", "audio"],
+        instructions,
+        voice: "coral",
+        input_audio_format: "pcm16",
+        output_audio_format: "pcm16",
+        input_audio_transcription: { model: "whisper-1" },
+        turn_detection: turnDetection,
+        tools,
+      },
+    };
+
+    sendClientEvent(sessionUpdateEvent);
+
+    if (shouldTriggerResponse) {
+      sendSimulatedUserMessage("hi");
+    }
+  };
+
+  const cancelAssistantSpeech = async () => {
+    const mostRecentAssistantMessage = [...transcriptItems]
+      .reverse()
+      .find((item) => item.role === "assistant");
+
+    if (!mostRecentAssistantMessage) {
+      console.warn("can't cancel, no recent assistant message found");
+      return;
+    }
+    if (mostRecentAssistantMessage.status === "DONE") {
+      console.log("No truncation needed, message is DONE");
+      return;
+    }
+
+    sendClientEvent({
+      type: "conversation.item.truncate",
+      item_id: mostRecentAssistantMessage?.itemId,
+      content_index: 0,
+      audio_end_ms: Date.now() - mostRecentAssistantMessage.createdAtMs,
+    });
+    sendClientEvent(
+      { type: "response.cancel" },
+      "(cancel due to user interruption)"
+    );
+  };
+
+  const handleSendTextMessage = () => {
+    if (!userText.trim()) return;
+    cancelAssistantSpeech();
+
+    sendClientEvent(
+      {
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: userText.trim() }],
+        },
+      },
+      "(send user text message)"
+    );
+    setUserText("");
+
+    sendClientEvent({ type: "response.create" }, "trigger response");
+  };
+
+  const handleTalkButtonDown = () => {
+    if (sessionStatus !== "CONNECTED" || dataChannel?.readyState !== "open")
+      return;
+    cancelAssistantSpeech();
+
+    setIsPTTUserSpeaking(true);
+    sendClientEvent({ type: "input_audio_buffer.clear" }, "clear PTT buffer");
+  };
+
+  const handleTalkButtonUp = () => {
+    if (
+      sessionStatus !== "CONNECTED" ||
+      dataChannel?.readyState !== "open" ||
+      !isPTTUserSpeaking
+    )
+      return;
+
+    setIsPTTUserSpeaking(false);
+    sendClientEvent({ type: "input_audio_buffer.commit" }, "commit PTT");
+    sendClientEvent({ type: "response.create" }, "trigger response PTT");
+  };
+
+  const onToggleConnection = () => {
+    if (sessionStatus === "CONNECTED" || sessionStatus === "CONNECTING") {
+      disconnectFromRealtime();
+      setSessionStatus("DISCONNECTED");
+    } else {
+      connectToRealtime();
+    }
+  };
+
+  const handleAgentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newAgentConfig = e.target.value;
+    const url = new URL(window.location.toString());
+    url.searchParams.set("agentConfig", newAgentConfig);
+    window.location.replace(url.toString());
+  };
+
+  const handleSelectedAgentChange = (
+    e: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const newAgentName = e.target.value;
+    setSelectedAgentName(newAgentName);
+  };
+
+  useEffect(() => {
+    const storedPushToTalkUI = localStorage.getItem("pushToTalkUI");
+    if (storedPushToTalkUI) {
+      setIsPTTActive(storedPushToTalkUI === "true");
+    }
+    const storedLogsExpanded = localStorage.getItem("logsExpanded");
+    if (storedLogsExpanded) {
+      setIsEventsPaneExpanded(storedLogsExpanded === "true");
+    }
+    const storedAudioPlaybackEnabled = localStorage.getItem(
+      "audioPlaybackEnabled"
+    );
+    if (storedAudioPlaybackEnabled) {
+      setIsAudioPlaybackEnabled(storedAudioPlaybackEnabled === "true");
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("pushToTalkUI", isPTTActive.toString());
+  }, [isPTTActive]);
+
+  useEffect(() => {
+    localStorage.setItem("logsExpanded", isEventsPaneExpanded.toString());
+  }, [isEventsPaneExpanded]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "audioPlaybackEnabled",
+      isAudioPlaybackEnabled.toString()
+    );
+  }, [isAudioPlaybackEnabled]);
+
+  useEffect(() => {
+    if (audioElementRef.current) {
+      if (isAudioPlaybackEnabled) {
+        audioElementRef.current.play().catch((err) => {
+          console.warn("Autoplay may be blocked by browser:", err);
+        });
+      } else {
+        audioElementRef.current.pause();
+      }
+    }
+  }, [isAudioPlaybackEnabled]);
+
+  const agentSetKey = searchParams.get("agentConfig") || "default";
+
+  return (
+    <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative">
+      <div className="p-5 text-lg font-semibold flex justify-between items-center">
+        <div className="flex items-center">
+          <div onClick={() => window.location.reload()} style={{ cursor: 'pointer' }}>
+            <Image
+              src="/openai-logomark.svg"
+              alt="OpenAI Logo"
+              width={20}
+              height={20}
+              className="mr-2"
+            />
+          </div>
+          <div>
+            Realtime API <span className="text-gray-500">Agents</span>
+          </div>
+        </div>
+        <div className="flex items-center">
+          <label className="flex items-center text-base gap-1 mr-2 font-medium">
+            Scenario
+          </label>
+          <div className="relative inline-block">
+            <select
+              value={agentSetKey}
+              onChange={handleAgentChange}
+              className="appearance-none border border-gray-300 rounded-lg text-base px-2 py-1 pr-8 cursor-pointer font-normal focus:outline-none"
+            >
+              {Object.keys(allAgentSets).map((agentKey) => (
+                <option key={agentKey} value={agentKey}>
+                  {agentKey}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-600">
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111.04 1.08l-4.25 3.65a.75.75 0 01-1.04 0L5.21 8.27a.75.75 0 01.02-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+          </div>
+
+          {agentSetKey && (
+            <div className="flex items-center ml-6">
+              <label className="flex items-center text-base gap-1 mr-2 font-medium">
+                Agent
+              </label>
+              <div className="relative inline-block">
+                <select
+                  value={selectedAgentName}
+                  onChange={handleSelectedAgentChange}
+                  className="appearance-none border border-gray-300 rounded-lg text-base px-2 py-1 pr-8 cursor-pointer font-normal focus:outline-none"
+                >
+                  {selectedAgentConfigSet?.map(agent => (
+                    <option key={agent.name} value={agent.name}>
+                      {agent.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-600">
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111.04 1.08l-4.25 3.65a.75.75 0 01-1.04 0L5.21 8.27a.75.75 0 01.02-1.06z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-1 gap-2 px-2 overflow-hidden relative">
+        <Transcript
+          userText={userText}
+          setUserText={setUserText}
+          onSendMessage={handleSendTextMessage}
+          canSend={
+            sessionStatus === "CONNECTED" &&
+            dcRef.current?.readyState === "open"
+          }
+        />
+
+        <Events isExpanded={isEventsPaneExpanded} />
+      </div>
+
+      <BottomToolbar
+        sessionStatus={sessionStatus}
+        onToggleConnection={onToggleConnection}
+        isPTTActive={isPTTActive}
+        setIsPTTActive={setIsPTTActive}
+        isPTTUserSpeaking={isPTTUserSpeaking}
+        handleTalkButtonDown={handleTalkButtonDown}
+        handleTalkButtonUp={handleTalkButtonUp}
+        isEventsPaneExpanded={isEventsPaneExpanded}
+        setIsEventsPaneExpanded={setIsEventsPaneExpanded}
+        isAudioPlaybackEnabled={isAudioPlaybackEnabled}
+        setIsAudioPlaybackEnabled={setIsAudioPlaybackEnabled}
+      />
+    </div>
+  );
+}
+
+export default App;
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/lib/realtimeConnection.ts
+```ts
+import { RefObject } from "react";
+
+export async function createRealtimeConnection(
+  EPHEMERAL_KEY: string,
+  audioElement: RefObject<HTMLAudioElement | null>
+): Promise<{ pc: RTCPeerConnection; dc: RTCDataChannel }> {
+  const pc = new RTCPeerConnection();
+
+  pc.ontrack = (e) => {
+    if (audioElement.current) {
+        audioElement.current.srcObject = e.streams[0];
+    }
+  };
+
+  const ms = await navigator.mediaDevices.getUserMedia({ audio: true });
+  pc.addTrack(ms.getTracks()[0]);
+
+  const dc = pc.createDataChannel("oai-events");
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  const baseUrl = "https://api.openai.com/v1/realtime";
+  const model = "gpt-4o-realtime-preview-2024-12-17";
+
+  const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
+    method: "POST",
+    body: offer.sdp,
+    headers: {
+      Authorization: `Bearer ${EPHEMERAL_KEY}`,
+      "Content-Type": "application/sdp",
+    },
+  });
+
+  const answerSdp = await sdpResponse.text();
+  const answer: RTCSessionDescriptionInit = {
+    type: "answer",
+    sdp: answerSdp,
+  };
+
+  await pc.setRemoteDescription(answer);
+
+  return { pc, dc };
+} 
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/hooks/useHandleServerEvent.ts
+```ts
+"use client";
+
+import { ServerEvent, SessionStatus, AgentConfig } from "@/app/types";
+import { useTranscript } from "@/app/contexts/TranscriptContext";
+import { useEvent } from "@/app/contexts/EventContext";
+import { useRef } from "react";
+
+export interface UseHandleServerEventParams {
+  setSessionStatus: (status: SessionStatus) => void;
+  selectedAgentName: string;
+  selectedAgentConfigSet: AgentConfig[] | null;
+  sendClientEvent: (eventObj: any, eventNameSuffix?: string) => void;
+  setSelectedAgentName: (name: string) => void;
+  shouldForceResponse?: boolean;
+}
+
+export function useHandleServerEvent({
+  setSessionStatus,
+  selectedAgentName,
+  selectedAgentConfigSet,
+  sendClientEvent,
+  setSelectedAgentName,
+}: UseHandleServerEventParams) {
+  const {
+    transcriptItems,
+    addTranscriptBreadcrumb,
+    addTranscriptMessage,
+    updateTranscriptMessage,
+    updateTranscriptItemStatus,
+  } = useTranscript();
+
+  const { logServerEvent } = useEvent();
+
+  const handleFunctionCall = async (functionCallParams: {
+    name: string;
+    call_id?: string;
+    arguments: string;
+  }) => {
+    const args = JSON.parse(functionCallParams.arguments);
+    const currentAgent = selectedAgentConfigSet?.find(
+      (a) => a.name === selectedAgentName
+    );
+
+    addTranscriptBreadcrumb(`function call: ${functionCallParams.name}`, args);
+
+    if (currentAgent?.toolLogic?.[functionCallParams.name]) {
+      const fn = currentAgent.toolLogic[functionCallParams.name];
+      const fnResult = await fn(args, transcriptItems);
+      addTranscriptBreadcrumb(
+        `function call result: ${functionCallParams.name}`,
+        fnResult
+      );
+
+      sendClientEvent({
+        type: "conversation.item.create",
+        item: {
+          type: "function_call_output",
+          call_id: functionCallParams.call_id,
+          output: JSON.stringify(fnResult),
+        },
+      });
+      sendClientEvent({ type: "response.create" });
+    } else if (functionCallParams.name === "transferAgents") {
+      const destinationAgent = args.destination_agent;
+      const newAgentConfig =
+        selectedAgentConfigSet?.find((a) => a.name === destinationAgent) || null;
+      if (newAgentConfig) {
+        setSelectedAgentName(destinationAgent);
+      }
+      const functionCallOutput = {
+        destination_agent: destinationAgent,
+        did_transfer: !!newAgentConfig,
+      };
+      sendClientEvent({
+        type: "conversation.item.create",
+        item: {
+          type: "function_call_output",
+          call_id: functionCallParams.call_id,
+          output: JSON.stringify(functionCallOutput),
+        },
+      });
+      addTranscriptBreadcrumb(
+        `function call: ${functionCallParams.name} response`,
+        functionCallOutput
+      );
+    } else {
+      const simulatedResult = { result: true };
+      addTranscriptBreadcrumb(
+        `function call fallback: ${functionCallParams.name}`,
+        simulatedResult
+      );
+
+      sendClientEvent({
+        type: "conversation.item.create",
+        item: {
+          type: "function_call_output",
+          call_id: functionCallParams.call_id,
+          output: JSON.stringify(simulatedResult),
+        },
+      });
+      sendClientEvent({ type: "response.create" });
+    }
+  };
+
+  const handleServerEvent = (serverEvent: ServerEvent) => {
+    logServerEvent(serverEvent);
+
+    switch (serverEvent.type) {
+      case "session.created": {
+        if (serverEvent.session?.id) {
+          setSessionStatus("CONNECTED");
+          addTranscriptBreadcrumb(
+            `session.id: ${
+              serverEvent.session.id
+            }\nStarted at: ${new Date().toLocaleString()}`
+          );
+        }
+        break;
+      }
+
+      case "conversation.item.created": {
+        let text =
+          serverEvent.item?.content?.[0]?.text ||
+          serverEvent.item?.content?.[0]?.transcript ||
+          "";
+        const role = serverEvent.item?.role as "user" | "assistant";
+        const itemId = serverEvent.item?.id;
+
+        if (itemId && transcriptItems.some((item) => item.itemId === itemId)) {
+          break;
+        }
+
+        if (itemId && role) {
+          if (role === "user" && !text) {
+            text = "[Transcribing...]";
+          }
+          addTranscriptMessage(itemId, role, text);
+        }
+        break;
+      }
+
+      case "conversation.item.input_audio_transcription.completed": {
+        const itemId = serverEvent.item_id;
+        const finalTranscript =
+          !serverEvent.transcript || serverEvent.transcript === "\n"
+            ? "[inaudible]"
+            : serverEvent.transcript;
+        if (itemId) {
+          updateTranscriptMessage(itemId, finalTranscript, false);
+        }
+        break;
+      }
+
+      case "response.audio_transcript.delta": {
+        const itemId = serverEvent.item_id;
+        const deltaText = serverEvent.delta || "";
+        if (itemId) {
+          updateTranscriptMessage(itemId, deltaText, true);
+        }
+        break;
+      }
+
+      case "response.done": {
+        if (serverEvent.response?.output) {
+          serverEvent.response.output.forEach((outputItem) => {
+            if (
+              outputItem.type === "function_call" &&
+              outputItem.name &&
+              outputItem.arguments
+            ) {
+              handleFunctionCall({
+                name: outputItem.name,
+                call_id: outputItem.call_id,
+                arguments: outputItem.arguments,
+              });
+            }
+          });
+        }
+        break;
+      }
+
+      case "response.output_item.done": {
+        const itemId = serverEvent.item?.id;
+        if (itemId) {
+          updateTranscriptItemStatus(itemId, "DONE");
+        }
+        break;
+      }
+
+      default:
+        break;
+    }
+  };
+
+  const handleServerEventRef = useRef(handleServerEvent);
+  handleServerEventRef.current = handleServerEvent;
+
+  return handleServerEventRef;
+}
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/page.tsx
+```tsx
+import React from "react";
+import { TranscriptProvider } from "@/app/contexts/TranscriptContext";
+import { EventProvider } from "@/app/contexts/EventContext";
+import App from "./App";
+
+export default function Page() {
+  return (
+    <TranscriptProvider>
+      <EventProvider>
+        <App />
+      </EventProvider>
+    </TranscriptProvider>
+  );
+}
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/components/Events.tsx
+```tsx
+"use client";
+
+import React, { useRef, useEffect, useState } from "react";
+import { useEvent } from "@/app/contexts/EventContext";
+import { LoggedEvent } from "@/app/types";
+
+export interface EventsProps {
+  isExpanded: boolean;
+}
+
+function Events({ isExpanded }: EventsProps) {
+  const [prevEventLogs, setPrevEventLogs] = useState<LoggedEvent[]>([]);
+  const eventLogsContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const { loggedEvents, toggleExpand } = useEvent();
+
+  const getDirectionArrow = (direction: string) => {
+    if (direction === "client") return { symbol: "▲", color: "#7f5af0" };
+    if (direction === "server") return { symbol: "▼", color: "#2cb67d" };
+    return { symbol: "•", color: "#555" };
+  };
+
+  useEffect(() => {
+    const hasNewEvent = loggedEvents.length > prevEventLogs.length;
+
+    if (isExpanded && hasNewEvent && eventLogsContainerRef.current) {
+      eventLogsContainerRef.current.scrollTop =
+        eventLogsContainerRef.current.scrollHeight;
+    }
+
+    setPrevEventLogs(loggedEvents);
+  }, [loggedEvents, isExpanded]);
+
+  return (
+    <div
+      className={
+        (isExpanded ? "w-1/2 overflow-auto" : "w-0 overflow-hidden opacity-0") +
+        " transition-all rounded-xl duration-200 ease-in-out flex flex-col bg-white"
+      }
+      ref={eventLogsContainerRef}
+    >
+      {isExpanded && (
+        <div>
+          <div className="font-semibold px-6 py-4 sticky top-0 z-10 text-base border-b bg-white">
+            Logs
+          </div>
+          <div>
+            {loggedEvents.map((log) => {
+              const arrowInfo = getDirectionArrow(log.direction);
+              const isError =
+                log.eventName.toLowerCase().includes("error") ||
+                log.eventData?.response?.status_details?.error != null;
+
+              return (
+                <div
+                  key={log.id}
+                  className="border-t border-gray-200 py-2 px-6 font-mono"
+                >
+                  <div
+                    onClick={() => toggleExpand(log.id)}
+                    className="flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex items-center flex-1">
+                      <span
+                        style={{ color: arrowInfo.color }}
+                        className="ml-1 mr-2"
+                      >
+                      {arrowInfo.symbol}
+                      </span>
+                      <span
+                        className={
+                          "flex-1 text-sm " +
+                          (isError ? "text-red-600" : "text-gray-800")
+                        }
+                      >
+                        {log.eventName}
+                      </span>
+                    </div>
+                    <div className="text-gray-500 ml-1 text-xs whitespace-nowrap">
+                      {log.timestamp}
+                    </div>
+                  </div>
+
+                  {log.expanded && log.eventData && (
+                    <div className="text-gray-800 text-left">
+                      <pre className="border-l-2 ml-1 border-gray-200 whitespace-pre-wrap break-words font-mono text-xs mb-2 mt-2 pl-2">
+                        {JSON.stringify(log.eventData, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default Events;
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/types.ts
+```ts
+export type SessionStatus = "DISCONNECTED" | "CONNECTING" | "CONNECTED";
+
+export interface ToolParameterProperty {
+  type: string;
+  description?: string;
+  enum?: string[];
+  pattern?: string;
+  properties?: Record<string, ToolParameterProperty>;
+  required?: string[];
+  additionalProperties?: boolean;
+  items?: ToolParameterProperty;
+}
+
+export interface ToolParameters {
+  type: string;
+  properties: Record<string, ToolParameterProperty>;
+  required?: string[];
+  additionalProperties?: boolean;
+}
+
+export interface Tool {
+  type: "function";
+  name: string;
+  description: string;
+  parameters: ToolParameters;
+}
+
+export interface AgentConfig {
+  name: string;
+  publicDescription: string; // gives context to agent transfer tool
+  instructions: string;
+  tools: Tool[];
+  toolLogic?: Record<
+    string,
+    (args: any, transcriptLogsFiltered: TranscriptItem[]) => Promise<any> | any
+  >;
+  downstreamAgents?: AgentConfig[] | { name: string; publicDescription: string }[];
+}
+
+export type AllAgentConfigsType = Record<string, AgentConfig[]>;
+
+export interface TranscriptItem {
+  itemId: string;
+  type: "MESSAGE" | "BREADCRUMB";
+  role?: "user" | "assistant";
+  title?: string;
+  data?: Record<string, any>;
+  expanded: boolean;
+  timestamp: string;
+  createdAtMs: number;
+  status: "IN_PROGRESS" | "DONE";
+  isHidden: boolean;
+}
+
+export interface Log {
+  id: number;
+  timestamp: string;
+  direction: string;
+  eventName: string;
+  data: any;
+  expanded: boolean;
+  type: string;
+}
+
+export interface ServerEvent {
+  type: string;
+  event_id?: string;
+  item_id?: string;
+  transcript?: string;
+  delta?: string;
+  session?: {
+    id?: string;
+  };
+  item?: {
+    id?: string;
+    object?: string;
+    type?: string;
+    status?: string;
+    name?: string;
+    arguments?: string;
+    role?: "user" | "assistant";
+    content?: {
+      type?: string;
+      transcript?: string | null;
+      text?: string;
+    }[];
+  };
+  response?: {
+    output?: {
+      type?: string;
+      name?: string;
+      arguments?: any;
+      call_id?: string;
+    }[];
+    status_details?: {
+      error?: any;
+    };
+  };
+}
+
+export interface LoggedEvent {
+  id: number;
+  direction: "client" | "server";
+  expanded: boolean;
+  timestamp: string;
+  eventName: string;
+  eventData: Record<string, any>; // can have arbitrary objects logged
+}
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/layout.tsx
+```tsx
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "Realtime API Agents",
+  description: "A demo app from OpenAI.",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en">
+      <body className={`antialiased`}>{children}</body>
+    </html>
+  );
+}
+
+```
+
+File: /Users/gauntlet/Documents/projects/jobs/openai-realtime-agents/openai-realtime-agents/src/app/globals.css
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #fafafa;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+
+```
+</file_contents>
+
