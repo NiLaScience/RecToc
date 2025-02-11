@@ -14,6 +14,7 @@ const AccordionGroup: React.FC<AccordionGroupProps> = ({
   return (
     <IonAccordionGroup 
       value={value}
+      multiple={true}
       className={`accordion-group ${className}`}
       style={{ 
         borderRadius: '8px', 

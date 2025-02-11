@@ -31,6 +31,8 @@ import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
 import type { CVSchema, JobDescriptionSchema } from '../services/OpenAIService';
+import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
+import CVAccordion from './shared/CVAccordion';
 
 interface ApplicationModalProps {
   isOpen: boolean;
@@ -336,31 +338,13 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
 
                     <div style={{ marginBottom: '2rem' }}>
                       <h3 style={{ color: '#fff', marginBottom: '1rem' }}>Job Details</h3>
-                      <AccordionGroup>
-                        {jobPost.jobDescription?.responsibilities && jobPost.jobDescription.responsibilities.length > 0 && (
-                          <AccordionSection value="responsibilities" label="Responsibilities">
-                            <ListContent items={jobPost.jobDescription.responsibilities} />
-                          </AccordionSection>
-                        )}
-                        
-                        {jobPost.jobDescription?.requirements && jobPost.jobDescription.requirements.length > 0 && (
-                          <AccordionSection value="requirements" label="Requirements">
-                            <ListContent items={jobPost.jobDescription.requirements} />
-                          </AccordionSection>
-                        )}
-                        
-                        {jobPost.jobDescription?.skills && jobPost.jobDescription.skills.length > 0 && (
-                          <AccordionSection value="skills" label="Required Skills">
-                            <ChipsContent items={jobPost.jobDescription.skills} />
-                          </AccordionSection>
-                        )}
-
-                        {jobPost.jobDescription?.benefits && jobPost.jobDescription.benefits.length > 0 && (
-                          <AccordionSection value="benefits" label="Benefits">
-                            <ListContent items={jobPost.jobDescription.benefits} />
-                          </AccordionSection>
-                        )}
-                      </AccordionGroup>
+                      <JobDescriptionAccordion
+                        responsibilities={jobPost.jobDescription?.responsibilities}
+                        requirements={jobPost.jobDescription?.requirements}
+                        skills={jobPost.jobDescription?.skills}
+                        benefits={jobPost.jobDescription?.benefits}
+                        transcript={jobPost.transcript}
+                      />
                     </div>
                   </IonCardContent>
                 </IonCard>
@@ -369,78 +353,31 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
 
             {/* User CV */}
             <div>
-              <IonCard style={{ 
-                '--background': '#2a2a2a',
-                '--color': '#fff',
-                margin: 0,
-                borderRadius: '8px',
-                border: '2px solid rgba(255, 255, 255, 0.1)'
-              }}>
-                <IonCardHeader>
-                  <IonCardTitle style={{ color: '#fff' }}>Your Profile</IonCardTitle>
-                  {profile && (
-                    <IonCardSubtitle style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                      {profile.displayName}
-                      {profile.cv?.personalInfo.location && ` • ${profile.cv.personalInfo.location}`}
-                    </IonCardSubtitle>
-                  )}
-                </IonCardHeader>
-                <IonCardContent>
-                  {profile?.cv ? (
-                    <div>
-                      <h3 style={{ color: '#fff', marginBottom: '1rem' }}>Candidate Details</h3>
-                      <AccordionGroup>
-                        {profile.cv.experience && profile.cv.experience.length > 0 && (
-                          <AccordionSection value="experience" label="Experience">
-                            {profile.cv.experience.map((exp: { title: string; company: string; location?: string; startDate: string; endDate?: string; current?: boolean; highlights: string[] }, index: number) => (
-                              <ExperienceContent
-                                key={index}
-                                title={exp.title}
-                                company={exp.company}
-                                startDate={exp.startDate}
-                                endDate={exp.endDate}
-                                current={exp.current}
-                                location={exp.location}
-                                highlights={exp.highlights}
-                              />
-                            ))}
-                          </AccordionSection>
-                        )}
-
-                        {profile.cv.education && profile.cv.education.length > 0 && (
-                          <AccordionSection value="education" label="Education">
-                            {profile.cv.education.map((edu: { institution: string; degree: string; field: string; graduationDate?: string; gpa?: number }, index: number) => (
-                              <EducationContent
-                                key={index}
-                                degree={edu.degree}
-                                field={edu.field}
-                                institution={edu.institution}
-                                graduationDate={edu.graduationDate}
-                                gpa={edu.gpa?.toString()}
-                              />
-                            ))}
-                          </AccordionSection>
-                        )}
-
-                        {profile.cv?.skills && profile.cv.skills.length > 0 && (
-                          <AccordionSection value="skills" label="Skills">
-                            {profile.cv.skills.map((skillGroup: { category: string; items: string[] }, index: number) => (
-                              <div key={index} style={{ marginBottom: index < (profile.cv?.skills?.length || 0) - 1 ? '1rem' : 0 }}>
-                                <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{skillGroup.category}</h4>
-                                <ChipsContent items={skillGroup.items} />
-                              </div>
-                            ))}
-                          </AccordionSection>
-                        )}
-                      </AccordionGroup>
-                    </div>
-                  ) : (
+              {profile?.cv ? (
+                <CVAccordion
+                  personalInfo={profile.cv.personalInfo}
+                  experience={profile.cv.experience}
+                  education={profile.cv.education}
+                  skills={profile.cv.skills}
+                  certifications={profile.cv.certifications}
+                  languages={profile.cv.languages}
+                  displayName={profile.displayName}
+                />
+              ) : (
+                <IonCard style={{ 
+                  '--background': '#2a2a2a',
+                  '--color': '#fff',
+                  margin: 0,
+                  borderRadius: '8px',
+                  border: '2px solid rgba(255, 255, 255, 0.1)'
+                }}>
+                  <IonCardContent>
                     <div style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255, 255, 255, 0.7)' }}>
                       <p>CV not available</p>
                     </div>
-                  )}
-                </IonCardContent>
-              </IonCard>
+                  </IonCardContent>
+                </IonCard>
+              )}
             </div>
 
             {/* Video Recording Section */}

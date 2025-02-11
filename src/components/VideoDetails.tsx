@@ -22,9 +22,7 @@ import { VideoItem } from '../types/video';
 import { useState } from 'react';
 import ApplicationModal from './ApplicationModal';
 import AppHeader from './AppHeader';
-import AccordionGroup from './shared/AccordionGroup';
-import AccordionSection from './shared/AccordionSection';
-import { ListContent, ChipsContent } from './shared/AccordionContent';
+import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
 import InterviewTrainingModal from './InterviewTrainingModal';
 
 interface VideoDetailsProps {
@@ -164,59 +162,13 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, onApplicati
                     </div>
                   )}
 
-                  <AccordionGroup>
-                    {jobDescription?.responsibilities && jobDescription.responsibilities.length > 0 && (
-                      <AccordionSection value="responsibilities" label="Responsibilities">
-                        <ListContent items={jobDescription.responsibilities} />
-                      </AccordionSection>
-                    )}
-                    
-                    {jobDescription?.requirements && jobDescription.requirements.length > 0 && (
-                      <AccordionSection value="requirements" label="Requirements">
-                        <ListContent items={jobDescription.requirements} />
-                      </AccordionSection>
-                    )}
-                    
-                    {jobDescription?.skills && jobDescription.skills.length > 0 && (
-                      <AccordionSection value="skills" label="Required Skills">
-                        <ChipsContent items={jobDescription.skills} />
-                      </AccordionSection>
-                    )}
-
-                    {jobDescription?.benefits && jobDescription.benefits.length > 0 && (
-                      <AccordionSection value="benefits" label="Benefits">
-                        <ListContent items={jobDescription.benefits} />
-                      </AccordionSection>
-                    )}
-
-                    {video.transcript && (
-                      <AccordionSection value="transcript" label="Video Transcript">
-                        <IonList style={{ background: 'transparent' }}>
-                          {video.transcript.segments.map((segment) => (
-                            <IonItem 
-                              key={segment.id} 
-                              lines="none"
-                              style={{ 
-                                '--background': 'transparent',
-                                '--color': '#fff'
-                              }}
-                            >
-                              <IonLabel className="ion-text-wrap">
-                                <p style={{ 
-                                  color: 'rgba(255, 255, 255, 0.6)', 
-                                  fontSize: '0.8rem', 
-                                  marginBottom: '0.25rem' 
-                                }}>
-                                  {formatTime(segment.start)} - {formatTime(segment.end)}
-                                </p>
-                                {segment.text}
-                              </IonLabel>
-                            </IonItem>
-                          ))}
-                        </IonList>
-                      </AccordionSection>
-                    )}
-                  </AccordionGroup>
+                  <JobDescriptionAccordion
+                    responsibilities={jobDescription?.responsibilities}
+                    requirements={jobDescription?.requirements}
+                    skills={jobDescription?.skills}
+                    benefits={jobDescription?.benefits}
+                    transcript={video.transcript}
+                  />
                 </IonCardContent>
               </IonCard>
 

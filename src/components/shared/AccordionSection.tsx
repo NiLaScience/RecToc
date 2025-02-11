@@ -5,16 +5,22 @@ interface AccordionSectionProps {
   label: string;
   className?: string;
   children: React.ReactNode;
+  onClick?: () => void;
 }
 
 const AccordionSection: React.FC<AccordionSectionProps> = ({
   value,
   label,
   className = '',
-  children
+  children,
+  onClick
 }) => {
   return (
-    <IonAccordion value={value} className={`accordion-section ${className}`}>
+    <IonAccordion 
+      value={value} 
+      className={`accordion-section ${className}`}
+      onChange={() => onClick?.()}
+    >
       <IonItem slot="header" style={{ '--background': '#2a2a2a', '--color': '#fff' }} lines="none">
         <IonLabel>{label}</IonLabel>
       </IonItem>

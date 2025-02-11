@@ -28,6 +28,8 @@ import type { UserProfile } from '../types/user';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
+import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
+import CVAccordion from './shared/CVAccordion';
 
 import ApplicationService from '../services/ApplicationService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
@@ -112,16 +114,6 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
             setProfile(data as UserProfile);
           }
         });
-
-        // Check for existing application
-        const existingApps = await ApplicationService.getUserApplications();
-        const found = existingApps.find((app) => app.jobId === jobId);
-        if (found) {
-          setApplication(found);
-          if (found.videoURL) {
-            setPreviewUrl(found.videoURL);
-          }
-        }
       } catch (err) {
         console.error('Error loading data:', err);
       }
@@ -233,114 +225,89 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
               )}
             </div>
 
-            {/* Feedback display */}
-            {interviewState.feedback && (
-              <div
-                style={{
-                  margin: '1rem',
-                  border: '1px solid #666',
-                  padding: '1rem',
+            {/* Job Posting Info */}
+            {jobPost && (
+              <div className="ion-padding">
+                <IonCard style={{ 
+                  '--background': '#2a2a2a',
+                  '--color': '#fff',
+                  margin: 0,
                   borderRadius: '8px',
-                }}
-              >
-                <h4>Feedback: {interviewState.feedback.feedbackType}</h4>
-                <p>{interviewState.feedback.message}</p>
-                {interviewState.feedback.details && (
-                  <>
-                    <p>Strengths:</p>
-                    <ul>
-                      {interviewState.feedback.details.strengths.map((s, i) => (
-                        <li key={i}>{s}</li>
-                      ))}
-                    </ul>
-                    <p>Improvements:</p>
-                    <ul>
-                      {interviewState.feedback.details.improvements.map((imp, i) => (
-                        <li key={i}>{imp}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
+                  border: '2px solid rgba(255, 255, 255, 0.1)'
+                }}>
+                  <IonCardHeader>
+                    <IonCardTitle style={{ color: '#fff' }}>{jobPost.title}</IonCardTitle>
+                    <IonCardSubtitle style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                      {jobPost.jobDescription?.company || 'Company not specified'}
+                      {jobPost.jobDescription?.location && ` • ${jobPost.jobDescription.location}`}
+                    </IonCardSubtitle>
+                  </IonCardHeader>
+                  <IonCardContent>
+                    {jobPost.jobDescription?.employmentType && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
+                          {jobPost.jobDescription.employmentType}
+                        </IonChip>
+                        {jobPost.jobDescription.experienceLevel && (
+                          <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
+                            {jobPost.jobDescription.experienceLevel}
+                          </IonChip>
+                        )}
+                      </div>
+                    )}
+
+                    <JobDescriptionAccordion
+                      responsibilities={jobPost.jobDescription?.responsibilities}
+                      requirements={jobPost.jobDescription?.requirements}
+                      skills={jobPost.jobDescription?.skills}
+                      benefits={jobPost.jobDescription?.benefits}
+                      transcript={jobPost.transcript}
+                    />
+                  </IonCardContent>
+                </IonCard>
               </div>
             )}
 
-            {/* Job Posting Info */}
-            {jobPost && (
-              <IonCard>
-                <IonCardHeader>
-                  <IonCardTitle>{jobPost.title}</IonCardTitle>
-                  <IonCardSubtitle>
-                    {jobPost.jobDescription?.company || 'Company not specified'}
-                    {jobPost.jobDescription?.location && ` • ${jobPost.jobDescription.location}`}
-                  </IonCardSubtitle>
-                </IonCardHeader>
-                <IonCardContent>
-                  {jobPost.jobDescription?.employmentType && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
-                        {jobPost.jobDescription.employmentType}
-                      </IonChip>
-                      {jobPost.jobDescription.experienceLevel && (
-                        <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
-                          {jobPost.jobDescription.experienceLevel}
-                        </IonChip>
-                      )}
-                    </div>
-                  )}
-                  
-                  <AccordionGroup>
-                    {jobPost.jobDescription?.responsibilities && jobPost.jobDescription.responsibilities.length > 0 && (
-                      <AccordionSection value="responsibilities" label="Responsibilities">
-                        <ListContent items={jobPost.jobDescription.responsibilities} />
-                      </AccordionSection>
-                    )}
-                    
-                    {jobPost.jobDescription?.requirements && jobPost.jobDescription.requirements.length > 0 && (
-                      <AccordionSection value="requirements" label="Requirements">
-                        <ListContent items={jobPost.jobDescription.requirements} />
-                      </AccordionSection>
-                    )}
-                    
-                    {jobPost.jobDescription?.skills && jobPost.jobDescription.skills.length > 0 && (
-                      <AccordionSection value="skills" label="Required Skills">
-                        <ChipsContent items={jobPost.jobDescription.skills} />
-                      </AccordionSection>
-                    )}
-                  </AccordionGroup>
-                </IonCardContent>
-              </IonCard>
+            {/* User's CV data */}
+            {profile?.cv && (
+              <div style={{ margin: '1rem 0' }}>
+                <CVAccordion
+                  personalInfo={profile.cv.personalInfo}
+                  experience={profile.cv.experience}
+                  education={profile.cv.education}
+                  skills={profile.cv.skills}
+                  certifications={profile.cv.certifications}
+                  languages={profile.cv.languages}
+                  displayName={profile.displayName}
+                />
+              </div>
             )}
 
-            {/* User's CV data */}
-            {profile && profile.cv && (
-              <IonCard>
-                <IonCardHeader>
-                  <IonCardTitle>Your CV</IonCardTitle>
-                  <IonCardSubtitle>{profile.displayName}</IonCardSubtitle>
-                </IonCardHeader>
-                <IonCardContent>
-                  {/* Show user CV in Accordions */}
-                  <AccordionGroup>
-                    {profile.cv.experience?.length > 0 && (
-                      <AccordionSection value="experience" label="Experience">
-                        {profile.cv.experience.map((exp, i) => (
-                          <ExperienceContent
-                            key={i}
-                            title={exp.title}
-                            company={exp.company}
-                            startDate={exp.startDate}
-                            endDate={exp.endDate}
-                            current={exp.current}
-                            location={exp.location}
-                            highlights={exp.highlights}
-                          />
-                        ))}
-                      </AccordionSection>
+            {/* Interview feedback */}
+            {interviewState.feedback && (
+              <AccordionGroup>
+                <AccordionSection value="feedback" label={`Feedback: ${interviewState.feedback.feedbackType}`}>
+                  <div className="ion-padding">
+                    <p>{interviewState.feedback.message}</p>
+                    {interviewState.feedback.details && (
+                      <>
+                        <h4>Strengths:</h4>
+                        <ul>
+                          {interviewState.feedback.details.strengths.map((s, i) => (
+                            <li key={i}>{s}</li>
+                          ))}
+                        </ul>
+                        <h4>Areas for Improvement:</h4>
+                        <ul>
+                          {interviewState.feedback.details.improvements.map((imp, i) => (
+                            <li key={i}>{imp}</li>
+                          ))}
+                        </ul>
+                      </>
                     )}
-                    {/* Education, Skills, etc. */}
-                  </AccordionGroup>
-                </IonCardContent>
-              </IonCard>
+                  </div>
+                </AccordionSection>
+              </AccordionGroup>
             )}
 
             {/* Video section */}

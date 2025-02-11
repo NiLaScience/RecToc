@@ -11,6 +11,15 @@ export interface JobDescription {
   applicationUrl?: string;
 }
 
+export interface Transcript {
+  segments: {
+    id: string;
+    start: number;
+    end: number;
+    text: string;
+  }[];
+}
+
 export interface VideoItem {
   id: string;
   title: string;
@@ -22,13 +31,5 @@ export interface VideoItem {
   createdAt: string;
   views: number;
   likes: number;
-  transcript?: {
-    text: string;
-    segments: {
-      id: number;
-      start: number;
-      end: number;
-      text: string;
-    }[];
-  } | null;
+  transcript?: Transcript | null;
 }

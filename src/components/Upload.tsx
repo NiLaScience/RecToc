@@ -36,6 +36,7 @@ import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent } from './shared/AccordionContent';
 import { FirebaseStorage } from '@capacitor-firebase/storage';
+import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
 
 interface User {
   uid: string;
@@ -764,39 +765,13 @@ const Upload = () => {
                   </div>
                 </div>
 
-                <AccordionGroup>
-                  {jobDescription.responsibilities && jobDescription.responsibilities.length > 0 && (
-                    <AccordionSection value="responsibilities" label="Responsibilities">
-                      <ListContent items={jobDescription.responsibilities} />
-                    </AccordionSection>
-                  )}
-                  
-                  {jobDescription.requirements && jobDescription.requirements.length > 0 && (
-                    <AccordionSection value="requirements" label="Requirements">
-                      <ListContent items={jobDescription.requirements} />
-                    </AccordionSection>
-                  )}
-                  
-                  {jobDescription.skills && jobDescription.skills.length > 0 && (
-                    <AccordionSection value="skills" label="Required Skills">
-                      <ChipsContent items={jobDescription.skills} />
-                    </AccordionSection>
-                  )}
-                  
-                  {jobDescription.benefits && jobDescription.benefits.length > 0 && (
-                    <AccordionSection value="benefits" label="Benefits">
-                      <ListContent items={jobDescription.benefits} />
-                    </AccordionSection>
-                  )}
-
-                  {jobDescription.salary && (
-                    <AccordionSection value="salary" label="Salary">
-                      <p style={{ color: '#fff' }}>
-                        {jobDescription.salary.min}-{jobDescription.salary.max} {jobDescription.salary.currency} ({jobDescription.salary.period})
-                      </p>
-                    </AccordionSection>
-                  )}
-                </AccordionGroup>
+                <JobDescriptionAccordion
+                  responsibilities={jobDescription.responsibilities}
+                  requirements={jobDescription.requirements}
+                  skills={jobDescription.skills}
+                  benefits={jobDescription.benefits}
+                  salary={jobDescription.salary}
+                />
               </div>
             </div>
           )}

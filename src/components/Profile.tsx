@@ -52,6 +52,7 @@ import '../styles/accordion.css';
 import { FirebaseStorage } from '@capacitor-firebase/storage';
 import RealtimeModal from './RealtimeModal';
 import ApplicationService from '../services/ApplicationService';
+import CVAccordion from './shared/CVAccordion';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -715,80 +716,15 @@ const Profile = () => {
 
           {profile?.cv && (
             <div style={{ margin: '1rem 0' }}>
-              <h3 style={{ color: '#fff', marginBottom: '1rem' }}>Your CV Information</h3>
-              
-              <AccordionGroup>
-                {profile?.cv?.personalInfo?.summary && (
-                  <AccordionSection value="summary" label="Professional Summary">
-                    {profile?.cv?.personalInfo?.summary}
-                  </AccordionSection>
-                )}
-
-                {profile?.cv?.experience && profile?.cv?.experience?.length > 0 && (
-                  <AccordionSection value="experience" label="Experience">
-                    {profile?.cv?.experience?.map((exp, index) => (
-                      <ExperienceContent
-                        key={index}
-                        title={exp.title}
-                        company={exp.company}
-                        startDate={exp.startDate}
-                        endDate={exp.endDate}
-                        current={exp.current}
-                        location={exp.location}
-                        highlights={exp.highlights}
-                      />
-                    ))}
-                  </AccordionSection>
-                )}
-
-                {profile?.cv?.education && profile?.cv?.education?.length > 0 && (
-                  <AccordionSection value="education" label="Education">
-                    {profile?.cv?.education?.map((edu, index) => (
-                      <EducationContent
-                        key={index}
-                        degree={edu.degree}
-                        field={edu.field}
-                        institution={edu.institution}
-                        graduationDate={edu.graduationDate}
-                        gpa={edu.gpa?.toString()}
-                      />
-                    ))}
-                  </AccordionSection>
-                )}
-
-                {profile?.cv?.skills && profile?.cv?.skills?.length > 0 && (
-                  <AccordionSection value="skills" label="Skills">
-                    {profile?.cv?.skills?.map((skillGroup, index) => (
-                      <div key={index} style={{ marginBottom: index < (profile?.cv?.skills?.length || 0) - 1 ? '1rem' : 0 }}>
-                        <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{skillGroup.category}</h4>
-                        <ChipsContent items={skillGroup.items} />
-                      </div>
-                    ))}
-                  </AccordionSection>
-                )}
-
-                {profile?.cv?.certifications && profile?.cv?.certifications?.length > 0 && (
-                  <AccordionSection value="certifications" label="Certifications">
-                    {profile?.cv?.certifications?.map((cert, index) => (
-                      <div key={index} style={{ marginBottom: index < (profile?.cv?.certifications?.length || 0) - 1 ? '1rem' : 0 }}>
-                        <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{cert.name}</h4>
-                        <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                          {cert.issuer}
-                          {cert.date && ` • ${cert.date}`}
-                        </p>
-                      </div>
-                    ))}
-                  </AccordionSection>
-                )}
-
-                {profile?.cv?.languages && profile?.cv?.languages?.length > 0 && (
-                  <AccordionSection value="languages" label="Languages">
-                    <ChipsContent 
-                      items={profile.cv.languages.map(lang => `${lang.language} - ${lang.proficiency}`)} 
-                    />
-                  </AccordionSection>
-                )}
-              </AccordionGroup>
+              <CVAccordion
+                personalInfo={profile.cv.personalInfo}
+                experience={profile.cv.experience}
+                education={profile.cv.education}
+                skills={profile.cv.skills}
+                certifications={profile.cv.certifications}
+                languages={profile.cv.languages}
+                displayName={profile.displayName}
+              />
             </div>
           )}
 
