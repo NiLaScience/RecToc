@@ -212,30 +212,34 @@ export const addSnapshotListener = async (reference: string, callback: (data: an
       if (queryString) {
         const params = new URLSearchParams(queryString);
         Array.from(params.entries()).forEach(([field, value]) => {
+          // Parse operator from value (e.g., "==", ">=", etc.)
+          const [op, val] = value.includes('==') ? value.split('==') : [undefined, value];
+          const opStr = op || '==';  // Default to equality if no operator specified
+          
           // Handle special array-based filters
           if (field === '__name__-in') {
-            const ids = value.split(',');
+            const ids = val.split(',');
             filters.push({
               fieldPath: '__name__',
               opStr: 'in',
               value: ids.map(id => `${path}/${id}`) // Convert to full document path
             });
           } else if (field === '__name__-not-in') {
-            const ids = value.split(',');
+            const ids = val.split(',');
             filters.push({
               fieldPath: '__name__',
               opStr: 'not-in',
               value: ids.map(id => `${path}/${id}`) // Convert to full document path
             });
           } else if (field === 'id-in') {
-            const ids = value.split(',');
+            const ids = val.split(',');
             filters.push({
               fieldPath: 'id',
               opStr: 'in',
               value: ids
             });
           } else if (field === 'id-not-in') {
-            const ids = value.split(',');
+            const ids = val.split(',');
             filters.push({
               fieldPath: 'id',
               opStr: 'not-in',
@@ -244,8 +248,8 @@ export const addSnapshotListener = async (reference: string, callback: (data: an
           } else {
             filters.push({
               fieldPath: field,
-              opStr: '==',
-              value
+              opStr,
+              value: val
             });
           }
         });

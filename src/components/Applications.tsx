@@ -24,6 +24,7 @@ import { timeOutline, documentTextOutline, businessOutline } from 'ionicons/icon
 import { formatDistanceToNow } from 'date-fns';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import VideoDetails from './VideoDetails';
+import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 
 const Applications: React.FC = () => {
   const { user } = useAuth();
@@ -51,37 +52,53 @@ const Applications: React.FC = () => {
     }
   };
 
-  const fetchApplications = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const apps = await ApplicationService.getUserApplications();
-      
-      // Fetch job details for each application
-      const appsWithDetails = await Promise.all(
-        apps.map(async (app) => {
-          const jobDetails = await fetchJobDetails(app.jobId);
-          return {
-            ...app,
-            jobDetails: jobDetails || undefined
-          };
-        })
-      );
-      
-      setApplications(appsWithDetails);
-    } catch (error) {
-      console.error('Error fetching applications:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchApplications();
+    let intervalId: NodeJS.Timeout | null = null;
+
+    const fetchApplicationsWithDetails = async () => {
+      if (!user) return;
+      try {
+        setLoading(true);
+        const apps = await ApplicationService.getUserApplications();
+        
+        // Fetch job details for each application
+        const appsWithDetails = await Promise.all(
+          apps.map(async (app) => {
+            const jobDetails = await fetchJobDetails(app.jobId);
+            return {
+              ...app,
+              jobDetails: jobDetails || undefined
+            };
+          })
+        );
+        
+        setApplications(appsWithDetails);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching applications:', error);
+        setLoading(false);
+      }
+    };
+
+    const startPolling = () => {
+      fetchApplicationsWithDetails();
+      // Poll every 5 seconds
+      intervalId = setInterval(fetchApplicationsWithDetails, 5000);
+    };
+
+    if (user) {
+      startPolling();
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, [user]);
 
   const handleRefresh = async (event: CustomEvent) => {
-    await fetchApplications();
+    await ApplicationService.getUserApplications();
     event.detail.complete();
   };
 

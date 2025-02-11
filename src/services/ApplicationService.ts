@@ -480,56 +480,43 @@ class ApplicationService {
     });
   }
 
-  private static async uploadWebFile(file: File, path: string): Promise<void> {
-    const base64Data = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(file);
-    });
+  static async addSnapshotListener(
+    path: string,
+    callback: (data: any) => void,
+    options?: { where?: [string, string, any][] }
+  ): Promise<string> {
+    if (!Capacitor.isNativePlatform()) {
+      throw new Error('Snapshot listeners are only supported on native platforms');
+    }
 
-    // Remove data URL prefix (e.g., "data:image/jpeg;base64,")
-    const base64Content = base64Data.split(',')[1];
+    let query = `${this.COLLECTION}`;
+    if (options?.where) {
+      // Add where clauses to the query
+      query = options.where.reduce((q, [field, op, value]) => {
+        return `${q}?where=${field}${op}${value}`;
+      }, query);
+    }
 
-    await FirebaseStorage.uploadFile({
-      path,
-      blob: new Blob([Buffer.from(base64Content, 'base64')], { type: file.type }),
-      metadata: {
-        contentType: file.type
+    return await FirebaseFirestore.addSnapshotListener({
+      reference: query,
+      callback: (snapshot) => {
+        if (snapshot.snapshot?.data) {
+          callback(snapshot.snapshot.data);
+        }
       }
-    }, () => {});
+    });
   }
 
-  private static async uploadNativeFile(file: File, path: string): Promise<void> {
-    const blob = await file.arrayBuffer();
-    const fileName = path.split('/').pop()!;
-    
-    // Write to filesystem
-    await Filesystem.writeFile({
-      path: fileName,
-      data: Buffer.from(blob).toString('base64'),
-      directory: Directory.Cache
-    });
+  static async removeSnapshotListener(id: string): Promise<void> {
+    if (!Capacitor.isNativePlatform()) {
+      return; // No-op on web
+    }
+    await FirebaseFirestore.removeSnapshotListener({ id });
+  }
 
-    // Get the file URI
-    const fileInfo = await Filesystem.getUri({
-      path: fileName,
-      directory: Directory.Cache
-    });
-
-    // Upload to Firebase Storage
-    await FirebaseStorage.uploadFile({
-      path,
-      uri: fileInfo.uri,
-      metadata: {
-        contentType: file.type
-      }
-    }, () => {});
-
-    // Clean up the temporary file
-    await Filesystem.deleteFile({
-      path: fileName,
-      directory: Directory.Cache
-    });
+  static async refreshApplications(): Promise<void> {
+    // Force a refresh of the applications collection
+    await FirebaseFirestore.refresh({ reference: this.COLLECTION });
   }
 
   static async deleteAllApplications(): Promise<void> {
