@@ -28,11 +28,13 @@ import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
 import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
 import CVAccordion from './shared/CVAccordion';
+import ChatMessage from './ChatMessage';
 
 import ApplicationService from '../services/ApplicationService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import { useInterviewCoach } from '../hooks/useInterviewCoach';
 import type { JobDescriptionSchema } from '../services/OpenAIService';
+import '../styles/chat.css';
 
 interface InterviewTrainingModalProps {
   isOpen: boolean;
@@ -64,8 +66,8 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
     sessionStatus,
     error: interviewError,
     messages: interviewMessages,
-    startInterview,
     stopInterview,
+    connect,
   } = useInterviewCoach({
     resumeData: profile?.cv || {
       personalInfo: { name: 'Anonymous' },
@@ -84,6 +86,7 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
     },
   });
 
+  // Handle data loading
   useEffect(() => {
     let jobUnsubscribeId: string | null = null;
     let profileUnsubscribeId: string | null = null;
@@ -118,18 +121,21 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
     };
   }, [user, jobId, isOpen]);
 
-  // Kick off the interview once we have job + profile
+  // Handle cleanup when modal closes
   useEffect(() => {
-    if (jobPost && profile && sessionStatus === 'DISCONNECTED') {
-      // Start interview once the Realtime connection is offline and we have data
-      startInterview();
+    if (!isOpen) {
+      stopInterview();
     }
-  }, [jobPost, profile, sessionStatus, startInterview]);
+  }, [isOpen, stopInterview]);
 
   if (!isOpen) return null;
 
   return (
-    <IonModal isOpen={isOpen} onDidDismiss={onClose}>
+    <IonModal 
+      isOpen={isOpen} 
+      onDidDismiss={onClose}
+      className="interview-training-modal"
+    >
       <IonHeader>
         <IonToolbar>
           <IonTitle>Interview Practice</IonTitle>
@@ -141,7 +147,7 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
         </IonToolbar>
       </IonHeader>
       
-      <IonContent>
+      <IonContent scrollY={true}>
         {loading ? (
           <div className="ion-padding ion-text-center">
             <IonSpinner />
@@ -155,14 +161,71 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
               style={{ height: '6px' }}
             ></IonProgressBar>
 
-            {/* Stage display */}
-            <div className="ion-padding-horizontal">
-              <h3>
-                Stage: {interviewState.stageTitle} ({Math.round(interviewState.progress)}%)
-              </h3>
-              {sessionStatus === 'CONNECTING' && <p>Connecting to AI Interview Coach...</p>}
-              {sessionStatus === 'CONNECTED' && (
-                <IonChip color="success">Connected</IonChip>
+            {/* Stage display and controls */}
+            <div className="ion-padding">
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginBottom: '1rem'
+              }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>
+                    Stage: {interviewState.stageTitle} ({Math.round(interviewState.progress)}%)
+                  </h3>
+                  {sessionStatus === 'CONNECTING' && <p>Connecting to AI Interview Coach...</p>}
+                  {sessionStatus === 'CONNECTED' && interviewState.progress === 0 && (
+                    <IonChip color="success">Interview ready to begin, say hello!</IonChip>
+                  )}
+                  {sessionStatus === 'CONNECTED' && interviewState.progress > 0 && (
+                    <IonChip color="primary">Interview in progress</IonChip>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <IonButton 
+                    onClick={connect}
+                    disabled={sessionStatus !== 'DISCONNECTED'}
+                  >
+                    Start Interview
+                  </IonButton>
+                  <IonButton 
+                    color="danger" 
+                    onClick={stopInterview}
+                    disabled={sessionStatus !== 'CONNECTED'}
+                  >
+                    End Interview
+                  </IonButton>
+                </div>
+              </div>
+
+              {/* Interview feedback */}
+              {interviewState.feedback && interviewState.progress > 0 && (
+                <AccordionGroup>
+                  <AccordionSection 
+                    value="feedback" 
+                    label={`Current Feedback: ${interviewState.feedback.feedbackType}`}
+                  >
+                    <div className="ion-padding">
+                      <p>{interviewState.feedback.message}</p>
+                      {interviewState.feedback.details && (
+                        <>
+                          <h4>Strengths:</h4>
+                          <ul>
+                            {interviewState.feedback.details.strengths.map((s, i) => (
+                              <li key={i}>{s}</li>
+                            ))}
+                          </ul>
+                          <h4>Areas for Improvement:</h4>
+                          <ul>
+                            {interviewState.feedback.details.improvements.map((imp, i) => (
+                              <li key={i}>{imp}</li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
+                  </AccordionSection>
+                </AccordionGroup>
               )}
             </div>
 
@@ -221,42 +284,6 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
                   languages={profile.cv.languages}
                   displayName={profile.displayName}
                 />
-              </div>
-            )}
-
-            {/* Interview feedback */}
-            {interviewState.feedback && (
-              <AccordionGroup>
-                <AccordionSection value="feedback" label={`Feedback: ${interviewState.feedback.feedbackType}`}>
-                  <div className="ion-padding">
-                    <p>{interviewState.feedback.message}</p>
-                    {interviewState.feedback.details && (
-                      <>
-                        <h4>Strengths:</h4>
-                        <ul>
-                          {interviewState.feedback.details.strengths.map((s, i) => (
-                            <li key={i}>{s}</li>
-                          ))}
-                        </ul>
-                        <h4>Areas for Improvement:</h4>
-                        <ul>
-                          {interviewState.feedback.details.improvements.map((imp, i) => (
-                            <li key={i}>{imp}</li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                  </div>
-                </AccordionSection>
-              </AccordionGroup>
-            )}
-
-            {/* End Interview */}
-            {sessionStatus === 'CONNECTED' && (
-              <div className="ion-padding">
-                <IonButton color="danger" onClick={stopInterview}>
-                  End Interview
-                </IonButton>
               </div>
             )}
           </>

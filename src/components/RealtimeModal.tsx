@@ -132,7 +132,7 @@ const RealtimeModal: React.FC<RealtimeModalProps> = ({ isOpen, onClose, resumeDa
     >
       <IonHeader>
         <IonToolbar>
-          <IonTitle>OpenAI Realtime Chat</IonTitle>
+          <IonTitle>Onboarding Interview</IonTitle>
           <IonButton slot="end" onClick={onClose} fill="clear" color="light">
             Close
           </IonButton>

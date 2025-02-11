@@ -53,7 +53,7 @@ export const useInterviewCoach = ({
     sessionStatus,
     error,
     messages,
-    connect,
+    connect: baseConnect,
     disconnect,
     sendMessage,
   } = useBaseRealtimeConnection({
@@ -189,19 +189,31 @@ Remember to keep the user engaged and track the progress from 0% to 100% through
     }
   });
 
-  const startInterview = useCallback(async () => {
-    if (sessionStatus === "DISCONNECTED") {
-      await connect();
-    } else {
-      // If already connected, just ask the coach to respond
-      sendMessage({ 
-        type: 'response.create', 
-        isUser: false 
-      });
+  const connect = useCallback(async () => {
+    try {
+      await baseConnect();
+      // Send initial message to start the interview immediately after connection
+      if (sessionStatus === "CONNECTED") {
+        const responseCreate = {
+          type: "response.create",
+          response: {
+            modalities: ["text", "audio"]
+          },
+          isUser: false
+        };
+        sendMessage(responseCreate);
+      }
+    } catch (err) {
+      console.error('Connection error:', err);
     }
-  }, [sessionStatus, connect, sendMessage]);
+  }, [baseConnect, sessionStatus, sendMessage]);
 
   const stopInterview = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      progress: 0,
+      feedback: null,
+    }));
     disconnect();
   }, [disconnect]);
 
@@ -215,7 +227,7 @@ Remember to keep the user engaged and track the progress from 0% to 100% through
     sessionStatus,
     error,
     messages,
-    startInterview,
+    connect,
     stopInterview,
   };
 };
