@@ -45,7 +45,17 @@ interface ServerEvent {
   item?: {
     content: any[];
   };
+  delta?: string;
 }
+
+export const INTERVIEW_STAGES: InterviewStage[] = [
+  'intro',
+  'technical',
+  'behavioral',
+  'problemSolving',
+  'cultureFit',
+  'closing'
+];
 
 export const useInterviewCoach = ({
   resumeData,
@@ -56,51 +66,51 @@ export const useInterviewCoach = ({
   const [state, setState] = useState<InterviewCoachState>({
     currentStage: 'intro',
     progress: 0,
-    stageTitle: 'Getting Started',
+    stageTitle: 'Introduction',
     feedback: null,
   });
 
-  // Tool implementation functions
-  const handleUpdateProgress = useCallback(({ currentStage, progress, stageTitle }: ProgressUpdate) => {
-    setState(prev => ({
-      ...prev,
-      currentStage,
-      progress,
-      stageTitle,
-    }));
-    onProgressUpdate(currentStage, progress, stageTitle);
-  }, [onProgressUpdate]);
+  const feedbackBuffer = useRef<string | null>(null);
 
-  const handleFeedback = useCallback(({ feedbackType, message, details }: InterviewFeedback) => {
-    const feedback = {
-      type: feedbackType,
-      message,
-      details,
-    };
-    setState(prev => ({
-      ...prev,
-      feedback,
-    }));
-    onFeedback(feedback);
-  }, [onFeedback]);
-
-  // Handle tool calls from the agent
+  // Handle stage transitions from agent responses
   const handleServerEvent = useCallback((event: ServerEvent) => {
-    if (event.type === 'tool.call') {
-      const toolCall = event.item?.content?.[0];
-      if (!toolCall) return;
+    console.log('Interview coach received event:', event);
 
-      const { name, parameters } = toolCall;
-      switch (name) {
-        case 'updateInterviewProgress':
-          handleUpdateProgress(parameters as ProgressUpdate);
-          break;
-        case 'showFeedback':
-          handleFeedback(parameters as InterviewFeedback);
-          break;
+    if (event.type === 'response.text.delta' && event.delta) {
+      // Check for stage transition markers
+      if (event.delta.includes('[NEXT_STAGE]')) {
+        const currentIndex = INTERVIEW_STAGES.indexOf(state.currentStage);
+        const nextStage = INTERVIEW_STAGES[currentIndex + 1] || 'closing';
+        const progress = ((currentIndex + 1) / INTERVIEW_STAGES.length) * 100;
+        
+        setState(prev => ({
+          ...prev,
+          currentStage: nextStage,
+          progress,
+          stageTitle: nextStage.charAt(0).toUpperCase() + nextStage.slice(1)
+        }));
+        
+        onProgressUpdate?.(nextStage, progress, nextStage);
+      }
+      
+      // Check for feedback markers
+      if (event.delta.includes('[FEEDBACK_START]')) {
+        // Start collecting feedback
+        feedbackBuffer.current = '';
+      } else if (event.delta.includes('[FEEDBACK_END]')) {
+        try {
+          const feedback = JSON.parse(feedbackBuffer.current);
+          setState(prev => ({ ...prev, feedback }));
+          onFeedback?.(feedback);
+        } catch (err) {
+          console.error('Failed to parse feedback:', err);
+        }
+        feedbackBuffer.current = null;
+      } else if (feedbackBuffer.current !== null) {
+        feedbackBuffer.current += event.delta;
       }
     }
-  }, [handleUpdateProgress, handleFeedback]);
+  }, [state.currentStage, onProgressUpdate, onFeedback]);
 
   // Use base realtime connection
   const {
@@ -122,15 +132,17 @@ export const useInterviewCoach = ({
         },
         turn_detection: {
           type: "server_vad",
-          threshold: 0.3,           // Lower threshold for better speech detection
-          prefix_padding_ms: 500,   // More padding before speech
-          silence_duration_ms: 800, // Longer silence duration to avoid premature cuts
+          threshold: 0.3,
+          prefix_padding_ms: 500,
+          silence_duration_ms: 800,
           create_response: true
         }
       }
     }),
     onEvent: handleServerEvent,
     onConnect: () => {
+      console.log('Interview coach connected, sending initial context...');
+      
       // Send initial context to the agent
       sendMessage({
         type: 'conversation.item.create',
@@ -141,15 +153,10 @@ export const useInterviewCoach = ({
             type: "input_text",
             text: `# Personality and Tone
 ## Identity
-You are a professional interview coach with expertise in technical interviews. You have years of experience preparing candidates for software engineering positions and understand both the technical and behavioral aspects of the interview process.
+You are a professional interview coach with expertise in technical interviews. You have years of experience preparing candidates for software engineering positions.
 
 ## Task
-Guide candidates through a structured technical interview preparation session, providing constructive feedback and helping them improve their interview skills.
-
-## Demeanor
-Professional yet approachable, maintaining a supportive and encouraging atmosphere while providing honest feedback.
-
-## Interview Context
+Guide candidates through a structured technical interview preparation session for the following position:
 Position: ${jobDescription.title}
 Company: ${jobDescription.company}
 Experience Level: ${jobDescription.experienceLevel}
@@ -160,97 +167,36 @@ ${jobDescription.skills.map(skill => `- ${skill}`).join('\n')}
 Key Responsibilities:
 ${jobDescription.responsibilities.map(resp => `- ${resp}`).join('\n')}
 
-## Tools
-You have access to the following tools to manage the interview process:
-
-1. updateInterviewProgress - Updates the UI to reflect current interview stage and progress
-   - Use this when transitioning between interview sections
-   - Update progress percentage based on completed sections
-
-2. showFeedback - Displays feedback UI component with evaluation
-   - Use after each response to provide immediate feedback
-   - Include specific strengths and areas for improvement
-
-## Interview Structure
-The interview is divided into the following sections:
-
-1. Introduction (5%)
-   - Welcome the candidate
-   - Explain the interview process
-   - Set expectations
-
-2. Technical Skills (25%)
-   - Questions based on required technical skills
-   - Focus on experience mentioned in resume
-   - Assess depth of knowledge
-
-3. Behavioral Questions (25%)
-   - Situation-based questions
-   - Leadership and teamwork scenarios
-   - Problem-solving approaches
-
-4. Problem Solving (20%)
-   - Technical scenarios
-   - Process explanation
-   - Decision-making assessment
-
-5. Culture Fit (15%)
-   - Company values alignment
-   - Work style preferences
-   - Team dynamics
-
-6. Closing (10%)
-   - Overall feedback
-   - Areas for improvement
-   - Next steps and recommendations
-
-## Interview Flow
-1. Start each section by calling updateInterviewProgress with the current stage and progress
-2. Ask clear, focused questions one at a time
-3. Listen to the candidate's response
-4. IMMEDIATELY after each response:
-   a. Call showFeedback with specific feedback about their answer
-   b. Include both strengths and areas for improvement
-5. Then decide whether to:
-   - Ask a follow-up question in the current section
-   - Move to the next section
-   - End the interview
-
-## Feedback Guidelines
-- Provide immediate feedback after EVERY response
-- Structure feedback with:
-  - Overall assessment (positive/improvement/neutral)
-  - Main message summarizing the evaluation
-  - Specific strengths demonstrated
-  - Concrete areas for improvement
-- Keep feedback constructive and actionable
-- Focus on both content and delivery
-- Reference specific examples from their response
-
-Example feedback:
+## Important Instructions
+1. After completing each interview stage, append the marker [NEXT_STAGE] to your response.
+2. When providing feedback, wrap it in [FEEDBACK_START] and [FEEDBACK_END] markers, using this format:
 {
-  "feedbackType": "positive",
-  "message": "Strong technical explanation with good structure",
+  "feedbackType": "positive" | "improvement" | "neutral",
+  "message": "Main feedback message",
   "details": {
-    "strengths": [
-      "Clear problem-solving approach",
-      "Used specific examples",
-      "Logical flow of ideas"
-    ],
-    "improvements": [
-      "Could add more context about scalability",
-      "Consider mentioning alternative approaches"
-    ]
+    "strengths": ["strength1", "strength2"],
+    "improvements": ["improvement1", "improvement2"]
   }
 }
 
-## Candidate Information
-${JSON.stringify({
-  resume: resumeData,
-  jobDescription
-}, null, 2)}
+## Interview Flow
+1. Start with a warm greeting, introducing yourself and explaining that this is a practice interview for the ${jobDescription.title} position at ${jobDescription.company}.
+2. Guide the candidate through these stages:
+   - Introduction
+   - Technical Skills Assessment
+   - Behavioral Questions
+   - Problem Solving
+   - Culture Fit
+   - Closing/Feedback
 
-Begin by calling updateInterviewProgress to start the introduction phase, then welcome the candidate, introduce yourself as their interview coach, mention the specific position they're interviewing for, and explain the interview process.
+## Candidate Information
+${JSON.stringify(resumeData, null, 2)}
+
+Remember to:
+- Be supportive and encouraging
+- Provide specific, actionable feedback after each response
+- Keep questions relevant to the job requirements
+- End each stage with [NEXT_STAGE]
 `
           }]
         }
@@ -276,7 +222,7 @@ Begin by calling updateInterviewProgress to start the introduction phase, then w
                     properties: {
                       currentStage: {
                         type: "string",
-                        enum: ["intro", "technical", "behavioral", "problemSolving", "cultureFit", "closing"]
+                        enum: INTERVIEW_STAGES
                       },
                       progress: {
                         type: "number",
@@ -328,46 +274,13 @@ Begin by calling updateInterviewProgress to start the introduction phase, then w
         }
       });
 
-      // Add a small delay to ensure session is fully configured
-      setTimeout(() => {
-        // Send first message
-        sendMessage({
-          type: 'conversation.item.create',
-          item: {
-            type: "message",
-            role: "user",
-            content: [{
-              type: "input_text",
-              text: "Hello, I'm here for the interview."
-            }]
-          }
-        });
-
-        // Send second message after a short delay
-        setTimeout(() => {
-          sendMessage({
-            type: 'conversation.item.create',
-            item: {
-              type: "message",
-              role: "user",
-              content: [{
-                type: "input_text",
-                text: "I'm excited to learn more about this opportunity."
-              }]
-            }
-          });
-
-          // Finally trigger the agent to respond
-          setTimeout(() => {
-            sendMessage({
-              type: 'response.create',
-              response: {
-                modalities: ["text", "audio"]
-              }
-            });
-          }, 500);
-        }, 500);
-      }, 1000);
+      // Immediately trigger the initial greeting
+      sendMessage({
+        type: 'response.create',
+        response: {
+          modalities: ["text", "audio"]
+        }
+      });
     }
   });
 
@@ -399,7 +312,5 @@ Begin by calling updateInterviewProgress to start the introduction phase, then w
     messages,
     startInterview,
     stopInterview,
-    updateProgress: handleUpdateProgress,
-    showFeedback: handleFeedback,
   };
 };
