@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useBaseRealtimeConnection } from './useBaseRealtimeConnection';
+import { useBaseRealtimeConnection, type ServerEvent as BaseServerEvent } from './useBaseRealtimeConnection';
 import type { CVSchema, JobDescriptionSchema } from '../services/OpenAIService';
 
 export type InterviewStage = 'intro' | 'technical' | 'behavioral' | 'problemSolving' | 'cultureFit' | 'closing';
@@ -40,14 +40,6 @@ interface UseInterviewCoachProps {
   onFeedback: (feedback: InterviewCoachState['feedback']) => void;
 }
 
-interface ServerEvent {
-  type: string;
-  item?: {
-    content: any[];
-  };
-  delta?: string;
-}
-
 export const INTERVIEW_STAGES: InterviewStage[] = [
   'intro',
   'technical',
@@ -73,7 +65,7 @@ export const useInterviewCoach = ({
   const feedbackBuffer = useRef<string | null>(null);
 
   // Handle stage transitions from agent responses
-  const handleServerEvent = useCallback((event: ServerEvent) => {
+  const handleServerEvent = useCallback((event: BaseServerEvent) => {
     console.log('Interview coach received event:', event);
 
     if (event.type === 'response.text.delta' && event.delta) {
@@ -99,9 +91,11 @@ export const useInterviewCoach = ({
         feedbackBuffer.current = '';
       } else if (event.delta.includes('[FEEDBACK_END]')) {
         try {
-          const feedback = JSON.parse(feedbackBuffer.current);
-          setState(prev => ({ ...prev, feedback }));
-          onFeedback?.(feedback);
+          if (feedbackBuffer.current !== null) {
+            const feedback = JSON.parse(feedbackBuffer.current);
+            setState(prev => ({ ...prev, feedback }));
+            onFeedback?.(feedback);
+          }
         } catch (err) {
           console.error('Failed to parse feedback:', err);
         }
@@ -146,6 +140,7 @@ export const useInterviewCoach = ({
       // Send initial context to the agent
       sendMessage({
         type: 'conversation.item.create',
+        isUser: false,
         item: {
           type: "message",
           role: "system",
@@ -205,6 +200,7 @@ Remember to:
       // Register available tools
       sendMessage({
         type: 'conversation.item.create',
+        isUser: false,
         item: {
           type: "message",
           role: "system",
@@ -277,6 +273,7 @@ Remember to:
       // Immediately trigger the initial greeting
       sendMessage({
         type: 'response.create',
+        isUser: false,
         response: {
           modalities: ["text", "audio"]
         }
@@ -286,12 +283,10 @@ Remember to:
 
   // Start the interview process
   const startInterview = useCallback(async () => {
-    try {
+    if (sessionStatus === "DISCONNECTED") {
       await baseConnect();
-    } catch (err) {
-      console.error('Failed to start interview:', err);
     }
-  }, [baseConnect]);
+  }, [baseConnect, sessionStatus]);
 
   // Stop the interview
   const stopInterview = useCallback(() => {

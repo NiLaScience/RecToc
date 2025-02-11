@@ -60,7 +60,18 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadMode, setUploadMode] = useState<'record' | 'file'>('record');
 
-  // Interview coach integration
+  const defaultJobDescription: JobDescriptionSchema = {
+    title: 'Untitled Position',
+    company: 'Unknown Company',
+    location: 'Remote',
+    employmentType: 'Full-time',
+    experienceLevel: 'Not specified',
+    skills: [],
+    responsibilities: [],
+    requirements: [],
+    benefits: [],
+  };
+
   const {
     state: interviewState,
     sessionStatus,
@@ -68,25 +79,28 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     messages: interviewMessages,
     startInterview,
     stopInterview,
-    toggleRecording,
   } = useInterviewCoach({
     resumeData: profile?.cv || {
-      personalInfo: {},
+      personalInfo: {
+        name: 'Anonymous Candidate',
+      },
       experience: [],
       education: [],
       skills: [],
     },
-    jobDescription: jobPost?.jobDescription || {
-      title: '',
-      company: '',
-      location: '',
-      employmentType: '',
-      experienceLevel: '',
-      skills: [],
-      responsibilities: [],
-      requirements: [],
-      benefits: [],
-    },
+    jobDescription: jobPost?.jobDescription ? {
+      ...defaultJobDescription,
+      ...jobPost.jobDescription,
+      // Ensure required fields are present
+      company: jobPost.jobDescription.company || defaultJobDescription.company,
+      location: jobPost.jobDescription.location || defaultJobDescription.location,
+      employmentType: jobPost.jobDescription.employmentType || defaultJobDescription.employmentType,
+      experienceLevel: jobPost.jobDescription.experienceLevel || defaultJobDescription.experienceLevel,
+      skills: jobPost.jobDescription.skills || [],
+      responsibilities: jobPost.jobDescription.responsibilities || [],
+      requirements: jobPost.jobDescription.requirements || [],
+      benefits: jobPost.jobDescription.benefits || [],
+    } : defaultJobDescription,
     onProgressUpdate: (stage, progress, title) => {
       // Progress updates are handled internally by the hook
     },

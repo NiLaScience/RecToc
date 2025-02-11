@@ -5,7 +5,7 @@ import { Capacitor } from '@capacitor/core';
 
 export type SessionStatus = "DISCONNECTED" | "CONNECTING" | "CONNECTED";
 
-interface RealtimeMessage {
+export interface RealtimeMessage {
   type: string;
   timestamp?: string;
   isUser: boolean;
@@ -14,7 +14,7 @@ interface RealtimeMessage {
   [key: string]: any;
 }
 
-interface ServerEvent {
+export interface ServerEvent {
   type: string;
   event_id?: string;
   item_id?: string;
@@ -271,7 +271,6 @@ export const useBaseRealtimeConnection = ({
             case 'response.done':
               if (currentResponseRef.current) {
                 const message: RealtimeMessage = {
-                  type: event.type,
                   timestamp: currentResponseRef.current.timestamp,
                   isUser: false,
                   text: currentResponseRef.current.text,
@@ -286,11 +285,10 @@ export const useBaseRealtimeConnection = ({
             case 'transcript.partial':
             case 'transcript.final':
               const message: RealtimeMessage = {
-                type: event.type,
-                timestamp: new Date().toISOString(),
                 isUser: true,
-                transcript: event.transcript,
-                ...event
+                timestamp: new Date().toISOString(),
+                ...event,
+                // Add any additional transcript-specific handling if needed
               };
               setMessages(prev => [...prev, message]);
               onMessage?.(message);
@@ -351,7 +349,10 @@ export const useBaseRealtimeConnection = ({
 
   const sendMessage = useCallback((message: RealtimeMessage) => {
     if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
-      dataChannelRef.current.send(JSON.stringify(message));
+      // Create a copy of the message without isUser
+      const { isUser, ...apiMessage } = message;
+      dataChannelRef.current.send(JSON.stringify(apiMessage));
+      // Keep isUser in the message for internal handling
       setMessages(prev => [...prev, message]);
       onMessage?.(message);
     }
