@@ -24,11 +24,6 @@ export interface ServerEvent {
   arguments?: Record<string, any>;
   session?: {
     id?: string;
-    input_audio_transcription?: {
-      model?: string;
-      language?: string;
-      prompt?: string;
-    };
   };
   item?: {
     id?: string;
@@ -42,11 +37,18 @@ export interface ServerEvent {
   };
   response?: {
     output?: Array<{
+      type?: string;
+      name?: string;
+      arguments?: string;
+      call_id?: string;
       content?: Array<{
         type?: string;
         text?: string;
       }>;
     }>;
+    status_details?: {
+      error?: any;
+    };
   };
   error?: {
     message?: string;
@@ -79,7 +81,7 @@ export const useBaseRealtimeConnection = ({
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
 
-  // Buffer for accumulating text deltas
+  // Buffer for accumulating partial text from "response.audio_transcript.delta"
   const currentResponseRef = useRef<{
     text: string;
     timestamp: string;
@@ -89,15 +91,14 @@ export const useBaseRealtimeConnection = ({
   } | null>(null);
 
   const cleanup = useCallback(() => {
-    // Clear all state
     setMessages([]);
     setError(null);
     setSessionStatus("DISCONNECTED");
 
-    // Clear refs
+    // Clear partial response buffer
     currentResponseRef.current = null;
     
-    // Close connections
+    // Close data channel and peer connection
     if (dataChannelRef.current) {
       dataChannelRef.current.close();
       dataChannelRef.current = null;
@@ -125,7 +126,7 @@ export const useBaseRealtimeConnection = ({
       setSessionStatus("CONNECTING");
       setError(null);
 
-      // Add timeout for session creation
+      // (Optional) add a timeout to guard against long session creation
       const sessionTimeout = setTimeout(() => {
         if (sessionStatus === "CONNECTING") {
           const errorMsg = 'Session creation timed out';
@@ -133,19 +134,16 @@ export const useBaseRealtimeConnection = ({
           onError?.(errorMsg);
           disconnect();
         }
-      }, 10000); // 10 second timeout
+      }, 10000);
 
-      // Ensure Firebase is initialized
       await ensureInitialized();
-
-      // Get ephemeral token using Firebase Function
+      
+      // Get ephemeral token from your Firebase function
       let token: string;
       if (Capacitor.isNativePlatform()) {
-        // Use Capacitor Firebase Functions plugin for native platforms
         const result = await callFunction('generateRealtimeToken') as { token: string };
         token = result.token;
       } else {
-        // Use web SDK for browser
         const functions = getFunctions();
         const generateToken = httpsCallable(functions, 'generateRealtimeToken');
         const result = await generateToken({});
@@ -156,38 +154,28 @@ export const useBaseRealtimeConnection = ({
         throw new Error('Invalid token response from server');
       }
 
-      // Create peer connection with ICE servers
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ]
-      });
-
+      const pc = new RTCPeerConnection();
       peerConnectionRef.current = pc;
 
-      // Set up audio element for remote audio
-      const audioEl = new Audio();
-      audioEl.autoplay = true;
-      audioElementRef.current = audioEl;
-
       pc.ontrack = (e) => {
-        if (audioElementRef.current) {
-          audioElementRef.current.srcObject = e.streams[0];
+        if (!audioElementRef.current) {
+          audioElementRef.current = document.createElement("audio");
+          audioElementRef.current.autoplay = true;
         }
+        audioElementRef.current.srcObject = e.streams[0];
       };
 
-      // Handle connection state changes
+      // Basic error handling for ICE
       pc.oniceconnectionstatechange = () => {
         if (pc.iceConnectionState === 'failed') {
-          const errorMsg = 'Connection failed. Please try again.';
+          const errorMsg = 'Connection failed.';
           setError(errorMsg);
           onError?.(errorMsg);
           disconnect();
         }
       };
 
-      // Set up audio
+      // Acquire user audio
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
@@ -199,171 +187,182 @@ export const useBaseRealtimeConnection = ({
         pc.addTrack(stream.getTracks()[0]);
       } catch (err) {
         console.error('Audio setup failed:', err);
-        throw new Error('Failed to setup audio');
+        throw new Error('Failed to set up audio');
       }
 
-      // Set up data channel
+      // DataChannel
       const dc = pc.createDataChannel("oai-events");
       dataChannelRef.current = dc;
 
       dc.onopen = () => {
         clearTimeout(sessionTimeout);
-        console.log('🔌 Connection established');
         setSessionStatus("CONNECTED");
         setError(null);
-        
-        // Send session configuration if provided
+
+        // Send any sessionConfig if provided
         if (onSessionConfig) {
           const config = onSessionConfig();
-          console.log('📝 Sending session config');
           dc.send(JSON.stringify(config));
         }
-        
         onConnect?.();
       };
 
-      dc.onmessage = (e) => {
+      dc.onclose = () => {
+        setSessionStatus("DISCONNECTED");
+      };
+
+      dc.onerror = (err) => {
+        console.error('Data channel error:', err);
+        setError(err.error?.message || 'Unknown DC error');
+      };
+
+      dc.onmessage = (e: MessageEvent) => {
+        let serverEvent: ServerEvent;
         try {
-          const event: ServerEvent = JSON.parse(e.data);
-          
-          // Only log specific events
-          if (event.type === 'function_call' && event.name && event.arguments) {
-            console.log('🔧 Function call:', {
-              name: event.name,
-              args: event.arguments
-            });
-          } else if (event.type === 'session.created' || event.type === 'session.updated') {
-            console.log('🔄 Session event:', event.type);
-          } else if (event.error) {
-            console.error('❌ Error:', event.error.message || 'Unknown error');
-          }
-
-          onEvent?.(event);
-
-          if (event.error) {
-            const errorMsg = event.error.message || 'Unknown error occurred';
-            setError(errorMsg);
-            onError?.(errorMsg);
-            return;
-          }
-
-          // Handle different event types
-          switch (event.type) {
-            case 'session.created':
-            case 'session.updated':
-              // After session is ready, notify consumer
-              if (!sessionStatus.includes('CONNECTED')) {
-                setSessionStatus("CONNECTED");
-                onConnect?.();
-              }
-              break;
-
-            case 'response.chunk':
-              if (event.delta) {
-                if (!currentResponseRef.current) {
-                  currentResponseRef.current = {
-                    text: event.delta,
-                    timestamp: new Date().toISOString(),
-                    responseId: event.event_id,
-                    isComplete: false
-                  };
-                } else {
-                  currentResponseRef.current.text += event.delta;
-                }
-              }
-              break;
-
-            case 'response.done':
-              if (currentResponseRef.current) {
-                const message: RealtimeMessage = {
-                  timestamp: currentResponseRef.current.timestamp,
-                  isUser: false,
-                  text: currentResponseRef.current.text,
-                  ...event
-                };
-                setMessages(prev => [...prev, message]);
-                onMessage?.(message);
-                currentResponseRef.current = null;
-              }
-              break;
-
-            case 'transcript.partial':
-            case 'transcript.final':
-              const message: RealtimeMessage = {
-                isUser: true,
-                timestamp: new Date().toISOString(),
-                ...event,
-                // Add any additional transcript-specific handling if needed
-              };
-              setMessages(prev => [...prev, message]);
-              onMessage?.(message);
-              if (event.type === 'transcript.final') {
-                // Automatically request a response when the user's turn is complete
-                if (dataChannelRef.current?.readyState === 'open') {
-                  dataChannelRef.current.send(JSON.stringify({
-                    type: 'response.create',
-                    response: {
-                      modalities: ["text", "audio"]
-                    }
-                  }));
-                }
-              }
-              break;
-          }
+          serverEvent = JSON.parse(e.data);
         } catch (err) {
-          console.error('Error processing message:', err, e.data);
+          console.error('Failed to parse server message:', e.data);
+          return;
+        }
+
+        // If there's an error in the event
+        if (serverEvent.error?.message) {
+          setError(serverEvent.error?.message);
+          onError?.(serverEvent.error?.message);
+        }
+
+        // Let consumer see every event
+        onEvent?.(serverEvent);
+
+        switch (serverEvent.type) {
+          case 'session.created':
+            // Session is established
+            setSessionStatus("CONNECTED");
+            break;
+
+          // Partial TTS text from the agent
+          case 'response.audio_transcript.delta':
+            if (serverEvent.delta) {
+              if (!currentResponseRef.current) {
+                currentResponseRef.current = {
+                  text: serverEvent.delta,
+                  timestamp: new Date().toISOString(),
+                  isComplete: false,
+                };
+              } else {
+                currentResponseRef.current.text += serverEvent.delta;
+              }
+            }
+            break;
+
+          // The final turn is done
+          case 'response.done': {
+            // If there's partial text
+            if (currentResponseRef.current) {
+              currentResponseRef.current.isComplete = true;
+              const finalText =
+                serverEvent.response?.output?.[0]?.content?.[0]?.text ||
+                currentResponseRef.current.text;
+
+              const finalMsg: RealtimeMessage = {
+                type: "assistant_message",
+                timestamp: currentResponseRef.current.timestamp,
+                isUser: false,
+                text: finalText,
+              };
+              setMessages((prev) => [...prev, finalMsg]);
+              onMessage?.(finalMsg);
+              currentResponseRef.current = null;
+            }
+
+            // Check if the model produced any function calls
+            const outputItems = serverEvent.response?.output || [];
+            outputItems.forEach((output) => {
+              if (output.type === "function_call" && output.name) {
+                let parsedArgs: any;
+                try {
+                  parsedArgs = JSON.parse(output.arguments || "{}");
+                } catch {
+                  parsedArgs = {};
+                }
+
+                // Fire a synthetic 'function_call' event so higher-level hooks can handle it
+                const functionCallEvent: ServerEvent = {
+                  type: "function_call",
+                  name: output.name,
+                  arguments: parsedArgs,
+                };
+                onEvent?.(functionCallEvent);
+              }
+            });
+            break;
+          }
+
+          // Transcribed user input
+          case 'conversation.item.input_audio_transcription.completed':
+            if (serverEvent.transcript) {
+              const userMsg: RealtimeMessage = {
+                type: "user_message",
+                timestamp: new Date().toISOString(),
+                isUser: true,
+                text: serverEvent.transcript,
+              };
+              setMessages((prev) => [...prev, userMsg]);
+              onMessage?.(userMsg);
+            }
+            break;
+
+          default:
+            // Possibly handle other events
+            break;
         }
       };
 
-      // Create and send offer
+      // Create offer
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      // Connect to OpenAI Realtime API
+      // Post to Realtime endpoint
       const baseUrl = "https://api.openai.com/v1/realtime";
       const model = "gpt-4o-realtime-preview-2024-12-17";
-      
+
       const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
         method: "POST",
         body: offer.sdp,
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/sdp"
+          "Content-Type": "application/sdp",
         },
       });
 
       if (!sdpResponse.ok) {
-        throw new Error('Failed to establish connection with OpenAI');
+        throw new Error('Failed to create session with OpenAI Realtime.');
       }
 
-      const answer = {
-        type: 'answer' as RTCSdpType,
-        sdp: await sdpResponse.text(),
-      };
-      
+      const answerSdp = await sdpResponse.text();
+      const answer: RTCSessionDescriptionInit = { type: "answer", sdp: answerSdp };
       await pc.setRemoteDescription(answer);
 
     } catch (err) {
       console.error('Connection failed:', err);
-      const errorMsg = 'Failed to establish connection';
-      setError(errorMsg);
-      onError?.(errorMsg);
+      const errMsg = err instanceof Error ? err.message : 'Unknown connect error';
+      setError(errMsg);
+      onError?.(errMsg);
       disconnect();
     }
-  }, [cleanup, disconnect, onConnect, onError, onMessage, onEvent, onSessionConfig]);
+  }, [disconnect, onConnect, onDisconnect, onError, onEvent, onSessionConfig, sessionStatus]);
 
   const sendMessage = useCallback((message: RealtimeMessage) => {
     if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
-      // Create a copy of the message without isUser
-      const { isUser, ...apiMessage } = message;
-      dataChannelRef.current.send(JSON.stringify(apiMessage));
-      // Keep isUser in the message for internal handling
-      setMessages(prev => [...prev, message]);
+      setMessages((prev) => [...prev, message]);
       onMessage?.(message);
+
+      dataChannelRef.current.send(JSON.stringify(message));
+    } else {
+      console.warn('No open data channel. Cannot send message.');
     }
   }, [onMessage]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       cleanup();

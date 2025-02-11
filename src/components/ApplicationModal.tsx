@@ -1,44 +1,35 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import {
   IonContent,
-  IonHeader,
-  IonToolbar,
-  IonTitle,
-  IonButtons,
-  IonButton,
-  IonIcon,
   IonSpinner,
   IonCard,
   IonCardHeader,
   IonCardTitle,
   IonCardSubtitle,
   IonCardContent,
+  IonButton,
+  IonIcon,
   IonChip,
-  IonList,
-  IonItem,
-  IonLabel,
-  IonAccordionGroup,
-  IonAccordion,
   useIonToast,
   IonModal,
   IonProgressBar,
-  IonFab,
-  IonFabButton,
+  IonHeader,
+  IonToolbar,
+  IonTitle,
+  IonButtons,
 } from '@ionic/react';
-import { closeOutline, videocamOutline, documentTextOutline, cameraOutline, stopOutline } from 'ionicons/icons';
+import { videocamOutline, cameraOutline, closeOutline } from 'ionicons/icons';
 import { useAuth } from '../context/AuthContext';
 import VideoRecorder from './VideoRecorder';
 import type { JobApplication } from '../types/application';
-import type { VideoItem, JobDescription } from '../types/video';
+import type { VideoItem } from '../types/video';
 import type { UserProfile } from '../types/user';
 import ApplicationService from '../services/ApplicationService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import { Capacitor } from '@capacitor/core';
-import AppHeader from './AppHeader';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
-import { useInterviewCoach, INTERVIEW_STAGES, type InterviewStage } from '../hooks/useInterviewCoach';
 import type { CVSchema, JobDescriptionSchema } from '../services/OpenAIService';
 
 interface ApplicationModalProps {
@@ -72,43 +63,6 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     benefits: [],
   };
 
-  const {
-    state: interviewState,
-    sessionStatus,
-    error: interviewError,
-    messages: interviewMessages,
-    startInterview,
-    stopInterview,
-  } = useInterviewCoach({
-    resumeData: profile?.cv || {
-      personalInfo: {
-        name: 'Anonymous Candidate',
-      },
-      experience: [],
-      education: [],
-      skills: [],
-    },
-    jobDescription: jobPost?.jobDescription ? {
-      ...defaultJobDescription,
-      ...jobPost.jobDescription,
-      // Ensure required fields are present
-      company: jobPost.jobDescription.company || defaultJobDescription.company,
-      location: jobPost.jobDescription.location || defaultJobDescription.location,
-      employmentType: jobPost.jobDescription.employmentType || defaultJobDescription.employmentType,
-      experienceLevel: jobPost.jobDescription.experienceLevel || defaultJobDescription.experienceLevel,
-      skills: jobPost.jobDescription.skills || [],
-      responsibilities: jobPost.jobDescription.responsibilities || [],
-      requirements: jobPost.jobDescription.requirements || [],
-      benefits: jobPost.jobDescription.benefits || [],
-    } : defaultJobDescription,
-    onProgressUpdate: (stage, progress, title) => {
-      // Progress updates are handled internally by the hook
-    },
-    onFeedback: (feedback) => {
-      // Feedback is handled internally by the hook
-    },
-  });
-
   useEffect(() => {
     let jobUnsubscribeId: string | null = null;
     let profileUnsubscribeId: string | null = null;
@@ -123,7 +77,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
           (data) => {
             if (data) {
               setJobPost(data as VideoItem);
-              setLoading(false); // Set loading to false once we have job data
+              setLoading(false);
             }
           }
         );
@@ -154,7 +108,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
           duration: 3000,
           color: 'danger',
         });
-        setLoading(false); // Set loading to false even if there's an error
+        setLoading(false);
       }
     };
 
@@ -173,12 +127,6 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
       setLoading(true);
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    if (jobPost && profile && sessionStatus === 'CONNECTED') {
-      startInterview();
-    }
-  }, [jobPost, profile, sessionStatus, startInterview]);
 
   const handleVideoRecorded = async (uri: string, format: string) => {
     try {
@@ -261,13 +209,6 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     }
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long'
-    });
-  };
-
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -286,30 +227,19 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     }
   };
 
-  const handleStartInterview = async () => {
-    if (!profile || !jobPost) {
-      presentToast({
-        message: 'Please wait for profile and job data to load',
-        duration: 3000,
-        color: 'warning',
-      });
-      return;
-    }
-    await startInterview();
-  };
-
-  useEffect(() => {
-    if (interviewError) {
-      presentToast({
-        message: `Interview error: ${interviewError}`,
-        duration: 3000,
-        color: 'danger',
-      });
-    }
-  }, [interviewError, presentToast]);
-
   return (
     <IonModal isOpen={isOpen} onDidDismiss={onClose} className="application-modal">
+      <IonHeader>
+        <IonToolbar>
+          <IonTitle>Apply for Job</IonTitle>
+          <IonButtons slot="end">
+            <IonButton onClick={onClose}>
+              <IonIcon icon={closeOutline} />
+            </IonButton>
+          </IonButtons>
+        </IonToolbar>
+      </IonHeader>
+      
       <IonContent>
         {loading ? (
           <div className="ion-padding ion-text-center">
@@ -317,155 +247,6 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
           </div>
         ) : (
           <>
-            {/* Progress Bar */}
-            <IonProgressBar
-              value={interviewState.progress / 100}
-              color={interviewState.feedback?.type === 'positive' ? 'success' : 'primary'}
-              style={{ 
-                height: '6px',
-                transition: 'all 0.3s ease-in-out'
-              }}
-            />
-
-            {/* Stage Timeline */}
-            <div className="ion-padding-horizontal" style={{ marginBottom: '1rem' }}>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                position: 'relative',
-                paddingTop: '20px'
-              }}>
-                {/* Progress line */}
-                <div style={{
-                  position: 'absolute',
-                  top: '30px',
-                  left: '0',
-                  right: '0',
-                  height: '2px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                  zIndex: 0
-                }} />
-                <div style={{
-                  position: 'absolute',
-                  top: '30px',
-                  left: '0',
-                  height: '2px',
-                  backgroundColor: '#0055ff',
-                  width: `${interviewState.progress}%`,
-                  transition: 'width 0.3s ease-in-out',
-                  zIndex: 1
-                }} />
-                
-                {/* Stage markers */}
-                {INTERVIEW_STAGES.map((stage, index) => {
-                  const isCompleted = INTERVIEW_STAGES.indexOf(interviewState.currentStage) > index;
-                  const isCurrent = interviewState.currentStage === stage;
-                  return (
-                    <div key={stage} style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      position: 'relative',
-                      zIndex: 2
-                    }}>
-                      <div style={{
-                        width: '12px',
-                        height: '12px',
-                        borderRadius: '50%',
-                        backgroundColor: isCompleted ? '#0055ff' : isCurrent ? '#fff' : 'rgba(255, 255, 255, 0.3)',
-                        border: `2px solid ${isCurrent ? '#0055ff' : 'transparent'}`,
-                        transition: 'all 0.3s ease-in-out'
-                      }} />
-                      <span style={{
-                        fontSize: '0.75rem',
-                        color: isCompleted || isCurrent ? '#fff' : 'rgba(255, 255, 255, 0.5)',
-                        marginTop: '0.5rem',
-                        transition: 'all 0.3s ease-in-out'
-                      }}>
-                        {stage.charAt(0).toUpperCase() + stage.slice(1)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Stage Title and Status */}
-            <div className="ion-padding">
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                marginBottom: '1rem'
-              }}>
-                <h2 style={{ 
-                  margin: 0,
-                  transition: 'opacity 0.3s ease-in-out',
-                  opacity: sessionStatus === 'CONNECTING' ? 0.7 : 1
-                }}>{interviewState.stageTitle}</h2>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  transition: 'opacity 0.3s ease-in-out'
-                }}>
-                  {sessionStatus === 'CONNECTING' && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <IonSpinner name="dots" />
-                      <span>Connecting to interview coach...</span>
-                    </div>
-                  )}
-                  {sessionStatus === 'CONNECTED' && (
-                    <IonChip color="success">
-                      Connected
-                    </IonChip>
-                  )}
-                  {interviewState.currentStage === 'closing' && (
-                    <IonChip color="primary">
-                      Interview Complete
-                    </IonChip>
-                  )}
-                </div>
-              </div>
-
-              {/* Feedback Display */}
-              {interviewState.feedback && (
-                <div className={`feedback-box ${interviewState.feedback.type}`} style={{
-                  padding: '1rem',
-                  borderRadius: '8px',
-                  backgroundColor: interviewState.feedback.type === 'positive' ? 'rgba(45, 211, 111, 0.1)' : 'rgba(235, 68, 90, 0.1)',
-                  border: `1px solid ${interviewState.feedback.type === 'positive' ? '#2dd36f' : '#eb445a'}`,
-                  marginTop: '1rem'
-                }}>
-                  <p style={{ margin: '0 0 0.5rem 0', color: '#fff' }}>{interviewState.feedback.message}</p>
-                  {interviewState.feedback.details && (
-                    <div>
-                      {interviewState.feedback.details.strengths.length > 0 && (
-                        <div style={{ marginTop: '0.5rem' }}>
-                          <strong style={{ color: '#2dd36f' }}>Strengths:</strong>
-                          <ul style={{ margin: '0.25rem 0', paddingLeft: '1.5rem' }}>
-                            {interviewState.feedback.details.strengths.map((strength, i) => (
-                              <li key={i}>{strength}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {interviewState.feedback.details.improvements.length > 0 && (
-                        <div style={{ marginTop: '0.5rem' }}>
-                          <strong style={{ color: '#eb445a' }}>Areas for Improvement:</strong>
-                          <ul style={{ margin: '0.25rem 0', paddingLeft: '1.5rem' }}>
-                            {interviewState.feedback.details.improvements.map((improvement, i) => (
-                              <li key={i}>{improvement}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
             {/* Job Description */}
             <div>
               {jobPost && (
@@ -604,27 +385,6 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                   )}
                 </IonCardContent>
               </IonCard>
-            </div>
-
-            {/* Interview Controls */}
-            <div className="ion-padding">
-              {sessionStatus === 'DISCONNECTED' ? (
-                <IonButton
-                  expand="block"
-                  onClick={handleStartInterview}
-                  disabled={submitting || !profile || !jobPost}
-                >
-                  Start Interview Practice
-                </IonButton>
-              ) : (
-                <IonButton
-                  expand="block"
-                  color="danger"
-                  onClick={stopInterview}
-                >
-                  End Interview
-                </IonButton>
-              )}
             </div>
 
             {/* Video Recording Section */}

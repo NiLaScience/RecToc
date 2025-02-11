@@ -34,3 +34,13 @@ export interface JobApplicationCreate extends Omit<JobApplication, 'id' | 'creat
 export interface JobApplicationUpdate extends Partial<Omit<JobApplication, 'id' | 'createdAt' | 'jobId' | 'candidateId'>> {
   updatedAt: string;
 }
+
+export interface Application {
+  id: string;
+  userId: string;
+  jobId: string;
+  jobTitle: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: string;
+  updatedAt: string;
+}

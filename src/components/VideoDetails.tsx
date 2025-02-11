@@ -15,8 +15,9 @@ import {
   IonItem,
   IonLabel,
   IonChip,
+  IonRouterLink,
 } from '@ionic/react';
-import { closeOutline, paperPlaneOutline } from 'ionicons/icons';
+import { closeOutline, paperPlaneOutline, chatbubbleOutline } from 'ionicons/icons';
 import { VideoItem } from '../types/video';
 import { useState } from 'react';
 import ApplicationModal from './ApplicationModal';
@@ -24,6 +25,7 @@ import AppHeader from './AppHeader';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent } from './shared/AccordionContent';
+import InterviewTrainingModal from './InterviewTrainingModal';
 
 interface VideoDetailsProps {
   video: VideoItem;
@@ -46,6 +48,7 @@ interface JobDescription {
 
 const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, onApplicationModalChange }) => {
   const [showApplication, setShowApplication] = useState(false);
+  const [showTraining, setShowTraining] = useState(false);
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const jobDescription = video.jobDescription as JobDescription;
 
@@ -217,24 +220,46 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, onApplicati
                 </IonCardContent>
               </IonCard>
 
-              <IonButton
-                expand="block"
-                onClick={handleApply}
-                style={{ 
-                  margin: '2rem 0',
-                  maxWidth: '400px',
-                  marginLeft: 'auto',
-                  marginRight: 'auto',
-                  '--background': '#0055ff',
-                  '--color': '#fff',
-                  '--border-radius': '8px',
-                  '--padding-top': '1rem',
-                  '--padding-bottom': '1rem'
-                }}
-              >
-                <IonIcon icon={paperPlaneOutline} slot="start" />
-                Apply Now
-              </IonButton>
+              <div style={{ 
+                display: 'flex', 
+                gap: '1rem',
+                margin: '2rem 0',
+                maxWidth: '400px',
+                marginLeft: 'auto',
+                marginRight: 'auto',
+              }}>
+                <IonButton
+                  expand="block"
+                  onClick={() => setShowTraining(true)}
+                  style={{ 
+                    flex: 1,
+                    '--background': '#2a2a2a',
+                    '--color': '#fff',
+                    '--border-radius': '8px',
+                    '--padding-top': '1rem',
+                    '--padding-bottom': '1rem'
+                  }}
+                >
+                  <IonIcon icon={chatbubbleOutline} slot="start" />
+                  Practice Interview
+                </IonButton>
+
+                <IonButton
+                  expand="block"
+                  onClick={handleApply}
+                  style={{ 
+                    flex: 1,
+                    '--background': '#0055ff',
+                    '--color': '#fff',
+                    '--border-radius': '8px',
+                    '--padding-top': '1rem',
+                    '--padding-bottom': '1rem'
+                  }}
+                >
+                  <IonIcon icon={paperPlaneOutline} slot="start" />
+                  Apply Now
+                </IonButton>
+              </div>
             </div>
           </div>
         </IonContent>
@@ -247,6 +272,12 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, onApplicati
           jobId={video.id}
         />
       )}
+
+      <InterviewTrainingModal
+        isOpen={showTraining}
+        onClose={() => setShowTraining(false)}
+        jobId={video.id}
+      />
     </>
   );
 };
