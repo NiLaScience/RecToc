@@ -51,6 +51,7 @@ import { ListContent, ChipsContent, ExperienceContent, EducationContent } from '
 import '../styles/accordion.css';
 import { FirebaseStorage } from '@capacitor-firebase/storage';
 import RealtimeModal from './RealtimeModal';
+import ApplicationService from '../services/ApplicationService';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -69,6 +70,8 @@ const Profile = () => {
   const pendingChangesRef = useRef<Set<string>>(new Set());
   const [showResetAlert, setShowResetAlert] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [showDeleteAppsAlert, setShowDeleteAppsAlert] = useState(false);
+  const [deletingApps, setDeletingApps] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [useGemini, setUseGemini] = useState(true);
   const [isRealtimeModalOpen, setIsRealtimeModalOpen] = useState(false);
@@ -474,6 +477,30 @@ const Profile = () => {
     }
   };
 
+  const handleDeleteAllApplications = async () => {
+    if (!user) return;
+    
+    setDeletingApps(true);
+    try {
+      await ApplicationService.deleteAllApplications();
+      presentToast({
+        message: 'Successfully deleted all applications',
+        duration: 2000,
+        color: 'success'
+      });
+    } catch (error) {
+      console.error('Error deleting applications:', error);
+      presentToast({
+        message: 'Failed to delete applications. Please try again.',
+        duration: 3000,
+        color: 'danger'
+      });
+    } finally {
+      setDeletingApps(false);
+      setShowDeleteAppsAlert(false);
+    }
+  };
+
   if (loading) {
     return (
       <IonPage>
@@ -770,14 +797,25 @@ const Profile = () => {
               <IonCardTitle>Danger Zone</IonCardTitle>
             </IonCardHeader>
             <IonCardContent>
-              <IonButton
-                color="danger"
-                expand="block"
-                onClick={() => setShowResetAlert(true)}
-                disabled={resetting}
-              >
-                {resetting ? <IonSpinner /> : 'Reset All Job Rejections'}
-              </IonButton>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <IonButton
+                  color="danger"
+                  expand="block"
+                  onClick={() => setShowResetAlert(true)}
+                  disabled={resetting}
+                >
+                  {resetting ? <IonSpinner /> : 'Reset All Job Rejections'}
+                </IonButton>
+
+                <IonButton
+                  color="danger"
+                  expand="block"
+                  onClick={() => setShowDeleteAppsAlert(true)}
+                  disabled={deletingApps}
+                >
+                  {deletingApps ? <IonSpinner /> : 'Delete All Applications'}
+                </IonButton>
+              </div>
             </IonCardContent>
           </IonCard>
 
@@ -795,6 +833,24 @@ const Profile = () => {
                 text: 'Reset',
                 role: 'destructive',
                 handler: handleResetRejections,
+              },
+            ]}
+          />
+
+          <IonAlert
+            isOpen={showDeleteAppsAlert}
+            onDidDismiss={() => setShowDeleteAppsAlert(false)}
+            header="Delete All Applications"
+            message="Are you sure you want to delete all your applications? This action cannot be undone."
+            buttons={[
+              {
+                text: 'Cancel',
+                role: 'cancel',
+              },
+              {
+                text: 'Delete',
+                role: 'destructive',
+                handler: handleDeleteAllApplications,
               },
             ]}
           />

@@ -24,51 +24,65 @@ class ApplicationService {
 
   static async createApplication(jobId: string): Promise<JobApplication> {
     const result = await FirebaseAuthentication.getCurrentUser();
-    console.log('Auth result:', result); // Debug log
+    console.log('Auth result:', result);
     if (!result.user) {
-      throw new Error('User must be authenticated to create an application');
+      throw new Error('User must be authenticated to create application');
     }
 
-    const application: JobApplicationCreate = {
+    const applicationData = {
       jobId,
       candidateId: result.user.uid,
-      status: 'draft'
-    };
-
-    console.log('Creating application with data:', {
-      ...application,
+      status: 'draft',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    }); // Debug log
+    };
 
-    const doc = await FirebaseFirestore.addDocument({
-      reference: this.COLLECTION,
-      data: {
-        ...application,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+    console.log('Creating application with data:', applicationData);
+
+    try {
+      const response = await FirebaseFirestore.addDocument({
+        reference: this.COLLECTION,
+        data: applicationData
+      });
+
+      // Get the document ID from the reference object
+      const docId = response.reference.id;
+      console.log('Created application with ID:', docId);
+
+      if (!docId) {
+        throw new Error('Failed to get application ID from Firebase reference');
       }
-    });
 
-    // Extract the ID from the reference path
-    const parts = doc.reference.toString().split('/');
-    const id = parts[parts.length - 1];
+      // Return the created application with its ID
+      const application: JobApplication = {
+        id: docId,
+        ...applicationData
+      };
 
-    return {
-      id,
-      ...application,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+      console.log('Returning application:', application);
+      return application;
+    } catch (error) {
+      console.error('Error creating application:', error);
+      throw error;
+    }
   }
 
   static async uploadApplicationVideo(
-    applicationId: string, 
+    applicationId: string | { id: string }, 
     videoFile: File,
     onProgress?: (progress: number) => void
   ): Promise<void> {
+    // Extract the ID string whether it's passed directly or as an object
+    const appId = typeof applicationId === 'string' ? applicationId : applicationId.id;
+
+    // Validate applicationId
+    if (!appId || typeof appId !== 'string') {
+      console.error('Invalid applicationId:', applicationId);
+      throw new Error('Invalid application ID');
+    }
+
     const result = await FirebaseAuthentication.getCurrentUser();
-    console.log('Auth result for upload:', result); // Debug log
+    console.log('Auth result for upload:', result);
     if (!result.user) {
       throw new Error('User must be authenticated to upload application video');
     }
@@ -76,11 +90,20 @@ class ApplicationService {
     // Generate video ID and set up paths with user ID included
     const videoId = uuidv4();
     const userId = result.user.uid;
-    const fileName = `${videoId}.${videoFile.type.split('/')[1].split(';')[0]}`; // Get clean extension
+    const fileName = `${Date.now()}-${videoId}.${videoFile.type.split('/')[1].split(';')[0]}`; // Get clean extension with timestamp
     const storagePath = `${this.STORAGE_PATH}/${userId}/application-videos/${fileName}`;
     
     try {
+      console.log('Starting video upload for application:', {
+        applicationId: appId,
+        userId,
+        storagePath
+      });
+
       // Upload video first
+      let videoURL: string | null = null;
+      const cleanMimeType = videoFile.type.split(';')[0];
+
       if (Capacitor.isNativePlatform()) {
         // For native platforms, we need to write to filesystem first
         const blob = await videoFile.arrayBuffer();
@@ -97,13 +120,11 @@ class ApplicationService {
         });
 
         // Upload to Firebase Storage with progress tracking
-        await new Promise<void>((resolve, reject) => {
+        videoURL = await new Promise<string>((resolve, reject) => {
           FirebaseStorage.uploadFile({
             path: storagePath,
             uri: fileInfo.uri,
-            metadata: {
-              contentType: videoFile.type.split(';')[0] // Clean MIME type
-            }
+            metadata: { contentType: cleanMimeType }
           }, (progress, error) => {
             if (error) {
               reject(error);
@@ -112,7 +133,9 @@ class ApplicationService {
                 onProgress(progress.progress * 100);
               }
               if (progress.completed) {
-                resolve();
+                FirebaseStorage.getDownloadUrl({ path: storagePath })
+                  .then(result => resolve(result.downloadUrl))
+                  .catch(reject);
               }
             }
           });
@@ -125,14 +148,11 @@ class ApplicationService {
         });
       } else {
         // For web, use the blob directly
-        const cleanMimeType = videoFile.type.split(';')[0]; // Clean MIME type
-        await new Promise<void>((resolve, reject) => {
+        videoURL = await new Promise<string>((resolve, reject) => {
           FirebaseStorage.uploadFile({
             path: storagePath,
             blob: videoFile,
-            metadata: {
-              contentType: cleanMimeType
-            }
+            metadata: { contentType: cleanMimeType }
           }, (progress, error) => {
             if (error) {
               reject(error);
@@ -141,54 +161,55 @@ class ApplicationService {
                 onProgress(progress.progress * 100);
               }
               if (progress.completed) {
-                resolve();
+                FirebaseStorage.getDownloadUrl({ path: storagePath })
+                  .then(result => resolve(result.downloadUrl))
+                  .catch(reject);
               }
             }
           });
         });
       }
 
-      // Try to get the download URL with retries
-      let videoURL: string | null = null;
-      let attempts = 0;
-      const maxAttempts = 5;
-      const delay = 1000; // 1 second between attempts
-
-      while (!videoURL && attempts < maxAttempts) {
-        try {
-          const result = await FirebaseStorage.getDownloadUrl({
-            path: storagePath
-          });
-          videoURL = result.downloadUrl;
-        } catch (error) {
-          attempts++;
-          if (attempts === maxAttempts) {
-            throw new Error('Failed to get download URL after multiple attempts');
-          }
-          // Wait before next attempt
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-      }
-
       if (!videoURL) {
         throw new Error('Failed to get download URL');
       }
 
-      // Update application with URL and ensure we follow the schema
+      // Update application with URL
       const updateData = {
         videoURL,
         status: 'submitted',
         updatedAt: new Date().toISOString(),
-        candidateId: result.user.uid
+        candidateId: result.user.uid,
+        submittedAt: new Date().toISOString()
       };
-      console.log('Updating application with data:', updateData); // Debug log
 
+      console.log('Updating application with data:', {
+        applicationId: appId,
+        reference: `${this.COLLECTION}/${appId}`,
+        data: updateData
+      });
+
+      // First get the existing application to verify ownership
+      const existingApp = await FirebaseFirestore.getDocument({
+        reference: `${this.COLLECTION}/${appId}`
+      });
+
+      if (!existingApp.snapshot?.data) {
+        throw new Error('Application not found');
+      }
+
+      const appData = existingApp.snapshot.data;
+      if (appData.candidateId !== result.user.uid) {
+        throw new Error('You do not have permission to update this application');
+      }
+
+      // Now update the application
       await FirebaseFirestore.updateDocument({
-        reference: `${this.COLLECTION}/${applicationId.toString()}`,
+        reference: `${this.COLLECTION}/${appId}`,
         data: updateData
       });
     } catch (error) {
-      console.error('Detailed error:', error); // More detailed error logging
+      console.error('Detailed error:', error);
       console.error('Error uploading application video:', error);
       // If we fail, we should try to clean up the uploaded file
       try {
@@ -355,6 +376,22 @@ class ApplicationService {
       path: fileName,
       directory: Directory.Cache
     });
+  }
+
+  static async deleteAllApplications(): Promise<void> {
+    const result = await FirebaseAuthentication.getCurrentUser();
+    if (!result.user) {
+      throw new Error('User must be authenticated to delete applications');
+    }
+
+    const applications = await this.getUserApplications();
+    
+    // Delete each application
+    await Promise.all(applications.map(async (app) => {
+      await FirebaseFirestore.deleteDocument({
+        reference: `${this.COLLECTION}/${app.id}`
+      });
+    }));
   }
 }
 

@@ -130,13 +130,12 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
 
   const handleVideoRecorded = async (uri: string, format: string) => {
     try {
+      let videoFile: File;
       if (Capacitor.isNativePlatform()) {
         // For native platforms, convert URI to File
         const response = await fetch(uri);
         const blob = await response.blob();
-        const file = new File([blob], `application-video.${format}`, { type: `video/${format}` });
-        setVideoFile(file);
-        setPreviewUrl(uri);
+        videoFile = new File([blob], `application-video.${format}`, { type: `video/${format}` });
       } else {
         // For web platform, convert the blob directly
         const response = await fetch(uri);
@@ -146,10 +145,18 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
         const cleanMimeType = `video/${cleanFormat}`;
         // Create a clean blob with proper MIME type
         const cleanBlob = new Blob([blob], { type: cleanMimeType });
-        const file = new File([cleanBlob], `application-video.${cleanFormat}`, { type: cleanMimeType });
-        setVideoFile(file);
-        setPreviewUrl(URL.createObjectURL(cleanBlob));
+        videoFile = new File([cleanBlob], `application-video.${cleanFormat}`, { type: cleanMimeType });
       }
+
+      // Create draft application when video is recorded
+      if (!application?.id) {
+        const newApplication = await ApplicationService.createApplication(jobId);
+        console.log('Created new application:', newApplication);
+        setApplication(newApplication);
+      }
+
+      setVideoFile(videoFile);
+      setPreviewUrl(Capacitor.isNativePlatform() ? uri : URL.createObjectURL(videoFile));
     } catch (error) {
       console.error('Error handling recorded video:', error);
       presentToast({
@@ -168,24 +175,47 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     });
   };
 
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      // Create draft application when video is uploaded
+      if (!application?.id) {
+        const newApplication = await ApplicationService.createApplication(jobId);
+        console.log('Created new application:', newApplication);
+        setApplication(newApplication);
+      }
+
+      setVideoFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    } catch (error) {
+      console.error('Error handling file:', error);
+      presentToast({
+        message: 'Error processing video file',
+        duration: 3000,
+        color: 'danger',
+      });
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!user || !videoFile) return;
+    if (!user || !videoFile || !application?.id) {
+      console.log('Missing required data:', { 
+        user: !!user, 
+        videoFile: !!videoFile, 
+        applicationId: application?.id 
+      });
+      return;
+    }
 
     setSubmitting(true);
     setUploadProgress(0);
     try {
-      let applicationId = application?.id;
-      
-      // Create application if it doesn't exist
-      if (!applicationId) {
-        const newApplication = await ApplicationService.createApplication(jobId);
-        applicationId = newApplication.id;
-        setApplication(newApplication);
-      }
-
       // Upload video with progress tracking
       await ApplicationService.uploadApplicationVideo(
-        applicationId, 
+        application.id,
         videoFile,
         (progress) => setUploadProgress(progress)
       );
@@ -206,24 +236,6 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     } finally {
       setSubmitting(false);
       setUploadProgress(0);
-    }
-  };
-
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setVideoFile(file);
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-    } catch (error) {
-      console.error('Error handling file:', error);
-      presentToast({
-        message: 'Error processing video file',
-        duration: 3000,
-        color: 'danger',
-      });
     }
   };
 

@@ -216,7 +216,6 @@ const Feed = () => {
       // Show details
       setMode('details');
       setSelectedJobId(video.id);
-      setShowApplication(true);
     }
   };
 

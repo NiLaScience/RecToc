@@ -275,6 +275,7 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
       // Right swipe (swipe left to right)
       if (diffX < -SWIPE_THRESHOLD) {
         if (!showDetails && onSwipe) {
+          setShowDetails(true);
           onSwipe('right');
         }
       }
