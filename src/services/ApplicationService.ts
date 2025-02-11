@@ -4,12 +4,19 @@ import {
   FirebaseFirestore,
   AddCollectionSnapshotListenerCallback,
   AddCollectionSnapshotListenerCallbackEvent,
-  DocumentData
+  DocumentData,
+  GetDocumentOptions,
+  GetDocumentResult,
+  AddDocumentOptions,
+  AddDocumentResult,
+  UpdateDocumentOptions,
+  DeleteDocumentOptions,
+  SetDocumentOptions
 } from '@capacitor-firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
-import type { JobApplication, JobApplicationCreate, JobApplicationUpdate } from '../types/application';
+import type { JobApplication, JobApplicationCreate, JobApplicationUpdate, ApplicationStatus } from '../types/application';
 import TranscriptionService from './TranscriptionService';
 import ThumbnailService from './ThumbnailService';
 
@@ -29,12 +36,13 @@ class ApplicationService {
       throw new Error('User must be authenticated to create application');
     }
 
+    const timestamp = new Date().toISOString();
     const applicationData = {
       jobId,
       candidateId: result.user.uid,
-      status: 'draft',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      status: 'draft' as ApplicationStatus,
+      createdAt: timestamp,
+      updatedAt: timestamp
     };
 
     console.log('Creating application with data:', applicationData);
@@ -481,12 +489,20 @@ class ApplicationService {
   }
 
   static async addSnapshotListener(
-    path: string,
     callback: (data: any) => void,
-    options?: { where?: [string, string, any][] }
+    options?: {
+      where?: [string, string, any][];
+    }
   ): Promise<string> {
     if (!Capacitor.isNativePlatform()) {
-      throw new Error('Snapshot listeners are only supported on native platforms');
+      // For web, just do a one-time fetch
+      const response = await FirebaseFirestore.getDocument({
+        reference: this.COLLECTION
+      });
+      if (response.snapshot?.data) {
+        callback(response.snapshot.data);
+      }
+      return this.COLLECTION;
     }
 
     let query = `${this.COLLECTION}`;
@@ -497,26 +513,30 @@ class ApplicationService {
       }, query);
     }
 
-    return await FirebaseFirestore.addSnapshotListener({
-      reference: query,
-      callback: (snapshot) => {
-        if (snapshot.snapshot?.data) {
-          callback(snapshot.snapshot.data);
-        }
-      }
+    const response = await FirebaseFirestore.getDocument({
+      reference: query
     });
+
+    if (response.snapshot?.data) {
+      callback(response.snapshot.data);
+    }
+
+    return query;
   }
 
   static async removeSnapshotListener(id: string): Promise<void> {
-    if (!Capacitor.isNativePlatform()) {
-      return; // No-op on web
-    }
-    await FirebaseFirestore.removeSnapshotListener({ id });
+    // No-op since we're not using real-time listeners anymore
   }
 
   static async refreshApplications(): Promise<void> {
-    // Force a refresh of the applications collection
-    await FirebaseFirestore.refresh({ reference: this.COLLECTION });
+    const result = await FirebaseAuthentication.getCurrentUser();
+    if (!result.user) {
+      throw new Error('User must be authenticated to refresh applications');
+    }
+
+    await FirebaseFirestore.getDocument({
+      reference: this.COLLECTION
+    });
   }
 
   static async deleteAllApplications(): Promise<void> {
@@ -533,6 +553,31 @@ class ApplicationService {
         reference: `${this.COLLECTION}/${app.id}`
       });
     }));
+  }
+
+  static async listenToApplications(callback: (applications: JobApplication[]) => void): Promise<string> {
+    const result = await FirebaseAuthentication.getCurrentUser();
+    if (!result.user) {
+      throw new Error('User must be authenticated to listen to applications');
+    }
+
+    const response = await FirebaseFirestore.getDocument({
+      reference: this.COLLECTION
+    });
+
+    if (response.snapshot?.data) {
+      const applications = Object.entries(response.snapshot.data).map(([id, data]) => ({
+        id,
+        ...data
+      })) as JobApplication[];
+      callback(applications);
+    }
+
+    return this.COLLECTION;
+  }
+
+  static async removeApplicationListener(id: string): Promise<void> {
+    // No-op since we're not using real-time listeners
   }
 }
 

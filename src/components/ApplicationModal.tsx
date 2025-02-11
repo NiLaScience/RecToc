@@ -202,6 +202,37 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     }
   };
 
+  const handleRecordedVideo = async (file: File) => {
+    try {
+      // Create draft application when video is recorded
+      if (!application?.id) {
+        const newApplication = await ApplicationService.createApplication(jobId);
+        console.log('Created new application:', newApplication);
+        setApplication(newApplication);
+      }
+
+      setVideoFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    } catch (error) {
+      console.error('Error handling recorded video:', error);
+      presentToast({
+        message: 'Error processing video file',
+        duration: 3000,
+        color: 'danger',
+      });
+    }
+  };
+
+  useEffect(() => {
+    // Cleanup preview URL when component unmounts or when previewUrl changes
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   const handleSubmit = async () => {
     if (!user || (!videoFile && !application?.videoURL) || !application?.id) {
       console.log('Missing required data:', { 
@@ -259,12 +290,14 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     setSubmitting(true);
     setUploadProgress(0);
     try {
-      // Upload video with progress tracking but keep draft status
-      await ApplicationService.updateApplicationDraft(
-        application.id,
-        videoFile,
-        (progress) => setUploadProgress(progress)
-      );
+      // Only call updateApplicationDraft if we have a new video file
+      if (videoFile) {
+        await ApplicationService.updateApplicationDraft(
+          application.id,
+          videoFile,
+          (progress) => setUploadProgress(progress)
+        );
+      }
       
       presentToast({
         message: 'Draft saved successfully',
