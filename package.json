@@ -9,7 +9,8 @@
     "lint": "next lint",
     "static": "next build",
     "predeploy": "npm run build && cp -r public/install out/",
-    "deploy": "firebase deploy"
+    "deploy": "firebase deploy",
+    "upload-jobs": "ts-node --project scripts/tsconfig.json scripts/upload_jobs.ts"
   },
   "dependencies": {
     "@capacitor-firebase/app": "^7.0.0",
@@ -29,16 +30,24 @@
     "@ionic/react": "^7.8.6",
     "@ionic/react-router": "^7.8.6",
     "@openai/realtime-api-beta": "github:openai/openai-realtime-api-beta",
+    "@types/fluent-ffmpeg": "^2.1.27",
+    "@web-std/file": "^3.0.3",
     "axios": "^1.7.9",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",
     "firebase": "^11.2.0",
+    "firebase-admin": "^13.1.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "form-data": "^4.0.1",
     "ionicons": "^7.2.2",
     "next": "14.1.0",
+    "node-fetch": "^2.7.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.5.1",
     "react-router-dom": "^5.3.4",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
     "swiper": "^11.2.2",
     "uuid": "^11.0.5",
     "zod": "^3.24.1",
@@ -57,6 +66,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/react-router-dom": "^5.3.3",
+    "@types/sqlite3": "^3.1.11",
     "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.0.1",
     "babel-loader": "^9.2.1",
@@ -67,6 +77,7 @@
     "http-proxy-middleware": "^3.0.3",
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }

@@ -69,3 +69,5 @@ logs
 
 # APK files
 *.apk
+
+service-account.json
