@@ -14,7 +14,7 @@ export default function Document() {
         
         {/* Add to homescreen for iOS */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-title" content="RecToc" />
+        <meta name="apple-mobile-web-app-title" content="Nexus" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black" />
         
         {/* Default Ionic core CSS */}

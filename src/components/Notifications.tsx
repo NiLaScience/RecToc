@@ -35,7 +35,7 @@ const Notifications: React.FC<NotificationsProps> = ({ open, onDidDismiss }) => 
         <IonList>
           <IonItem>
             <IonLabel>
-              <h2>Welcome to ReCToC!</h2>
+              <h2>Welcome to Nexus!</h2>
               <p>Start exploring videos now.</p>
             </IonLabel>
           </IonItem>

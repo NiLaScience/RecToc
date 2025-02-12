@@ -40,9 +40,9 @@ const Tutorial: React.FC<TutorialProps> = ({ isOpen, onClose }) => {
 
   const tutorialSteps = [
     {
-      title: 'Welcome to ReCToC',
+      title: 'Welcome to Nexus',
       description:
-        'We are a personalized video job application platform. With ReCToC, you can browse, watch, and apply to job listings through short videos. Let\'s get started!',
+        'We are a personalized video job application platform. With Nexus, you can browse, watch, and apply to job listings through short videos. Let\'s get started!',
       icon: rocketOutline,
       color: 'primary',
     },
@@ -98,7 +98,7 @@ const Tutorial: React.FC<TutorialProps> = ({ isOpen, onClose }) => {
     {
       title: 'Revisit Tutorial',
       description:
-        'You can reopen this guide anytime by tapping the help button in the top-left corner. Enjoy exploring ReCToC!',
+        'You can reopen this guide anytime by tapping the help button in the top-left corner. Enjoy exploring Nexus!',
       icon: helpCircleOutline,
       color: 'medium',
     },
