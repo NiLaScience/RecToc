@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ensureInitialized, callFunction } from '../config/firebase';
 import { Capacitor } from '@capacitor/core';
+import { useBaseRealtimeConnection, type SessionStatus } from './useBaseRealtimeConnection';
 
 // Interview stage definitions
 export enum InterviewStage {
@@ -25,6 +26,18 @@ interface InterviewState {
   };
   keyInsights: string[];
   isCompleting: boolean;
+  feedback: InterviewFeedback | null;
+  progress: number;
+  stageTitle: string;
+}
+
+interface InterviewFeedback {
+  feedbackType: 'positive' | 'improvement' | 'neutral';
+  message: string;
+  details: {
+    strengths: string[];
+    improvements: string[];
+  };
 }
 
 interface RealtimeMessage {
@@ -55,8 +68,8 @@ interface ResumeData {
   [key: string]: any;
 }
 
-// Add better type definitions at the top
-export type SessionStatus = "DISCONNECTED" | "CONNECTING" | "CONNECTED";
+// Re-export the SessionStatus type
+export type { SessionStatus };
 
 interface ServerEvent {
   type: string;
@@ -64,6 +77,8 @@ interface ServerEvent {
   item_id?: string;
   transcript?: string;
   delta?: string;
+  name?: string;
+  arguments?: any;
   session?: {
     id?: string;
     input_audio_transcription?: {
@@ -96,16 +111,39 @@ interface ServerEvent {
   };
 }
 
+// Add stage names and order
+export const INTERVIEW_STAGES = [
+  InterviewStage.INTRODUCTION,
+  InterviewStage.EXPERIENCE_REVIEW,
+  InterviewStage.SKILLS_ASSESSMENT,
+  InterviewStage.PREFERENCES,
+  InterviewStage.EXPECTATIONS,
+  InterviewStage.WRAP_UP
+];
+
+export const stageNames: Record<InterviewStage, string> = {
+  introduction: 'Introduction',
+  experience_review: 'Experience Review',
+  skills_assessment: 'Skills Assessment',
+  preferences: 'Job Preferences',
+  expectations: 'Career Goals',
+  wrap_up: 'Wrap Up',
+  completed: 'Completed'
+};
+
 export const useRealtimeConnection = (resumeData?: ResumeData) => {
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>("DISCONNECTED");
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<RealtimeMessage[]>([]);
-  const [interviewState, setInterviewState] = useState<InterviewState>({
+  const [state, setState] = useState<InterviewState>({
     stage: InterviewStage.INTRODUCTION,
     completedTopics: [],
     preferences: {},
     keyInsights: [],
-    isCompleting: false
+    isCompleting: false,
+    feedback: null,
+    progress: 0,
+    stageTitle: 'Introduction'
   });
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -135,12 +173,15 @@ export const useRealtimeConnection = (resumeData?: ResumeData) => {
     setMessages([]);
     setError(null);
     setSessionStatus("DISCONNECTED");
-    setInterviewState({
+    setState({
       stage: InterviewStage.INTRODUCTION,
       completedTopics: [],
       preferences: {},
       keyInsights: [],
-      isCompleting: false
+      isCompleting: false,
+      feedback: null,
+      progress: 0,
+      stageTitle: 'Introduction'
     });
 
     // Clear refs
@@ -167,242 +208,142 @@ export const useRealtimeConnection = (resumeData?: ResumeData) => {
     cleanup();
   }, [cleanup]);
 
-  const connect = useCallback(async () => {
-    try {
-      setSessionStatus("CONNECTING");
-      setError(null);
+  const handleFunctionCall = useCallback((name: string, args: any) => {
+    switch (name) {
+      case 'updateInterviewProgress':
+        const { currentStage, progress, stageTitle } = args;
+        setState(prev => ({
+          ...prev,
+          stage: currentStage,
+          progress,
+          stageTitle,
+          completedTopics: [...prev.completedTopics, prev.stage]
+        }));
+        break;
 
-      // Ensure Firebase is initialized
-      await ensureInitialized();
+      case 'showFeedback':
+        const { feedbackType, message, details } = args;
+        setState(prev => ({
+          ...prev,
+          feedback: { feedbackType, message, details }
+        }));
+        break;
 
-      // Get ephemeral token using Firebase Function
-      let token: string;
-      if (Capacitor.isNativePlatform()) {
-        // Use Capacitor Firebase Functions plugin for native platforms
-        const result = await callFunction('generateRealtimeToken') as { token: string };
-        token = result.token;
-      } else {
-        // Use web SDK for browser
-        const functions = getFunctions();
-        const generateToken = httpsCallable(functions, 'generateRealtimeToken');
-        const result = await generateToken({});
-        token = (result.data as { token: string }).token;
-      }
+      case 'updatePreferences':
+        const { preferences } = args;
+        setState(prev => ({
+          ...prev,
+          preferences: { ...prev.preferences, ...preferences }
+        }));
+        break;
 
-      if (!token) {
-        throw new Error('Invalid token response from server');
-      }
-
-      // Create peer connection with ICE servers
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ]
-      });
-      peerConnectionRef.current = pc;
-
-      // Set up audio element for remote audio
-      const audioEl = new Audio();
-      audioEl.autoplay = true;
-      audioElementRef.current = audioEl;
-
-      pc.ontrack = (e) => {
-        if (audioElementRef.current) {
-          audioElementRef.current.srcObject = e.streams[0];
-        }
-      };
-
-      // Handle connection state changes
-      pc.oniceconnectionstatechange = () => {
-        if (pc.iceConnectionState === 'failed') {
-          setError('Connection failed. Please try again.');
-          disconnect();
-        }
-      };
-
-      // Set up audio
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        });
-        pc.addTrack(stream.getTracks()[0]);
-      } catch (err) {
-        console.error('Audio setup failed:', err);
-        throw new Error('Failed to setup audio');
-      }
-
-      // Set up data channel
-      const dc = pc.createDataChannel("oai-events");
-      dataChannelRef.current = dc;
-
-      dc.onopen = () => {
-        setSessionStatus("CONNECTED");
-        setError(null);
-
-        try {
-          // First, send basic session config
-          const sessionConfig = {
-            type: "session.update",
-            session: {
-              modalities: ["audio", "text"],
-              input_audio_transcription: {
-                model: "whisper-1",
-                language: "en",
-                prompt: "This is a job interview conversation."
-              },
-              turn_detection: {
-                type: "server_vad",
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 200,
-                create_response: true
-              }
-            }
-          };
-
-          console.log('Sending session config:', sessionConfig);
-          dc.send(JSON.stringify(sessionConfig));
-
-          // Then, if we have resume data, send it as a system message
-          if (resumeData) {
-            const formatSystemPrompt = (resume: ResumeData, state: InterviewState) => {
-              const experienceSection = resume.experience.map(exp => 
-                `- ${exp.title} at ${exp.company} (${exp.startDate} to ${exp.endDate || 'Present'})
-                   ${exp.description}`
-              ).join('\n');
-
-              const educationSection = resume.education.map(edu =>
-                `- ${edu.degree} in ${edu.field} from ${edu.school}, graduated ${edu.graduationDate}`
-              ).join('\n');
-
-              const skillsSection = `Skills: ${resume.skills.join(', ')}`;
-
-              return `
-You are an AI interviewer conducting a structured job search onboarding interview.
-Current interview stage: ${state.stage}
-
-Candidate's Resume:
-Experience:
-${experienceSection}
-
-Education:
-${educationSection}
-
-${skillsSection}
-
-Instructions:
-1. Start by briefly acknowledging their experience at ${resume.experience[0]?.company} as a ${resume.experience[0]?.title}.
-2. Follow this interview structure:
-   - Review their experience and achievements
-   - Assess their skills and expertise
-   - Understand their job preferences (location, salary, remote work)
-   - Discuss career goals and expectations
-3. Keep responses concise and focused.
-4. Ask one question at a time.
-5. Include [NEXT_STAGE] when ready to move to the next stage.
-6. Include [INTERVIEW_COMPLETE] when all stages are done.
-
-Previously completed topics: ${state.completedTopics.join(', ')}
-Current preferences: ${JSON.stringify(state.preferences)}
-Key insights gathered: ${state.keyInsights.join(', ')}
-`;
-            };
-
-            // Send initial system message
-            const systemMessage = {
-              type: "conversation.item.create",
-              item: {
-                type: "message",
-                role: "system",
-                content: [
-                  {
-                    type: "input_text",
-                    text: formatSystemPrompt(resumeData, interviewState)
-                  }
-                ]
-              }
-            };
-
-            console.log('Sending system message with resume:', systemMessage);
-            dc.send(JSON.stringify(systemMessage));
-
-            // Start the interview with a response request
-            const responseCreate = {
-              type: "response.create",
-              response: {
-                modalities: ["text", "audio"]
-              }
-            };
-            dc.send(JSON.stringify(responseCreate));
-          }
-        } catch (error) {
-          console.error('Failed to configure session:', error);
-          setError('Failed to configure session');
-        }
-      };
-
-      dc.onclose = () => {
-        setSessionStatus("DISCONNECTED");
-      };
-
-      dc.onerror = (e) => {
-        setError('Data channel error: ' + e.error?.message || 'Unknown error');
-      };
-
-      dc.onmessage = (e) => {
-        try {
-          const event = JSON.parse(e.data);
-          handleServerEvent(event);
-        } catch (parseError) {
-          console.error('Failed to parse message:', parseError);
-          setError('Failed to parse server message');
-        }
-      };
-
-      // Create and set local description
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      // Connect to OpenAI Realtime API
-      const baseUrl = "https://api.openai.com/v1/realtime";
-      const model = "gpt-4o-realtime-preview-2024-12-17";
-      
-      const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
-        method: "POST",
-        body: offer.sdp,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/sdp"
-        },
-      });
-
-      if (!sdpResponse.ok) {
-        throw new Error('Failed to establish connection with OpenAI');
-      }
-
-      const answer = {
-        type: 'answer' as RTCSdpType,
-        sdp: await sdpResponse.text(),
-      };
-      
-      await pc.setRemoteDescription(answer);
-
-    } catch (err) {
-      console.error('Connection error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to connect');
-      setSessionStatus("DISCONNECTED");
-      disconnect();
+      case 'addKeyInsight':
+        const { insight } = args;
+        setState(prev => ({
+          ...prev,
+          keyInsights: [...prev.keyInsights, insight]
+        }));
+        break;
     }
-  }, [resumeData, interviewState, disconnect]);
+  }, []);
+
+  // Add helper to process stage transitions
+  const processStageTransition = useCallback((text: string) => {
+    if (text.includes('[NEXT_STAGE]')) {
+      const currentIndex = INTERVIEW_STAGES.indexOf(state.stage);
+      if (currentIndex < INTERVIEW_STAGES.length - 1) {
+        const nextStage = INTERVIEW_STAGES[currentIndex + 1];
+        const progress = ((currentIndex + 2) / INTERVIEW_STAGES.length) * 100;
+        handleFunctionCall('updateInterviewProgress', {
+          currentStage: nextStage,
+          progress,
+          stageTitle: stageNames[nextStage]
+        });
+      }
+    }
+  }, [state.stage, handleFunctionCall]);
+
+  const handleServerEvent = useCallback((event: ServerEvent) => {
+    // Handle function calls
+    if (event.type === 'function_call' && event.name && event.arguments) {
+      handleFunctionCall(event.name, event.arguments);
+      return;
+    }
+    
+    // Handle other events
+    switch (event.type) {
+      case 'error':
+        const errorMessage = event.error?.message || 'Unknown error occurred';
+        console.error('OpenAI Realtime error:', errorMessage, event.error);
+        setError(errorMessage);
+        break;
+
+      case 'conversation.item.input_audio_transcription.completed':
+        const userTranscript = {
+          type: event.type,
+          transcript: event.transcript,
+          timestamp: new Date().toISOString(),
+          isUser: true
+        };
+        setMessages(prev => [...prev, userTranscript]);
+        break;
+
+      case 'response.created':
+        currentResponseRef.current = {
+          text: '',
+          timestamp: new Date().toISOString(),
+          responseId: event.item?.id,
+          isComplete: false
+        };
+        break;
+
+      case 'response.audio_transcript.delta':
+        if (currentResponseRef.current && !currentResponseRef.current.isComplete) {
+          currentResponseRef.current.text += event.delta || '';
+        }
+        break;
+
+      case 'response.done':
+        if (currentResponseRef.current) {
+          currentResponseRef.current.isComplete = true;
+          const finalText = event.response?.output?.[0]?.content?.[0]?.text || currentResponseRef.current.text;
+          
+          // Check for interview completion
+          if (finalText.includes('[INTERVIEW_COMPLETE]')) {
+            setState(prev => ({
+              ...prev,
+              stage: InterviewStage.COMPLETED,
+              isCompleting: true
+            }));
+          } else {
+            // Process stage transitions
+            processStageTransition(finalText);
+          }
+
+          const finalResponse = {
+            type: 'response.done',
+            text: finalText,
+            timestamp: currentResponseRef.current.timestamp,
+            isUser: false,
+            stage: state.stage
+          };
+          setMessages(prev => [...prev, finalResponse]);
+          currentResponseRef.current = null;
+        }
+        break;
+    }
+  }, [handleFunctionCall, processStageTransition, state.stage]);
 
   const sendMessage = useCallback((message: RealtimeMessage) => {
     if (dataChannelRef.current?.readyState === 'open') {
       try {
+        // Add message to local state immediately
+        setMessages(prev => [...prev, {
+          ...message,
+          timestamp: new Date().toISOString(),
+          isUser: true
+        }]);
+
         // Step 1: Create conversation item
         const conversationItem = {
           type: "conversation.item.create",
@@ -412,7 +353,7 @@ Key insights gathered: ${state.keyInsights.join(', ')}
             content: [
               {
                 type: "input_text",
-                text: message.response.instructions
+                text: message.text
               }
             ]
           }
@@ -436,183 +377,244 @@ Key insights gathered: ${state.keyInsights.join(', ')}
     }
   }, []);
 
-  const handleCompletion = useCallback(() => {
-    // Set completing state
-    setInterviewState(prev => ({
-      ...prev,
-      isCompleting: true
-    }));
+  const {
+    sessionStatus: baseSessionStatus,
+    error: baseError,
+    messages: baseMessages,
+    connect: baseConnect,
+    disconnect: baseDisconnect,
+    sendMessage: baseSendMessage,
+  } = useBaseRealtimeConnection({
+    onSessionConfig: () => {
+      const instructions = `
+# Personality and Tone
+You are an AI-powered onboarding interview assistant. Your role is to conduct a structured interview to understand the candidate's background, skills, and preferences.
 
-    // Wait for audio to finish (5 seconds buffer)
-    completionTimeoutRef.current = setTimeout(() => {
-      // Close the connection
-      disconnect();
-      
-      // Reset completion state
-      setInterviewState(prev => ({
-        ...prev,
-        isCompleting: false
-      }));
-    }, 5000);
-  }, [disconnect]);
+# Interview Structure
+You must follow these interview sections:
+1) Introduction (10%)
+   - Welcome the candidate, mention their background and purpose of the interview
+   - Brief overview of the process
+   - Initial rapport building
 
-  const processAIResponse = useCallback((response: string) => {
-    // Check for interview completion
-    if (response.includes('[INTERVIEW_COMPLETE]')) {
-      setInterviewState(prev => ({
-        ...prev,
-        stage: InterviewStage.COMPLETED
-      }));
-      handleCompletion();
-      return;
-    }
+2) Experience Review (25%)
+   - Discuss past roles and responsibilities
+   - Key achievements
+   - Learning experiences
 
-    // Check for stage transition marker
-    if (response.includes('[NEXT_STAGE]')) {
-      // Move to next stage
-      const currentIndex = Object.values(InterviewStage).indexOf(interviewState.stage);
-      const nextStage = Object.values(InterviewStage)[currentIndex + 1];
-      
-      // Add current stage to completed topics
-      setInterviewState(prev => ({
-        ...prev,
-        stage: nextStage,
-        completedTopics: [...prev.completedTopics, prev.stage]
-      }));
-    }
+3) Skills Assessment (25%)
+   - Technical skills evaluation
+   - Soft skills discussion
+   - Areas of expertise
 
-    // Extract and update preferences if in preferences stage
-    if (interviewState.stage === InterviewStage.PREFERENCES) {
-      // Look for specific preference markers in the response
-      const jobTypesMatch = response.match(/Job Types?: (.*?)(?:\[|$)/i);
-      const locationsMatch = response.match(/Locations?: (.*?)(?:\[|$)/i);
-      const salaryMatch = response.match(/Salary?: (.*?)(?:\[|$)/i);
-      const remoteMatch = response.match(/Remote?: (.*?)(?:\[|$)/i);
+4) Job Preferences (20%)
+   - Desired role types
+   - Location preferences
+   - Salary expectations
+   - Remote work preferences
 
-      setInterviewState(prev => ({
-        ...prev,
-        preferences: {
-          ...prev.preferences,
-          ...(jobTypesMatch && { jobTypes: jobTypesMatch[1].split(',').map(s => s.trim()) }),
-          ...(locationsMatch && { locations: locationsMatch[1].split(',').map(s => s.trim()) }),
-          ...(salaryMatch && { salary: salaryMatch[1].trim() }),
-          ...(remoteMatch && { remote: remoteMatch[1].toLowerCase().includes('yes') })
+5) Career Goals (15%)
+   - Short-term objectives
+   - Long-term aspirations
+   - Growth areas
+
+6) Wrap Up (5%)
+   - Summary of key points
+   - Next steps
+   - Final questions
+
+The candidate's resume data is:
+${JSON.stringify(resumeData, null, 2)}
+
+# Important Guidelines
+1. Keep responses concise and focused
+2. Ask one question at a time
+3. Use updateInterviewProgress to track progress through stages
+4. Use showFeedback to provide feedback after responses
+5. Use updatePreferences to record job preferences
+6. Use addKeyInsight to note important points
+7. Include [NEXT_STAGE] when ready to move stages
+8. Include [INTERVIEW_COMPLETE] when finished
+
+Remember to:
+- Be professional but friendly
+- Focus on gathering specific, actionable information
+- Provide constructive feedback
+- Help identify candidate's strengths and areas for improvement
+`;
+
+      return {
+        type: "session.update",
+        session: {
+          modalities: ["audio", "text"],
+          instructions,
+          voice: "coral",
+          input_audio_transcription: {
+            model: "whisper-1",
+            language: "en",
+            prompt: "This is an onboarding interview conversation."
+          },
+          turn_detection: {
+            type: "server_vad",
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 200,
+            create_response: true
+          },
+          tools: [
+            {
+              type: "function",
+              name: "updateInterviewProgress",
+              description: "Updates the UI to reflect current interview stage and progress",
+              parameters: {
+                type: "object",
+                properties: {
+                  currentStage: {
+                    type: "string",
+                    enum: Object.values(InterviewStage),
+                    description: "The current stage of the interview"
+                  },
+                  progress: {
+                    type: "number",
+                    description: "Progress percentage (0-100)"
+                  },
+                  stageTitle: {
+                    type: "string",
+                    description: "Display title for current stage"
+                  }
+                },
+                required: ["currentStage", "progress", "stageTitle"]
+              }
+            },
+            {
+              type: "function",
+              name: "showFeedback",
+              description: "Displays feedback UI component with evaluation",
+              parameters: {
+                type: "object",
+                properties: {
+                  feedbackType: {
+                    type: "string",
+                    enum: ["positive", "improvement", "neutral"],
+                    description: "Type of feedback to display"
+                  },
+                  message: {
+                    type: "string",
+                    description: "Feedback message to display"
+                  },
+                  details: {
+                    type: "object",
+                    properties: {
+                      strengths: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "List of strong points in the answer"
+                      },
+                      improvements: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "List of areas for improvement"
+                      }
+                    },
+                    required: ["strengths", "improvements"]
+                  }
+                },
+                required: ["feedbackType", "message", "details"]
+              }
+            },
+            {
+              type: "function",
+              name: "updatePreferences",
+              description: "Updates the candidate's job preferences",
+              parameters: {
+                type: "object",
+                properties: {
+                  preferences: {
+                    type: "object",
+                    properties: {
+                      jobTypes: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "Types of jobs the candidate is interested in"
+                      },
+                      locations: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "Preferred work locations"
+                      },
+                      salary: {
+                        type: "string",
+                        description: "Salary expectations"
+                      },
+                      remote: {
+                        type: "boolean",
+                        description: "Whether the candidate prefers remote work"
+                      }
+                    }
+                  }
+                },
+                required: ["preferences"]
+              }
+            },
+            {
+              type: "function",
+              name: "addKeyInsight",
+              description: "Adds a key insight about the candidate",
+              parameters: {
+                type: "object",
+                properties: {
+                  insight: {
+                    type: "string",
+                    description: "Important insight about the candidate"
+                  }
+                },
+                required: ["insight"]
+              }
+            }
+          ]
         }
-      }));
-    }
+      };
+    },
+    onEvent: handleServerEvent
+  });
 
-    // Extract key insights from AI responses
-    const insights = response
-      .split('\n')
-      .filter(line => line.startsWith('*') || line.startsWith('-'))
-      .map(line => line.replace(/^[*-]\s*/, '').trim());
-
-    if (insights.length > 0) {
-      setInterviewState(prev => ({
-        ...prev,
-        keyInsights: Array.from(new Set([...prev.keyInsights, ...insights]))
-      }));
-    }
-  }, [interviewState.stage, handleCompletion]);
-
-  const handleServerEvent = useCallback((event: ServerEvent) => {
-    console.log("Received event:", event.type, event);
-
-    switch (event.type) {
-      case 'error':
-        const errorMessage = event.error?.message || 'Unknown error occurred';
-        console.error('OpenAI Realtime error:', errorMessage, event.error);
-        setError(errorMessage);
-        break;
-
-      case 'session.created':
-        console.log('Session created:', event.session);
-        setSessionStatus("CONNECTED");
-        break;
-
-      case 'session.updated':
-        console.log('Session updated:', event.session);
-        if (!event.session?.input_audio_transcription) {
-          console.warn('Session missing audio transcription configuration');
-        }
-        break;
-
-      case 'conversation.item.input_audio_transcription.completed':
-        const userTranscript = {
-          type: event.type,
-          transcript: event.transcript,
-          timestamp: new Date().toISOString(),
-          isUser: true
-        };
-        console.log('User transcript:', userTranscript);
-        setMessages(prev => [...prev, userTranscript]);
-        break;
-
-      case 'response.created':
-        currentResponseRef.current = {
-          text: '',
-          timestamp: new Date().toISOString(),
-          responseId: event.item?.id,
-          isComplete: false
-        };
-        break;
-
-      case 'response.audio_transcript.delta':
-        if (currentResponseRef.current && !currentResponseRef.current.isComplete) {
-          currentResponseRef.current.text += event.delta || '';
-        }
-        break;
-
-      case 'response.done':
-        if (currentResponseRef.current) {
-          currentResponseRef.current.isComplete = true;
-          const finalText = event.response?.output?.[0]?.content?.[0]?.text || currentResponseRef.current.text;
-          const finalResponse = {
-            type: 'response.done',
-            text: finalText,
-            timestamp: currentResponseRef.current.timestamp,
-            isUser: false,
-            stage: interviewState.stage
-          };
-          console.log('Final response:', finalResponse);
-          setMessages(prev => [...prev, finalResponse]);
-          currentResponseRef.current = null;
-        }
-        break;
-
-      default:
-        console.log('Unhandled event type:', event.type);
-        break;
-    }
-  }, [interviewState.stage]);
-
-  // Update message handling to process AI responses
+  // Update our state based on base connection
   useEffect(() => {
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage && !lastMessage.isUser && lastMessage.text) {
-      processAIResponse(lastMessage.text);
-    }
-  }, [messages, processAIResponse]);
+    setSessionStatus(baseSessionStatus);
+  }, [baseSessionStatus]);
 
-  // Clean up
   useEffect(() => {
-    return () => {
-      if (sessionStatus === "CONNECTED") {
-        disconnect();
-      }
-    };
-  }, [sessionStatus, disconnect]);
+    setError(baseError);
+  }, [baseError]);
+
+  useEffect(() => {
+    setMessages(baseMessages);
+  }, [baseMessages]);
+
+  const connect = useCallback(async () => {
+    try {
+      await baseConnect();
+    } catch (err) {
+      console.error('Connection error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to connect');
+    }
+  }, [baseConnect]);
 
   return {
     sessionStatus,
     error,
     messages,
     connect,
-    disconnect,
-    sendMessage,
+    disconnect: baseDisconnect,
+    sendMessage: baseSendMessage,
     cleanup,
-    isCompleting: interviewState.isCompleting,
-    currentStage: interviewState.stage,
-    totalStages: Object.keys(InterviewStage).length - 1, // Subtract 1 to exclude COMPLETED
+    isCompleting: state.isCompleting,
+    currentStage: state.stage,
+    totalStages: Object.keys(InterviewStage).length - 1,
+    progress: state.progress,
+    stageTitle: state.stageTitle,
+    feedback: state.feedback,
+    preferences: state.preferences,
+    keyInsights: state.keyInsights
   };
 };

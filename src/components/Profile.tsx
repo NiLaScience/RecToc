@@ -50,7 +50,7 @@ import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
 import '../styles/accordion.css';
 import { FirebaseStorage } from '@capacitor-firebase/storage';
-import RealtimeModal from './RealtimeModal';
+import OnboardingModal from './OnboardingModal';
 import ApplicationService from '../services/ApplicationService';
 import CVAccordion from './shared/CVAccordion';
 
@@ -695,25 +695,9 @@ const Profile = () => {
               Start Onboarding Interview
             </IonButton>
 
-          <RealtimeModal
+          <OnboardingModal
             isOpen={isRealtimeModalOpen}
             onClose={() => setIsRealtimeModalOpen(false)}
-            resumeData={profile?.cv ? {
-              experience: profile.cv.experience?.map(exp => ({
-                company: exp.company,
-                title: exp.title,
-                startDate: exp.startDate,
-                endDate: exp.endDate,
-                description: exp.highlights?.join('\n') || ''
-              })) || [],
-              education: profile.cv.education?.map(edu => ({
-                school: edu.institution,
-                degree: edu.degree,
-                field: edu.field,
-                graduationDate: edu.graduationDate || ''
-              })) || [],
-              skills: profile.cv.skills?.flatMap(skill => skill.items) || []
-            } : undefined}
           />
 
           {profile?.cv && (

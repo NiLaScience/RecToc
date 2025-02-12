@@ -11,10 +11,17 @@ import {
   IonChip,
   IonFooter,
   IonProgressBar,
+  IonIcon,
+  IonButtons,
 } from '@ionic/react';
+import { closeOutline } from 'ionicons/icons';
 import { useState, useEffect, useRef } from 'react';
-import { useRealtimeConnection, SessionStatus, InterviewStage } from '../hooks/useRealtimeConnection';
+import { useRealtimeConnection, type SessionStatus, InterviewStage } from '../hooks/useRealtimeConnection';
+import { useAuth } from '../context/AuthContext';
+import { updateDocument } from '../config/firebase';
 import ChatMessage from './ChatMessage';
+import AccordionGroup from './shared/AccordionGroup';
+import AccordionSection from './shared/AccordionSection';
 import '../styles/chat.css';
 import { toast } from 'react-hot-toast';
 
@@ -62,7 +69,9 @@ const stageNames: Record<InterviewStage, string> = {
 };
 
 const RealtimeModal: React.FC<RealtimeModalProps> = ({ isOpen, onClose, resumeData }) => {
+  const { user } = useAuth();
   const contentRef = useRef<HTMLIonContentElement>(null);
+  const mountedRef = useRef(false);
   const {
     sessionStatus,
     error,
@@ -72,31 +81,42 @@ const RealtimeModal: React.FC<RealtimeModalProps> = ({ isOpen, onClose, resumeDa
     isCompleting,
     currentStage,
     totalStages,
+    progress,
+    stageTitle,
+    feedback,
+    preferences,
+    keyInsights
   } = useRealtimeConnection(resumeData);
 
   const isConnected = sessionStatus === "CONNECTED";
   const isConnecting = sessionStatus === "CONNECTING";
 
-  // Calculate progress (0 to 1)
-  const progress = Math.min(
-    (INTERVIEW_STAGES.indexOf(currentStage) + 1) / INTERVIEW_STAGES.length,
-    1
-  );
-
-  const stageProgress = currentStage === InterviewStage.COMPLETED 
-    ? 'Interview Complete'
-    : `Stage ${INTERVIEW_STAGES.indexOf(currentStage) + 1}/${INTERVIEW_STAGES.length}: ${stageNames[currentStage]}`;
-
+  // Initialize connection on mount
   useEffect(() => {
-    if (isOpen && sessionStatus === "DISCONNECTED") {
-      connect();
-    }
+    mountedRef.current = true;
     return () => {
-      if (sessionStatus === "CONNECTED") {
-        disconnect();
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Handle connection state
+  useEffect(() => {
+    if (!mountedRef.current) return;
+
+    const handleConnection = async () => {
+      try {
+        if (isOpen && sessionStatus === "DISCONNECTED") {
+          await connect();
+        } else if (!isOpen && sessionStatus === "CONNECTED") {
+          disconnect();
+        }
+      } catch (err) {
+        console.error('Connection error:', err);
       }
     };
-  }, [isOpen, sessionStatus, connect, disconnect]);
+
+    handleConnection();
+  }, [isOpen, sessionStatus]);
 
   useEffect(() => {
     if (contentRef.current) {
@@ -106,45 +126,65 @@ const RealtimeModal: React.FC<RealtimeModalProps> = ({ isOpen, onClose, resumeDa
 
   // Handle completion state
   useEffect(() => {
-    if (isCompleting) {
+    if (isCompleting && user) {
       const toastId = toast.loading('Completing onboarding interview...', {
         duration: 5000,
       });
 
-      const timer = setTimeout(() => {
-        toast.dismiss(toastId);
-        onClose();
-        disconnect();
-      }, 5000);
+      const saveInterviewResults = async () => {
+        try {
+          // Update user profile with interview results
+          await updateDocument(`users/${user.uid}`, {
+            interviewResults: {
+              preferences,
+              keyInsights,
+              completedAt: new Date().toISOString()
+            },
+            updatedAt: new Date().toISOString()
+          });
+
+          toast.dismiss(toastId);
+          toast.success('Interview results saved to your profile');
+          onClose();
+          disconnect();
+        } catch (err) {
+          console.error('Error saving interview results:', err);
+          toast.dismiss(toastId);
+          toast.error('Failed to save interview results');
+        }
+      };
+
+      saveInterviewResults();
 
       return () => {
-        clearTimeout(timer);
         toast.dismiss(toastId);
       };
     }
-  }, [isCompleting, onClose, disconnect]);
+  }, [isCompleting, user, preferences, keyInsights, onClose, disconnect]);
 
   return (
     <IonModal 
       isOpen={isOpen} 
       onDidDismiss={onClose}
-      data-inert={!isOpen}
+      className="interview-training-modal"
     >
       <IonHeader>
         <IonToolbar>
           <IonTitle>Onboarding Interview</IonTitle>
-          <IonButton slot="end" onClick={onClose} fill="clear" color="light">
-            Close
-          </IonButton>
+          <IonButtons slot="end">
+            <IonButton onClick={onClose}>
+              <IonIcon icon={closeOutline} />
+            </IonButton>
+          </IonButtons>
         </IonToolbar>
         <div className="interview-progress">
           <IonProgressBar 
-            value={progress} 
+            value={progress / 100} 
             color="primary"
             style={{ height: '6px' }}
           />
           <div className="stage-info ion-padding-horizontal ion-text-center">
-            <small>{stageProgress}</small>
+            <small>{stageTitle} ({Math.round(progress)}%)</small>
           </div>
         </div>
       </IonHeader>
@@ -161,10 +201,136 @@ const RealtimeModal: React.FC<RealtimeModalProps> = ({ isOpen, onClose, resumeDa
           </div>
         ) : (
           <>
-            <div className="connection-status">
-              <IonChip color={isConnected ? "success" : "medium"} role="status">
-                {isConnected ? "Connected" : "Disconnected"}
-              </IonChip>
+            {/* Stage display and controls */}
+            <div className="ion-padding">
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginBottom: '1rem'
+              }}>
+                <div>
+                  <div>
+                    {isConnecting && <p>Connecting to AI Interview Coach...</p>}
+                    {isConnected && progress === 0 && (
+                      <IonChip color="success">Interview ready to begin, say hello!</IonChip>
+                    )}
+                    {isConnected && progress > 0 && (
+                      <IonChip color="primary">Interview in progress</IonChip>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <IonButton 
+                    onClick={connect}
+                    disabled={sessionStatus !== "DISCONNECTED"}
+                  >
+                    Start Interview
+                  </IonButton>
+                  <IonButton 
+                    color="danger" 
+                    onClick={disconnect}
+                    disabled={sessionStatus !== "CONNECTED"}
+                  >
+                    End Interview
+                  </IonButton>
+                </div>
+              </div>
+
+              {/* Interview feedback */}
+              {feedback && progress > 0 && (
+                <AccordionGroup>
+                  <AccordionSection 
+                    value="feedback" 
+                    label={`Current Feedback: ${feedback.feedbackType}`}
+                  >
+                    <div className="ion-padding">
+                      <p>{feedback.message}</p>
+                      {feedback.details && (
+                        <>
+                          <h4>Strengths:</h4>
+                          <ul>
+                            {feedback.details.strengths.map((s, i) => (
+                              <li key={i}>{s}</li>
+                            ))}
+                          </ul>
+                          <h4>Areas for Improvement:</h4>
+                          <ul>
+                            {feedback.details.improvements.map((imp, i) => (
+                              <li key={i}>{imp}</li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
+                  </AccordionSection>
+                </AccordionGroup>
+              )}
+
+              {/* Preferences Summary */}
+              {Object.keys(preferences).length > 0 && (
+                <AccordionGroup>
+                  <AccordionSection
+                    value="preferences"
+                    label="Your Job Preferences"
+                  >
+                    <div className="ion-padding">
+                      {preferences.jobTypes && (
+                        <div>
+                          <h4>Job Types:</h4>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            {preferences.jobTypes.map((type, i) => (
+                              <IonChip key={i}>{type}</IonChip>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {preferences.locations && (
+                        <div>
+                          <h4>Preferred Locations:</h4>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            {preferences.locations.map((loc, i) => (
+                              <IonChip key={i}>{loc}</IonChip>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {preferences.salary && (
+                        <div>
+                          <h4>Salary Expectation:</h4>
+                          <p>{preferences.salary}</p>
+                        </div>
+                      )}
+                      {preferences.remote !== undefined && (
+                        <div>
+                          <h4>Remote Work:</h4>
+                          <IonChip color={preferences.remote ? "success" : "medium"}>
+                            {preferences.remote ? "Yes" : "No"}
+                          </IonChip>
+                        </div>
+                      )}
+                    </div>
+                  </AccordionSection>
+                </AccordionGroup>
+              )}
+
+              {/* Key Insights */}
+              {keyInsights.length > 0 && (
+                <AccordionGroup>
+                  <AccordionSection
+                    value="insights"
+                    label="Key Insights"
+                  >
+                    <div className="ion-padding">
+                      <ul>
+                        {keyInsights.map((insight, i) => (
+                          <li key={i}>{insight}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </AccordionSection>
+                </AccordionGroup>
+              )}
             </div>
             
             <div className="chat-container" role="log" aria-live="polite">
