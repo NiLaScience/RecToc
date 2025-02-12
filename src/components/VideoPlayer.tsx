@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { IonIcon, IonButton, IonAvatar, IonSpinner } from '@ionic/react';
-import { volumeHighOutline, volumeMuteOutline } from 'ionicons/icons';
+import { volumeHighOutline, volumeMuteOutline, eyeOutline, eyeOffOutline, playCircleOutline, pauseCircleOutline } from 'ionicons/icons';
 import { VideoItem } from '../types/video';
 import type { UserProfile } from '../types/user';
 import SubtitleService from '../services/SubtitleService';
@@ -31,20 +31,6 @@ const videoStyle: React.CSSProperties = {
   height: '100%',
   objectFit: 'contain',
   backgroundColor: '#000'
-};
-
-const overlayStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  padding: '1rem',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'space-between',
-  zIndex: 15,
-  pointerEvents: 'none' // Allow clicks to pass through to video
 };
 
 const interactiveStyle: React.CSSProperties = {
@@ -121,6 +107,29 @@ const tagStyle: React.CSSProperties = {
   display: 'inline-block'
 };
 
+const controlsStyle: React.CSSProperties = {
+  position: 'absolute',
+  bottom: '1rem',
+  right: '1rem',
+  display: 'flex',
+  gap: '0.5rem',
+  zIndex: 20
+};
+
+const playPauseOverlayStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  zIndex: 16,
+  opacity: 0,
+  transition: 'opacity 0.2s ease-in-out',
+  pointerEvents: 'none',
+  backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  borderRadius: '50%',
+  padding: '0.5rem'
+};
+
 export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded, allowSwipe = true, mode = 'feed' }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(autoPlay);
@@ -135,6 +144,25 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
   const [showApplication, setShowApplication] = useState(false);
   const [videoLoading, setVideoLoading] = useState(true);
   const [thumbnailError, setThumbnailError] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(true);
+  const [showPlayPauseOverlay, setShowPlayPauseOverlay] = useState(false);
+  const playPauseTimeoutRef = useRef<NodeJS.Timeout>();
+
+  const overlayStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: '1rem',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    zIndex: 15,
+    pointerEvents: 'none', // Allow clicks to pass through to video
+    opacity: showOverlay ? 1 : 0,
+    transition: 'opacity 0.2s ease-in-out'
+  };
 
   useEffect(() => {
     let callbackId: string;
@@ -357,14 +385,39 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
 
   const togglePlay = () => {
     setIsPlaying(!isPlaying);
+    // Show the overlay
+    setShowPlayPauseOverlay(true);
+    
+    // Clear any existing timeout
+    if (playPauseTimeoutRef.current) {
+      clearTimeout(playPauseTimeoutRef.current);
+    }
+    
+    // Hide the overlay after 1.5 seconds
+    playPauseTimeoutRef.current = setTimeout(() => {
+      setShowPlayPauseOverlay(false);
+    }, 1500);
   };
 
   const toggleMute = () => {
+    setIsMuted(!isMuted);
     if (videoRef.current) {
-      setIsMuted(!isMuted);
       videoRef.current.muted = !isMuted;
     }
   };
+
+  const toggleOverlay = () => {
+    setShowOverlay(!showOverlay);
+  };
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (playPauseTimeoutRef.current) {
+        clearTimeout(playPauseTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div
@@ -433,11 +486,7 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
           poster={video.thumbnailUrl}
         />
 
-        <div style={{
-          ...overlayStyle,
-          paddingTop: mode === 'feed' ? '4rem' : '1rem',
-          paddingBottom: mode === 'feed' ? '4rem' : '1rem'
-        }}>
+        <div style={overlayStyle}>
           <div style={upperLeftStyle}>
             {/* Title in upper left */}
             <div style={{ 
@@ -508,40 +557,6 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
                 )}
               </div>
             </div>
-
-            {/* Action buttons */}
-            <div style={{
-              ...actionButtonsStyle,
-              ...interactiveStyle
-            }}>
-              <IonButton
-                fill="clear"
-                color="light"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleMute();
-                }}
-              >
-                <IonIcon icon={isMuted ? volumeMuteOutline : volumeHighOutline} />
-              </IonButton>
-              {video.transcript && (
-                <IonButton
-                  fill="clear"
-                  color="light"
-                  onClick={() => setSubtitlesEnabled(!subtitlesEnabled)}
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ 
-                      fontSize: '1.2rem', 
-                      fontWeight: 'bold',
-                      opacity: subtitlesEnabled ? 1 : 0.5 
-                    }}>
-                      CC
-                    </span>
-                  </div>
-                </IonButton>
-              )}
-            </div>
           </div>
         </div>
 
@@ -573,6 +588,61 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
           onApplicationModalChange={(isOpen) => setShowApplication(isOpen)}
         />
       )}
+
+      <div style={controlsStyle}>
+        <IonButton
+          onClick={toggleOverlay}
+          fill="clear"
+          style={{ '--padding-start': '8px', '--padding-end': '8px' }}
+        >
+          <IonIcon
+            icon={showOverlay ? eyeOutline : eyeOffOutline}
+            style={{ color: '#fff', fontSize: '24px' }}
+          />
+        </IonButton>
+        <IonButton
+          onClick={toggleMute}
+          fill="clear"
+          style={{ '--padding-start': '8px', '--padding-end': '8px' }}
+        >
+          <IonIcon
+            icon={isMuted ? volumeMuteOutline : volumeHighOutline}
+            style={{ color: '#fff', fontSize: '24px' }}
+          />
+        </IonButton>
+        {video.transcript && (
+          <IonButton
+            fill="clear"
+            color="light"
+            onClick={() => setSubtitlesEnabled(!subtitlesEnabled)}
+            style={{ '--padding-start': '8px', '--padding-end': '8px' }}
+          >
+            <span style={{ 
+              fontSize: '1.2rem', 
+              fontWeight: 'bold',
+              opacity: subtitlesEnabled ? 1 : 0.5,
+              color: '#fff'
+            }}>
+              CC
+            </span>
+          </IonButton>
+        )}
+      </div>
+
+      {/* Play/Pause Overlay */}
+      <div style={{
+        ...playPauseOverlayStyle,
+        opacity: showPlayPauseOverlay ? 1 : 0
+      }}>
+        <IonIcon
+          icon={isPlaying ? pauseCircleOutline : playCircleOutline}
+          style={{
+            color: '#fff',
+            fontSize: '64px',
+            filter: 'drop-shadow(0 0 8px rgba(0,0,0,0.5))'
+          }}
+        />
+      </div>
 
       <style>{`
         video::cue {
