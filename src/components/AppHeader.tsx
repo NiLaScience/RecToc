@@ -6,7 +6,9 @@ import {
   IonButton,
   IonIcon,
 } from '@ionic/react';
-import { notificationsOutline, gridOutline, closeOutline } from 'ionicons/icons';
+import { notificationsOutline, gridOutline, closeOutline, helpCircleOutline } from 'ionicons/icons';
+import { useState } from 'react';
+import Tutorial from './Tutorial';
 
 interface AppHeaderProps {
   title: string;
@@ -27,6 +29,8 @@ const AppHeader: React.FC<AppHeaderProps> = ({
   onNotifications,
   rightContent,
 }) => {
+  const [showTutorial, setShowTutorial] = useState(false);
+  
   const headerStyle: React.CSSProperties = {
     position: 'fixed',
     top: 0,
@@ -40,6 +44,11 @@ const AppHeader: React.FC<AppHeaderProps> = ({
     <>
       <IonHeader style={headerStyle}>
         <IonToolbar className="dark-toolbar">
+          <IonButtons slot="start">
+            <IonButton onClick={() => setShowTutorial(true)} style={{ color: '#fff' }}>
+              <IonIcon icon={helpCircleOutline} />
+            </IonButton>
+          </IonButtons>
           <IonTitle style={{ color: '#fff' }}>{title}</IonTitle>
           {(showFeedButtons || onClose || rightContent) && (
             <IonButtons slot="end">
@@ -75,6 +84,11 @@ const AppHeader: React.FC<AppHeaderProps> = ({
           )}
         </IonToolbar>
       </IonHeader>
+
+      <Tutorial
+        isOpen={showTutorial}
+        onClose={() => setShowTutorial(false)}
+      />
 
       <style>{`
         .dark-toolbar {

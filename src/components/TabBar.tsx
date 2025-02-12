@@ -8,7 +8,6 @@ import Feed from './Feed';
 import Upload from './Upload';
 import Profile from './Profile';
 import Applications from './Applications';
-import TutorialFAB from './TutorialFAB';
 
 const TabBarContent = () => {
   const location = useLocation();
@@ -55,7 +54,6 @@ const TabBarContent = () => {
           </IonTabButton>
         </IonTabBar>
       </IonTabs>
-      <TutorialFAB />
     </>
   );
 };
