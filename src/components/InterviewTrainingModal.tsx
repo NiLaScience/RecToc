@@ -154,48 +154,49 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
           </div>
         ) : (
           <>
-            {/* Interview progress bar */}
-            <IonProgressBar
-              value={interviewState.progress / 100}
-              color="primary"
-              style={{ height: '6px' }}
-            ></IonProgressBar>
-
-            {/* Stage display and controls */}
-            <div className="ion-padding">
+            <div style={{ padding: '1rem' }}>
+              {/* Controls */}
               <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                marginBottom: '1rem'
+                display: 'flex',
+                justifyContent: 'center',
+                width: '100%',
+                gap: '1rem',
+                marginBottom: '1.5rem'
               }}>
-                <div>
-                  <h3 style={{ margin: 0 }}>
-                    Stage: {interviewState.stageTitle} ({Math.round(interviewState.progress)}%)
-                  </h3>
-                  {sessionStatus === 'CONNECTING' && <p>Connecting to AI Interview Coach...</p>}
-                  {sessionStatus === 'CONNECTED' && interviewState.progress === 0 && (
-                    <IonChip color="success">Interview ready to begin, say hello!</IonChip>
-                  )}
-                  {sessionStatus === 'CONNECTED' && interviewState.progress > 0 && (
-                    <IonChip color="primary">Interview in progress</IonChip>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <IonButton 
-                    onClick={connect}
-                    disabled={sessionStatus !== 'DISCONNECTED'}
-                  >
-                    Start Interview
-                  </IonButton>
-                  <IonButton 
-                    color="danger" 
-                    onClick={stopInterview}
-                    disabled={sessionStatus !== 'CONNECTED'}
-                  >
-                    End Interview
-                  </IonButton>
-                </div>
+                <IonButton 
+                  onClick={connect}
+                  disabled={sessionStatus !== 'DISCONNECTED'}
+                >
+                  Start Interview
+                </IonButton>
+                <IonButton 
+                  color="danger" 
+                  onClick={stopInterview}
+                  disabled={sessionStatus !== 'CONNECTED'}
+                >
+                  End Interview
+                </IonButton>
+              </div>
+
+              {/* Interview progress bar */}
+              <IonProgressBar
+                value={interviewState.progress / 100}
+                color="primary"
+                style={{ height: '6px', marginBottom: '1.5rem' }}
+              ></IonProgressBar>
+
+              {/* Stage information */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: 0, marginBottom: '0.5rem' }}>
+                  Stage: {interviewState.stageTitle} ({Math.round(interviewState.progress)}%)
+                </h3>
+                {sessionStatus === 'CONNECTING' && <p>Connecting to AI Interview Coach...</p>}
+                {sessionStatus === 'CONNECTED' && interviewState.progress === 0 && (
+                  <IonChip color="success">Interview ready to begin, say hello!</IonChip>
+                )}
+                {sessionStatus === 'CONNECTED' && interviewState.progress > 0 && (
+                  <IonChip color="primary">Interview in progress</IonChip>
+                )}
               </div>
 
               {/* Interview feedback */}

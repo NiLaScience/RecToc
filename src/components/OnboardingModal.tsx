@@ -128,48 +128,49 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
           </div>
         ) : (
           <>
-            {/* onboarding progress bar */}
-            <IonProgressBar
-              value={onboardingState.progress / 100}
-              color="primary"
-              style={{ height: '6px' }}
-            ></IonProgressBar>
-
-            {/* Stage display and controls */}
-            <div className="ion-padding">
+            <div style={{ padding: '1rem' }}>
+              {/* Controls */}
               <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                marginBottom: '1rem'
+                display: 'flex',
+                justifyContent: 'center',
+                width: '100%',
+                gap: '1rem',
+                marginBottom: '1.5rem'
               }}>
-                <div>
-                  <h3 style={{ margin: 0 }}>
-                    Stage: {onboardingState.stageTitle} ({Math.round(onboardingState.progress)}%)
-                  </h3>
-                  {sessionStatus === 'CONNECTING' && <p>Connecting to AI onboarding Coach...</p>}
-                  {sessionStatus === 'CONNECTED' && onboardingState.progress === 0 && (
-                    <IonChip color="success">onboarding ready to begin, say hello!</IonChip>
-                  )}
-                  {sessionStatus === 'CONNECTED' && onboardingState.progress > 0 && (
-                    <IonChip color="primary">onboarding in progress</IonChip>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <IonButton 
-                    onClick={connect}
-                    disabled={sessionStatus !== 'DISCONNECTED'}
-                  >
-                    Start onboarding
-                  </IonButton>
-                  <IonButton 
-                    color="danger" 
-                    onClick={stopOnboarding}
-                    disabled={sessionStatus !== 'CONNECTED'}
-                  >
-                    End onboarding
-                  </IonButton>
-                </div>
+                <IonButton 
+                  onClick={connect}
+                  disabled={sessionStatus !== 'DISCONNECTED'}
+                >
+                  Start Onboarding
+                </IonButton>
+                <IonButton 
+                  color="danger" 
+                  onClick={stopOnboarding}
+                  disabled={sessionStatus !== 'CONNECTED'}
+                >
+                  End Onboarding
+                </IonButton>
+              </div>
+
+              {/* onboarding progress bar */}
+              <IonProgressBar
+                value={onboardingState.progress / 100}
+                color="primary"
+                style={{ height: '6px', marginBottom: '1.5rem' }}
+              ></IonProgressBar>
+
+              {/* Stage information */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: 0, marginBottom: '0.5rem' }}>
+                  Stage: {onboardingState.stageTitle} ({Math.round(onboardingState.progress)}%)
+                </h3>
+                {sessionStatus === 'CONNECTING' && <p>Connecting to AI onboarding Coach...</p>}
+                {sessionStatus === 'CONNECTED' && onboardingState.progress === 0 && (
+                  <IonChip color="success">onboarding ready to begin, say hello!</IonChip>
+                )}
+                {sessionStatus === 'CONNECTED' && onboardingState.progress > 0 && (
+                  <IonChip color="primary">onboarding in progress</IonChip>
+                )}
               </div>
 
               {/* onboarding feedback */}

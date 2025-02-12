@@ -634,7 +634,7 @@ const Profile = () => {
           <div style={{ 
             display: 'flex', 
             gap: '1rem', 
-            marginBottom: '2rem',
+            marginBottom: '1rem',
             marginTop: '2rem'
           }}>
             <IonButton
@@ -658,8 +658,6 @@ const Profile = () => {
                 'Edit Profile'
               )}
             </IonButton>
-
-            
 
             <input
               type="file"
@@ -687,13 +685,12 @@ const Profile = () => {
           </div>
 
           <IonButton
-              expand="block"
-              fill="clear"
-              onClick={() => setIsRealtimeModalOpen(true)}
-            >
-              <IonIcon slot="start" icon={chatbubbleOutline} />
-              Start Onboarding Interview
-            </IonButton>
+            expand="block"
+            style={{ marginBottom: '2rem' }}
+            onClick={() => setIsRealtimeModalOpen(true)}
+          >
+            Start Onboarding
+          </IonButton>
 
           <OnboardingModal
             isOpen={isRealtimeModalOpen}
