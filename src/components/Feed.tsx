@@ -160,7 +160,8 @@ const Feed = () => {
         // Find the previous non-rejected video if we're not showing rejected videos
         if (!showRejected) {
           for (let i = currentIndex - 1; i >= 0; i--) {
-            if (!rejectedJobIds.has(videos[i].id)) {
+            const videoId = videos[i].id;
+            if (videoId && !rejectedJobIds.has(videoId)) {
               setSelectedVideo(videos[i]);
               break;
             }

@@ -8,7 +8,12 @@ export interface JobDescription {
   requirements?: string[];
   skills?: string[];
   benefits?: string[];
-  salary?: string;
+  salary?: {
+    min: number;
+    max: number;
+    currency: string;
+    period: string;
+  };
 }
 
 export interface Transcript {
@@ -22,7 +27,7 @@ export interface Transcript {
 }
 
 export interface VideoItem {
-  id?: string;
+  id: string;
   title: string;
   videoUrl: string;
   thumbnailUrl?: string;
