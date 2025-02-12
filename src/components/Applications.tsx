@@ -15,7 +15,7 @@ import {
   IonTitle,
   IonModal,
 } from '@ionic/react';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import ApplicationService from '../services/ApplicationService';
 import { JobApplication } from '../types/application';
@@ -53,52 +53,98 @@ const Applications: React.FC = () => {
   };
 
   useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
+    let applicationsUnsubscribeId: string | null = null;
+    let jobDetailsUnsubscribers: { [key: string]: string } = {};
 
-    const fetchApplicationsWithDetails = async () => {
+    const setupListeners = async () => {
       if (!user) return;
+
       try {
         setLoading(true);
-        const apps = await ApplicationService.getUserApplications();
         
-        // Fetch job details for each application
-        const appsWithDetails = await Promise.all(
-          apps.map(async (app) => {
-            const jobDetails = await fetchJobDetails(app.jobId);
-            return {
-              ...app,
-              jobDetails: jobDetails || undefined
-            };
-          })
+        // Listen to applications collection
+        applicationsUnsubscribeId = await addSnapshotListener(
+          'applications',
+          async (snapshot) => {
+            if (!snapshot || typeof snapshot !== 'object') {
+              setApplications([]);
+              return;
+            }
+
+            const apps = Object.entries(snapshot)
+              .map(([id, data]) => ({
+                id,
+                ...(data as Omit<JobApplication, 'id'>)
+              }))
+              .filter((app): app is JobApplication => 
+                app.candidateId === user.uid
+              )
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+            // Set up listeners for job details for each application
+            const currentJobIds = new Set(apps.map(app => app.jobId));
+            
+            // Remove listeners for jobs that are no longer in the applications list
+            Object.entries(jobDetailsUnsubscribers).forEach(([jobId, unsubscriberId]) => {
+              if (!currentJobIds.has(jobId)) {
+                removeSnapshotListener(unsubscriberId);
+                delete jobDetailsUnsubscribers[jobId];
+              }
+            });
+
+            // Add listeners for new jobs
+            for (const app of apps) {
+              if (!jobDetailsUnsubscribers[app.jobId]) {
+                jobDetailsUnsubscribers[app.jobId] = await addSnapshotListener(
+                  `videos/${app.jobId}`,
+                  (jobData) => {
+                    if (jobData) {
+                      setApplications(prev => prev.map(prevApp => 
+                        prevApp.jobId === app.jobId
+                          ? { ...prevApp, jobDetails: { id: app.jobId, ...jobData } as VideoItem }
+                          : prevApp
+                      ));
+                    }
+                  }
+                );
+              }
+            }
+
+            // Initial job details fetch
+            const appsWithDetails = await Promise.all(
+              apps.map(async (app) => {
+                const jobDetails = await fetchJobDetails(app.jobId);
+                return {
+                  ...app,
+                  jobDetails: jobDetails || undefined
+                };
+              })
+            );
+
+            setApplications(appsWithDetails);
+            setLoading(false);
+          }
         );
-        
-        setApplications(appsWithDetails);
-        setLoading(false);
       } catch (error) {
-        console.error('Error fetching applications:', error);
+        console.error('Error setting up listeners:', error);
         setLoading(false);
       }
     };
 
-    const startPolling = () => {
-      fetchApplicationsWithDetails();
-      // Poll every 5 seconds
-      intervalId = setInterval(fetchApplicationsWithDetails, 5000);
-    };
-
-    if (user) {
-      startPolling();
-    }
+    setupListeners();
 
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
+      if (applicationsUnsubscribeId) {
+        removeSnapshotListener(applicationsUnsubscribeId);
       }
+      Object.values(jobDetailsUnsubscribers).forEach(unsubscriberId => {
+        removeSnapshotListener(unsubscriberId);
+      });
     };
   }, [user]);
 
   const handleRefresh = async (event: CustomEvent) => {
-    await ApplicationService.getUserApplications();
+    await ApplicationService.refreshApplications();
     event.detail.complete();
   };
 
