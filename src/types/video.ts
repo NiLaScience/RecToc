@@ -8,12 +8,13 @@ export interface JobDescription {
   requirements?: string[];
   skills?: string[];
   benefits?: string[];
-  applicationUrl?: string;
+  salary?: string;
 }
 
 export interface Transcript {
+  text: string;
   segments: {
-    id: string;
+    id: number | string;
     start: number;
     end: number;
     text: string;
@@ -21,7 +22,7 @@ export interface Transcript {
 }
 
 export interface VideoItem {
-  id: string;
+  id?: string;
   title: string;
   videoUrl: string;
   thumbnailUrl?: string;
@@ -32,4 +33,6 @@ export interface VideoItem {
   views: number;
   likes: number;
   transcript?: Transcript | null;
+  sourceVideo?: string;
+  applicationUrl?: string;
 }

@@ -1,40 +1,40 @@
 require('dotenv').config();
 
-// Add debug logging
-console.log('Environment variables:', {
-  NEXT_PUBLIC_GEMINI_API_KEY: process.env.NEXT_PUBLIC_GEMINI_API_KEY,
-  FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-});
+import admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
+import fs from 'fs/promises';
+import path from 'path';
+import { File } from '@web-std/file';
 
-const admin = require('firebase-admin');
-const { getStorage } = require('firebase-admin/storage');
-const { getFirestore } = require('firebase-admin/firestore');
-const sqlite3 = require('sqlite3');
-const { open } = require('sqlite');
-const fs = require('fs').promises;
-const path = require('path');
-const { File } = require('@web-std/file');
-const { GeminiParserService } = require('../src/services/GeminiParserService');
-const PDFParserService = require('../src/services/PDFParserService');
+import { NodeGeminiParserService } from './NodeGeminiParserService';
+import PDFParserService from '../src/services/PDFParserService';
 import NodeThumbnailService from './NodeThumbnailService';
 import NodeTranscriptionService from './NodeTranscriptionService';
 import type { JobDescriptionSchema } from '../src/services/OpenAIService';
-import { NodeGeminiParserService } from './NodeGeminiParserService';
 
-// Initialize Firebase Admin
+//
+// 1) Initialize Firebase Admin
+//    (Replace service-account.json with your real service account credentials.)
+//
 const serviceAccount = require('../service-account.json');
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
 });
 
-const storage = getStorage().bucket();
 const db = getFirestore();
+const bucket = getStorage().bucket();
 
-// Absolute paths
+//
+// 2) Constants
+//
 const DB_PATH = '/Users/gauntlet/Documents/projects/jobs/data/my_database.db';
 const VIDEOS_DIR = '/Users/gauntlet/Documents/projects/jobs/videos';
 
+// The local DB “jobs” table has records shaped roughly like:
 interface JobRecord {
   id: number;
   title: string;
@@ -47,145 +47,149 @@ interface JobRecord {
   date_loaded: string;
 }
 
-// Update video file pattern to match simple numeric filenames
-const VIDEO_FILE_PATTERN = /^(\d+)\.(mp4|mov|avi)$/i;
+interface TranscriptionResult {
+  text: string;
+  segments: Array<{
+    start: number;
+    end: number;
+    text: string;
+  }>;
+}
 
+//
+// 3) Utility to ensure directories exist
+//
 async function ensureDirectoriesExist() {
-  // Ensure database directory exists
+  // Make sure DB path directory exists
   await fs.mkdir(path.dirname(DB_PATH), { recursive: true });
-  
-  // Ensure videos directory exists
+  // Make sure videos directory exists
   await fs.mkdir(VIDEOS_DIR, { recursive: true });
 }
 
-async function uploadVideo(videoPath: string, jobId: string, userId: string): Promise<[string, string]> {
-  // Validate video path
-  try {
-    const stats = await fs.stat(videoPath);
-    console.log(`Video file exists: ${videoPath}`);
-    console.log(`File stats:`, stats);
-  } catch (error) {
-    console.error(`Error accessing video file: ${videoPath}`, error);
-    throw new Error(`Video file not accessible: ${videoPath}`);
-  }
+//
+// 4) Upload a single video to Firebase Storage
+//    and generate a thumbnail.
+//
+async function uploadVideo(
+  videoPath: string,
+  userId: string
+): Promise<{ videoUrl: string; thumbnailUrl: string }> {
+  // Validate existence
+  await fs.access(videoPath);
 
-  // Read video file
+  // Read bytes
   const fileBuffer = await fs.readFile(videoPath);
 
-  // Generate thumbnail
-  console.log(`Generating thumbnail for job ${jobId}...`);
-  console.log(`Video path: ${videoPath}`);
+  // Generate thumbnail via Node script
   const thumbnailBuffer = await NodeThumbnailService.generateThumbnail(videoPath);
 
-  // Upload video - use same path structure as Upload component
-  const videoDestination = `videos/${userId}/${path.basename(videoPath)}`;
-  const videoFile = storage.file(videoDestination);
+  //
+  // Upload the video
+  //
+  const videoFileName = path.basename(videoPath); // e.g. "1234.mp4"
+  const videoStoragePath = `videos/${userId}/${videoFileName}`;
+  const videoFile = bucket.file(videoStoragePath);
+
   await videoFile.save(fileBuffer, {
-    metadata: {
-      contentType: 'video/mp4'
-    }
+    metadata: { contentType: 'video/mp4' },
   });
+
   const [videoUrl] = await videoFile.getSignedUrl({
     action: 'read',
-    expires: '03-01-2500' // Far future expiration
+    expires: '03-01-2500',
   });
 
-  // Upload thumbnail - use same path structure as Upload component
-  const thumbnailDestination = `thumbnails/${userId}/${jobId}/thumbnail.jpg`;
-  const thumbnailFile = storage.file(thumbnailDestination);
+  //
+  // Upload the thumbnail
+  //
+  const thumbnailFileName = `thumbnail-${Date.now()}.jpg`;
+  const thumbnailStoragePath = `thumbnails/${userId}/${thumbnailFileName}`;
+  const thumbnailFile = bucket.file(thumbnailStoragePath);
+
   await thumbnailFile.save(thumbnailBuffer, {
-    metadata: {
-      contentType: 'image/jpeg'
-    }
+    metadata: { contentType: 'image/jpeg' },
   });
+
   const [thumbnailUrl] = await thumbnailFile.getSignedUrl({
     action: 'read',
-    expires: '03-01-2500' // Far future expiration
+    expires: '03-01-2500',
   });
 
-  return [videoUrl, thumbnailUrl];
+  return { videoUrl, thumbnailUrl };
 }
 
-async function parseJobDescription(text: string, useGemini: boolean = true): Promise<JobDescriptionSchema> {
+//
+// 5) Parse a job description with optional Gemini or PDF approach
+//
+async function parseJobDescription(
+  text: string,
+  useGemini = true
+): Promise<JobDescriptionSchema> {
   if (useGemini) {
     const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     if (!geminiApiKey) {
-      throw new Error('NEXT_PUBLIC_GEMINI_API_KEY is not configured in your environment');
+      throw new Error(
+        'NEXT_PUBLIC_GEMINI_API_KEY is not configured in your environment'
+      );
     }
     const geminiParser = new NodeGeminiParserService(geminiApiKey);
+    // The parseJobDescription in NodeGeminiParserService expects plain text,
+    // but your local code base64-encodes job text. If that's correct, do:
     return await geminiParser.parseJobDescription(text);
   } else {
-    // Use OpenAI parsing through PDFParserService
-    // Note: This would normally expect a PDF file, but we're adapting it for text
-    const blob = new Blob([text], { type: 'application/pdf' });
-    const file = new File([blob], 'job_description.pdf', { type: 'application/pdf' });
-    return await PDFParserService.parsePDF(file);
+    // Fall back to PDF parser
+    // (But you’re feeding it text, so adapt if needed.)
+    const fakePDFFile = new File([text], 'job_description.pdf', {
+      type: 'application/pdf',
+    });
+    return await PDFParserService.parsePDF(fakePDFFile);
   }
 }
 
-// Extract tags from job description
-function generateTags(jobData: JobRecord, parsedJobDescription: JobDescriptionSchema): string[] {
+//
+// 6) Transcribe the video with NodeTranscriptionService
+//
+async function transcribeVideo(videoPath: string): Promise<TranscriptionResult> {
+  return await NodeTranscriptionService.transcribeVideo(videoPath);
+}
+
+//
+// 7) Generate tags from job data + parsed fields
+//
+function generateTags(
+  job: JobRecord,
+  parsed: JobDescriptionSchema
+): string[] {
   const tags = new Set<string>();
 
-  // Add company name
-  if (jobData.company) {
-    tags.add(jobData.company.trim());
+  if (job.company) tags.add(job.company.trim());
+  if (parsed.employmentType) tags.add(parsed.employmentType.trim());
+  if (parsed.experienceLevel) tags.add(parsed.experienceLevel.trim());
+  if (parsed.skills && parsed.skills.length > 0) {
+    parsed.skills.slice(0, 3).forEach((skill) => tags.add(skill.trim()));
   }
+  if (job.location) tags.add(job.location.trim());
 
-  // Add employment type and experience level
-  if (parsedJobDescription.employmentType) {
-    tags.add(parsedJobDescription.employmentType.trim());
-  }
-  if (parsedJobDescription.experienceLevel) {
-    tags.add(parsedJobDescription.experienceLevel.trim());
-  }
-
-  // Add top 3 skills
-  if (parsedJobDescription.skills) {
-    parsedJobDescription.skills.slice(0, 3).forEach(skill => {
-      tags.add(skill.trim());
-    });
-  }
-
-  // Add location
-  if (jobData.location) {
-    tags.add(jobData.location.trim());
-  }
-
-  // Filter out any empty strings and return unique tags
-  return Array.from(tags).filter(Boolean);
+  return Array.from(tags);
 }
 
-async function findMatchingVideo(jobId: number, directory: string): Promise<string | null> {
-  const videoFiles = await fs.readdir(directory);
-  
-  // Find exact match for job ID
-  const videoFile = videoFiles.find((file: string) => {
-    const match = file.match(VIDEO_FILE_PATTERN);
-    return match && parseInt(match[1]) === jobId;
-  });
-
-  if (!videoFile) {
-    console.log(`No video found for job ${jobId}`);
-    return null;
-  }
-
-  return videoFile;
-}
-
-async function uploadJobs(adminUid: string, useGemini: boolean = true) {
+//
+// 8) Main function that processes jobs from local SQLite
+//    and uploads them to Firestore
+//
+async function uploadJobs(adminUid: string, useGemini = true) {
   await ensureDirectoriesExist();
 
-  // Open SQLite database
+  // Open the SQLite DB
   const sqliteDb = await open({
     filename: DB_PATH,
-    driver: sqlite3.Database
+    driver: sqlite3.Database,
   });
 
   try {
-    // Get all jobs from the database with required fields
-    const jobs = await sqliteDb.all(`
-      SELECT 
+    // Grab relevant job rows
+    const rows = (await sqliteDb.all(`
+      SELECT
         id,
         title,
         company,
@@ -195,105 +199,130 @@ async function uploadJobs(adminUid: string, useGemini: boolean = true) {
         job_description,
         pitch_script,
         date_loaded
-      FROM jobs 
+      FROM jobs
       WHERE pitch_script IS NOT NULL
         AND length(job_description) > 100
-    `) as JobRecord[];
+    `)) as JobRecord[];
 
-    console.log(`Found ${jobs.length} jobs to process`);
+    console.log(`Found ${rows.length} jobs to process.`);
+
     let processedCount = 0;
     let skippedCount = 0;
 
-    for (const job of jobs) {
+    for (const job of rows) {
       try {
-        // Find matching video with improved validation
-        const videoFile = await findMatchingVideo(job.id, VIDEOS_DIR);
-        if (!videoFile) {
-          skippedCount++;
-          continue;
-        }
+        // In your existing logic you matched files named "job.id.mp4"
+        const videoFileName = `${job.id}.mp4`; // or .mov, etc.
+        const videoPath = path.join(VIDEOS_DIR, videoFileName);
 
-        const videoPath = path.join(VIDEOS_DIR, videoFile);
-        
-        // Validate video file exists and is accessible
+        // Check that video actually exists
         try {
-          const stats = await fs.stat(videoPath);
-          if (!stats.isFile()) {
-            console.error(`Video path exists but is not a file: ${videoPath}`);
-            skippedCount++;
-            continue;
-          }
-          console.log(`Processing job ${job.id} with video: ${videoFile} (${(stats.size / 1024 / 1024).toFixed(2)}MB)`);
-        } catch (error) {
-          console.error(`Error accessing video file for job ${job.id}:`, error);
+          await fs.access(videoPath);
+        } catch {
+          console.log(`No matching video found for job ${job.id}; skipping.`);
           skippedCount++;
           continue;
         }
 
-        // Upload video and generate thumbnail
-        const [videoUrl, thumbnailUrl] = await uploadVideo(videoPath, job.id.toString(), adminUid);
+        console.log(`Uploading video for job ID ${job.id}...`);
+        const { videoUrl, thumbnailUrl } = await uploadVideo(videoPath, adminUid);
 
-        // Parse job description using existing services
-        console.log(`Parsing job description for ${job.id}...`);
-        const parsedJobDescription = await parseJobDescription(job.job_description, useGemini);
+        // Parse job description
+        console.log(`Parsing job description for job ID ${job.id}...`);
+        const parsed = await parseJobDescription(job.job_description, useGemini);
 
-        // Transcribe video to get proper timestamps
-        console.log(`Transcribing video for job ${job.id}...`);
-        const transcriptionResult = await NodeTranscriptionService.transcribeVideo(videoPath);
+        // Transcribe the video
+        console.log(`Transcribing video for job ID ${job.id}...`);
+        const rawTranscript = await transcribeVideo(videoPath);
 
-        // Generate tags using the new function
-        const tags = generateTags(job, parsedJobDescription);
+        // Format transcript to match the shape used by Upload.tsx
+        // We typically store:
+        //   { text: string; segments: { id: string, start: number, end: number, text: string }[] }
+        const transcript = {
+          text: rawTranscript.text,
+          segments: rawTranscript.segments.map((segment, index) => ({
+            id: index.toString(),
+            start: segment.start,
+            end: segment.end,
+            text: segment.text,
+          })),
+        };
 
-        // Prepare job data for Firestore
-        const jobData = {
-          id: job.id.toString(),
+        // Build tags
+        const tags = generateTags(job, parsed);
+
+        // Prepare the jobDescription to fit the app's shape
+        // (making sure salary is `parsed.salary || null`)
+        const jobDescription = {
+          title: parsed.title || job.title || 'Untitled',
+          company: parsed.company || job.company || '',
+          location: parsed.location || job.location || '',
+          employmentType: parsed.employmentType || 'Full-time',
+          experienceLevel: parsed.experienceLevel || '',
+          responsibilities: parsed.responsibilities || [],
+          requirements: parsed.requirements || [],
+          skills: parsed.skills || [],
+          benefits: parsed.benefits || [],
+          salary: parsed.salary ?? null,
+          applicationUrl: job.job_url,
+        };
+
+        //
+        // This is the crucial part:
+        //  - DO NOT store an `id:` field that collides with the doc ID.
+        //  - Instead, let Firestore assign its own doc ID, or if you really want the doc ID
+        //    to match `job.id.toString()`, you must explicitly do doc(job.id.toString()).set(...).
+        //
+        const documentData = {
+          // No `id` field! We'll let Firestore do the doc ID
           title: job.title,
           videoUrl,
           thumbnailUrl,
-          jobDescription: {
-            ...parsedJobDescription,
-            // Override with database values if needed
-            title: job.title,
-            company: job.company,
-            location: job.location,
-            applicationUrl: job.job_url
-          },
+          jobDescription,
           tags,
           userId: adminUid,
           createdAt: new Date().toISOString(),
           views: 0,
           likes: 0,
-          transcript: transcriptionResult,
-          sourceVideo: videoFile // Store the original video filename for reference
+          transcript, // same shape as from Upload.tsx
         };
 
-        // Add to Firestore
-        await db.collection('videos').add(jobData);
-        console.log(`Successfully uploaded job ${job.id} with video ${videoFile}`);
+        //
+        // Firestore: add doc with random ID
+        // or:
+        //   .doc(job.id.toString()).set(documentData)   // if you want the doc ID = local job ID
+        //
+        await db.collection('videos').add(documentData);
+
+        console.log(`Successfully uploaded job ${job.id}`);
         processedCount++;
-      } catch (error) {
-        console.error(`Error processing job ${job.id}:`, error);
+      } catch (err) {
+        console.error(`Error processing job ${job.id}:`, err);
         skippedCount++;
       }
     }
 
-    console.log(`Upload complete. Processed: ${processedCount}, Skipped: ${skippedCount}, Total: ${jobs.length}`);
+    console.log(
+      `Finished. Processed = ${processedCount}, Skipped = ${skippedCount}, total = ${rows.length}`
+    );
   } catch (error) {
-    console.error('Error uploading jobs:', error);
+    console.error('Unhandled error in uploadJobs:', error);
     throw error;
   } finally {
     await sqliteDb.close();
   }
 }
 
-// Usage example
+//
+// 9) CLI usage
+//
 if (require.main === module) {
-  const adminUid = process.argv[2]; // Firebase Authentication UID of the admin user
-  const useGemini = process.argv[3] !== 'false'; // Default to true unless explicitly set to false
+  const adminUid = process.argv[2];
+  const geminiArg = process.argv[3];
+  const useGemini = geminiArg !== 'false';
 
   if (!adminUid) {
     console.error('Usage: ts-node upload_jobs.ts <admin_firebase_uid> [use_gemini]');
-    console.error('Note: The admin_firebase_uid should be the Firebase Authentication UID of the admin user');
     process.exit(1);
   }
 
@@ -302,10 +331,10 @@ if (require.main === module) {
       console.log('All jobs uploaded successfully');
       process.exit(0);
     })
-    .catch(error => {
-      console.error('Failed to upload jobs:', error);
+    .catch((err) => {
+      console.error('Failed to upload jobs:', err);
       process.exit(1);
     });
 }
 
-module.exports = { uploadJobs }; 
+export { uploadJobs };
