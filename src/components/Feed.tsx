@@ -186,7 +186,7 @@ const Feed = () => {
           setSelectedVideo(videos[currentIndex + 1]);
         }
       }
-    } else if (direction === 'left') {
+    } else if (direction === 'right') {
       // Reject job
       const newRejectedJobIds = new Set(rejectedJobIds);
       newRejectedJobIds.add(video.id);
@@ -211,7 +211,7 @@ const Feed = () => {
       } catch (error) {
         console.error('Error updating rejected jobs:', error);
       }
-    } else if (direction === 'right') {
+    } else if (direction === 'left') {
       // Show details
       setMode('details');
       setSelectedJobId(video.id);

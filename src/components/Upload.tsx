@@ -224,6 +224,7 @@ const Upload = () => {
     setError('');
     setTranscript(null);
     setWebSuccess(false);
+    setJobDescription(null);
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
@@ -480,7 +481,6 @@ const Upload = () => {
       <AppHeader
         title="Upload Job"
         mode="upload"
-        onClose={() => {}}
       />
       <IonContent>
         <div style={{ padding: '1rem', paddingTop: '56px' }}>

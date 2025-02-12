@@ -138,6 +138,7 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
   const [isMuted, setIsMuted] = useState(autoPlay);
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const [mouseStart, setMouseStart] = useState<{ x: number; y: number } | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -150,6 +151,7 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
   const [showPlayPauseOverlay, setShowPlayPauseOverlay] = useState(false);
   const playPauseTimeoutRef = useRef<NodeJS.Timeout>();
   const history = useHistory();
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
 
   const overlayStyle: React.CSSProperties = {
     position: 'absolute',
@@ -329,7 +331,6 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
       // Right swipe (swipe left to right)
       if (diffX < -SWIPE_THRESHOLD) {
         if (!showDetails && onSwipe) {
-          setShowDetails(true);
           onSwipe('right');
         }
       }
@@ -338,6 +339,7 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
         if (showDetails && !showApplication) {
           setShowDetails(false);
         } else if (!showDetails && onSwipe) {
+          setShowDetails(true);
           onSwipe('left');
         }
       }
@@ -353,12 +355,41 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
     }
   };
 
+  const updateSwipeDirection = (diffX: number) => {
+    const threshold = 20; // Smaller threshold for color change
+    if (diffX > threshold) {
+      setSwipeDirection('right'); // Reject direction (swiping right)
+    } else if (diffX < -threshold) {
+      setSwipeDirection('left'); // Apply direction (swiping left)
+    } else {
+      setSwipeDirection(null);
+    }
+  };
+
   // Touch event handlers for mobile
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStart({
       x: e.touches[0].clientX,
       y: e.touches[0].clientY
     });
+    setDragOffset({ x: 0, y: 0 });
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStart) return;
+
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const diffX = currentX - touchStart.x;
+    const diffY = currentY - touchStart.y;
+
+    // Limit the drag distance
+    const maxDrag = 100;
+    const boundedX = Math.max(Math.min(diffX, maxDrag), -maxDrag);
+    const boundedY = Math.max(Math.min(diffY, maxDrag), -maxDrag);
+
+    setDragOffset({ x: boundedX, y: boundedY });
+    updateSwipeDirection(diffX);
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -371,6 +402,8 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
 
     handleSwipeGesture(touchStart, touchEnd);
     setTouchStart(null);
+    setDragOffset({ x: 0, y: 0 });
+    setSwipeDirection(null);
   };
 
   // Mouse event handlers for desktop
@@ -380,11 +413,24 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
       y: e.clientY
     });
     setIsDragging(true);
+    setDragOffset({ x: 0, y: 0 });
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging || !mouseStart) return;
 
+    const currentX = e.clientX;
+    const currentY = e.clientY;
+    const diffX = currentX - mouseStart.x;
+    const diffY = currentY - mouseStart.y;
+
+    // Limit the drag distance
+    const maxDrag = 100;
+    const boundedX = Math.max(Math.min(diffX, maxDrag), -maxDrag);
+    const boundedY = Math.max(Math.min(diffY, maxDrag), -maxDrag);
+
+    setDragOffset({ x: boundedX, y: boundedY });
+    updateSwipeDirection(diffX);
     // Prevent text selection during drag
     e.preventDefault();
   };
@@ -400,12 +446,16 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
     handleSwipeGesture(mouseStart, mouseEnd);
     setMouseStart(null);
     setIsDragging(false);
+    setDragOffset({ x: 0, y: 0 });
+    setSwipeDirection(null);
   };
 
   // Handle mouse leaving the element
   const handleMouseLeave = () => {
     setMouseStart(null);
     setIsDragging(false);
+    setDragOffset({ x: 0, y: 0 });
+    setSwipeDirection(null);
   };
 
   const togglePlay = () => {
@@ -450,12 +500,15 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
         position: 'relative',
         width: '100%',
         height: '100%',
-        backgroundColor: '#000',
+        backgroundColor: swipeDirection === 'left' ? 'rgba(0, 255, 0, 0.3)' : 
+                        swipeDirection === 'right' ? 'rgba(255, 0, 0, 0.3)' : '#000',
         cursor: (mode === 'feed' || mode === 'details') ? (isDragging ? 'grabbing' : 'grab') : 'default',
         overflow: 'hidden',
-        touchAction: (mode === 'feed' || mode === 'details') ? 'none' : 'auto'
+        touchAction: (mode === 'feed' || mode === 'details') ? 'none' : 'auto',
+        transition: 'background-color 0.2s ease-out'
       }}
       onTouchStart={(mode === 'feed' || mode === 'details') ? handleTouchStart : undefined}
+      onTouchMove={(mode === 'feed' || mode === 'details') ? handleTouchMove : undefined}
       onTouchEnd={(mode === 'feed' || mode === 'details') ? handleTouchEnd : undefined}
       onMouseDown={(mode === 'feed' || mode === 'details') ? handleMouseDown : undefined}
       onMouseMove={(mode === 'feed' || mode === 'details') ? handleMouseMove : undefined}
@@ -494,7 +547,11 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
         </div>
       )}
 
-      <div style={containerStyle}>
+      <div style={{
+        ...containerStyle,
+        transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
+        transition: isDragging ? 'none' : 'transform 0.3s ease-out'
+      }}>
         <video
           ref={videoRef}
           src={video.videoUrl}
