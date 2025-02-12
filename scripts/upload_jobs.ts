@@ -16,7 +16,7 @@ const path = require('path');
 const { File } = require('@web-std/file');
 const { GeminiParserService } = require('../src/services/GeminiParserService');
 const PDFParserService = require('../src/services/PDFParserService');
-const NodeThumbnailService = require('./NodeThumbnailService');
+import NodeThumbnailService from './NodeThumbnailService';
 import NodeTranscriptionService from './NodeTranscriptionService';
 import type { JobDescriptionSchema } from '../src/services/OpenAIService';
 const NodeGeminiParserService = require('./NodeGeminiParserService');
@@ -56,11 +56,22 @@ async function ensureDirectoriesExist() {
 }
 
 async function uploadVideo(videoPath: string, jobId: string, userId: string): Promise<[string, string]> {
+  // Validate video path
+  try {
+    const stats = await fs.stat(videoPath);
+    console.log(`Video file exists: ${videoPath}`);
+    console.log(`File stats:`, stats);
+  } catch (error) {
+    console.error(`Error accessing video file: ${videoPath}`, error);
+    throw new Error(`Video file not accessible: ${videoPath}`);
+  }
+
   // Read video file
   const fileBuffer = await fs.readFile(videoPath);
 
   // Generate thumbnail
   console.log(`Generating thumbnail for job ${jobId}...`);
+  console.log(`Video path: ${videoPath}`);
   const thumbnailBuffer = await NodeThumbnailService.generateThumbnail(videoPath);
 
   // Upload video - use same path structure as Upload component
