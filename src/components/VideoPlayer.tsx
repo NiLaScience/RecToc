@@ -6,6 +6,8 @@ import type { UserProfile } from '../types/user';
 import SubtitleService from '../services/SubtitleService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import VideoDetails from './VideoDetails';
+import { App } from '@capacitor/app';
+import { useHistory } from 'react-router-dom';
 
 interface VideoPlayerProps {
   video: VideoItem;
@@ -147,6 +149,7 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
   const [showOverlay, setShowOverlay] = useState(true);
   const [showPlayPauseOverlay, setShowPlayPauseOverlay] = useState(false);
   const playPauseTimeoutRef = useRef<NodeJS.Timeout>();
+  const history = useHistory();
 
   const overlayStyle: React.CSSProperties = {
     position: 'absolute',
@@ -290,6 +293,28 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
       };
     }
   }, []);
+
+  // Handle Android back button
+  useEffect(() => {
+    const handleBackButton = () => {
+      // If we're in details mode or showing details overlay, close that first
+      if (showDetails) {
+        setShowDetails(false);
+        return;
+      }
+
+      // Navigate to feed with replace to ensure Feed component remounts in grid mode
+      history.replace('/');
+    };
+
+    // Register back button handler
+    App.addListener('backButton', handleBackButton);
+
+    // Cleanup
+    return () => {
+      App.removeAllListeners();
+    };
+  }, [history, showDetails]);
 
   const handleSwipeGesture = (startPos: { x: number; y: number }, endPos: { x: number; y: number }) => {
     // Only allow swipes in feed mode and details mode
