@@ -32,8 +32,8 @@ const storage = getStorage().bucket();
 const db = getFirestore();
 
 // Absolute paths
-const DB_PATH = '/Users/gauntlet/Documents/projects/jobs/linkedinscraper/data/my_database.db';
-const VIDEOS_DIR = '/Users/gauntlet/Documents/projects/jobs/linkedinscraper/videos';
+const DB_PATH = '/Users/gauntlet/Documents/projects/jobs/data/my_database.db';
+const VIDEOS_DIR = '/Users/gauntlet/Documents/projects/jobs/videos';
 
 interface JobRecord {
   id: number;
