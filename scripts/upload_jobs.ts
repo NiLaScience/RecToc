@@ -47,6 +47,9 @@ interface JobRecord {
   date_loaded: string;
 }
 
+// Update video file pattern to match simple numeric filenames
+const VIDEO_FILE_PATTERN = /^(\d+)\.(mp4|mov|avi)$/i;
+
 async function ensureDirectoriesExist() {
   // Ensure database directory exists
   await fs.mkdir(path.dirname(DB_PATH), { recursive: true });
@@ -120,6 +123,56 @@ async function parseJobDescription(text: string, useGemini: boolean = true): Pro
   }
 }
 
+// Extract tags from job description
+function generateTags(jobData: JobRecord, parsedJobDescription: JobDescriptionSchema): string[] {
+  const tags = new Set<string>();
+
+  // Add company name
+  if (jobData.company) {
+    tags.add(jobData.company.trim());
+  }
+
+  // Add employment type and experience level
+  if (parsedJobDescription.employmentType) {
+    tags.add(parsedJobDescription.employmentType.trim());
+  }
+  if (parsedJobDescription.experienceLevel) {
+    tags.add(parsedJobDescription.experienceLevel.trim());
+  }
+
+  // Add top 3 skills
+  if (parsedJobDescription.skills) {
+    parsedJobDescription.skills.slice(0, 3).forEach(skill => {
+      tags.add(skill.trim());
+    });
+  }
+
+  // Add location
+  if (jobData.location) {
+    tags.add(jobData.location.trim());
+  }
+
+  // Filter out any empty strings and return unique tags
+  return Array.from(tags).filter(Boolean);
+}
+
+async function findMatchingVideo(jobId: number, directory: string): Promise<string | null> {
+  const videoFiles = await fs.readdir(directory);
+  
+  // Find exact match for job ID
+  const videoFile = videoFiles.find((file: string) => {
+    const match = file.match(VIDEO_FILE_PATTERN);
+    return match && parseInt(match[1]) === jobId;
+  });
+
+  if (!videoFile) {
+    console.log(`No video found for job ${jobId}`);
+    return null;
+  }
+
+  return videoFile;
+}
+
 async function uploadJobs(adminUid: string, useGemini: boolean = true) {
   await ensureDirectoriesExist();
 
@@ -147,62 +200,84 @@ async function uploadJobs(adminUid: string, useGemini: boolean = true) {
         AND length(job_description) > 100
     `) as JobRecord[];
 
+    console.log(`Found ${jobs.length} jobs to process`);
+    let processedCount = 0;
+    let skippedCount = 0;
+
     for (const job of jobs) {
-      // Find corresponding video file
-      const videoFiles = await fs.readdir(VIDEOS_DIR);
-      const videoFile = videoFiles.find((file: string) => file.startsWith(job.id.toString()));
+      try {
+        // Find matching video with improved validation
+        const videoFile = await findMatchingVideo(job.id, VIDEOS_DIR);
+        if (!videoFile) {
+          skippedCount++;
+          continue;
+        }
 
-      if (!videoFile) {
-        console.log(`No video found for job ${job.id}, skipping...`);
-        continue;
-      }
+        const videoPath = path.join(VIDEOS_DIR, videoFile);
+        
+        // Validate video file exists and is accessible
+        try {
+          const stats = await fs.stat(videoPath);
+          if (!stats.isFile()) {
+            console.error(`Video path exists but is not a file: ${videoPath}`);
+            skippedCount++;
+            continue;
+          }
+          console.log(`Processing job ${job.id} with video: ${videoFile} (${(stats.size / 1024 / 1024).toFixed(2)}MB)`);
+        } catch (error) {
+          console.error(`Error accessing video file for job ${job.id}:`, error);
+          skippedCount++;
+          continue;
+        }
 
-      // Upload video and generate thumbnail
-      const videoPath = path.join(VIDEOS_DIR, videoFile);
-      const [videoUrl, thumbnailUrl] = await uploadVideo(videoPath, job.id.toString(), adminUid);
+        // Upload video and generate thumbnail
+        const [videoUrl, thumbnailUrl] = await uploadVideo(videoPath, job.id.toString(), adminUid);
 
-      // Parse job description using existing services
-      console.log(`Parsing job description for ${job.id}...`);
-      const parsedJobDescription = await parseJobDescription(job.job_description, useGemini);
+        // Parse job description using existing services
+        console.log(`Parsing job description for ${job.id}...`);
+        const parsedJobDescription = await parseJobDescription(job.job_description, useGemini);
 
-      // Transcribe video to get proper timestamps
-      console.log(`Transcribing video for job ${job.id}...`);
-      const transcriptionResult = await NodeTranscriptionService.transcribeVideo(videoPath);
+        // Transcribe video to get proper timestamps
+        console.log(`Transcribing video for job ${job.id}...`);
+        const transcriptionResult = await NodeTranscriptionService.transcribeVideo(videoPath);
 
-      // Extract tags from job description (similar to Upload component)
-      const tags = [
-        job.company,
-        ...parsedJobDescription.skills.slice(0, 3), // Take top 3 skills as tags
-        parsedJobDescription.employmentType,
-        parsedJobDescription.experienceLevel
-      ].filter(Boolean); // Remove any null/undefined values
+        // Generate tags using the new function
+        const tags = generateTags(job, parsedJobDescription);
 
-      // Prepare job data for Firestore - match Upload component structure exactly
-      const jobData = {
-        id: job.id.toString(),
-        title: job.title,
-        videoUrl,
-        thumbnailUrl,
-        jobDescription: {
-          ...parsedJobDescription,
-          // Override with database values if needed
+        // Prepare job data for Firestore
+        const jobData = {
+          id: job.id.toString(),
           title: job.title,
-          company: job.company,
-          location: job.location,
-          applicationUrl: job.job_url
-        },
-        tags,
-        userId: adminUid,
-        createdAt: new Date().toISOString(), // Use current timestamp like Upload component
-        views: 0,
-        likes: 0,
-        transcript: transcriptionResult
-      };
+          videoUrl,
+          thumbnailUrl,
+          jobDescription: {
+            ...parsedJobDescription,
+            // Override with database values if needed
+            title: job.title,
+            company: job.company,
+            location: job.location,
+            applicationUrl: job.job_url
+          },
+          tags,
+          userId: adminUid,
+          createdAt: new Date().toISOString(),
+          views: 0,
+          likes: 0,
+          transcript: transcriptionResult,
+          sourceVideo: videoFile // Store the original video filename for reference
+        };
 
-      // Add to Firestore
-      await db.collection('videos').add(jobData);
-      console.log(`Uploaded job ${job.id} with thumbnail and transcript`);
+        // Add to Firestore
+        await db.collection('videos').add(jobData);
+        console.log(`Successfully uploaded job ${job.id} with video ${videoFile}`);
+        processedCount++;
+      } catch (error) {
+        console.error(`Error processing job ${job.id}:`, error);
+        skippedCount++;
+      }
     }
+
+    console.log(`Upload complete. Processed: ${processedCount}, Skipped: ${skippedCount}, Total: ${jobs.length}`);
   } catch (error) {
     console.error('Error uploading jobs:', error);
     throw error;

@@ -11,13 +11,14 @@
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "baseUrl": "..",
-    "rootDir": "..",
-    "outDir": "../dist/scripts"
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": [
-    "**/*.ts",
-    "../src/**/*.ts"
+    "scripts/**/*.ts",
+    "src/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

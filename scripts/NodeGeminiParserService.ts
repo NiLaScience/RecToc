@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import type { JobDescriptionSchema } from '../src/services/OpenAIService';
 import { JobDescriptionSchemaObj } from '../src/services/OpenAIService';
 
@@ -17,74 +17,139 @@ function cleanJsonResponse(text: string): string {
   return text;
 }
 
+function cleanJobDescription(text: string): string {
+  return text
+    .replace(/\#.*$/gm, '') // Remove hashtag comments and everything after them
+    .replace(/Please (?:send|share) .*@.*\.com/gi, '') // Remove email instructions
+    .replace(/[^\x20-\x7E\n]/g, '') // Remove non-ASCII characters
+    .replace(/\\/g, '') // Remove backslashes
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+}
+
 export class NodeGeminiParserService {
   private genAI: any;
   private model: any;
 
   constructor(apiKey: string) {
     this.genAI = new GoogleGenerativeAI(apiKey);
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.0-pro' });
+    
+    const schema = {
+      type: SchemaType.OBJECT,
+      properties: {
+        title: {
+          type: SchemaType.STRING,
+          description: "Job title",
+          nullable: false,
+        },
+        company: {
+          type: SchemaType.STRING,
+          description: "Company name",
+          nullable: false,
+        },
+        location: {
+          type: SchemaType.STRING,
+          description: "Job location",
+          nullable: false,
+        },
+        employmentType: {
+          type: SchemaType.STRING,
+          description: "Full-time/Part-time/Contract",
+          nullable: false,
+        },
+        experienceLevel: {
+          type: SchemaType.STRING,
+          description: "Entry/Mid/Senior level",
+          nullable: false,
+        },
+        skills: {
+          type: SchemaType.ARRAY,
+          description: "Required skills",
+          items: {
+            type: SchemaType.STRING
+          },
+          nullable: false,
+        },
+        responsibilities: {
+          type: SchemaType.ARRAY,
+          description: "Job responsibilities",
+          items: {
+            type: SchemaType.STRING
+          },
+          nullable: false,
+        },
+        requirements: {
+          type: SchemaType.ARRAY,
+          description: "Job requirements",
+          items: {
+            type: SchemaType.STRING
+          },
+          nullable: false,
+        },
+        benefits: {
+          type: SchemaType.ARRAY,
+          description: "Job benefits",
+          items: {
+            type: SchemaType.STRING
+          },
+          nullable: true,
+        },
+        salary: {
+          type: SchemaType.OBJECT,
+          description: "Salary information",
+          properties: {
+            min: {
+              type: SchemaType.NUMBER,
+              description: "Minimum salary",
+              nullable: true,
+            },
+            max: {
+              type: SchemaType.NUMBER,
+              description: "Maximum salary",
+              nullable: true,
+            },
+            currency: {
+              type: SchemaType.STRING,
+              description: "Salary currency (e.g., USD)",
+              nullable: true,
+            },
+            period: {
+              type: SchemaType.STRING,
+              description: "Salary period (yearly/monthly)",
+              nullable: true,
+            }
+          },
+          nullable: true,
+        }
+      },
+      required: ["title", "company", "location", "employmentType", "experienceLevel", "skills", "responsibilities", "requirements"]
+    };
+
+    this.model = this.genAI.getGenerativeModel({
+      model: "gemini-1.5-pro",
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+      },
+    });
   }
 
   async parseJobDescription(text: string): Promise<JobDescriptionSchema> {
     try {
-      const model = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY!).getGenerativeModel({ model: "gemini-pro" });
+      const prompt = `Parse the following job description into structured data according to this schema:
+${JSON.stringify(JobDescriptionSchemaObj, null, 2)}
 
-      const structuringPrompt = [
-        "Given the following job description text, extract and structure the information into a JSON object with the following fields:",
-        "- title: string | null",
-        "- company: string | null",
-        "- location: string | null",
-        "- employmentType: string | null",
-        "- experienceLevel: string | null",
-        "- skills: string[]",
-        "- responsibilities: string[]",
-        "- requirements: string[]",
-        "- benefits: string[]",
-        "- salary: { min: number | null, max: number | null, currency: string | null, period: string | null } | null",
-        "",
-        "IMPORTANT: Return ONLY the raw JSON object. Do not wrap it in code block markers (```). Do not add any explanations or additional text.",
-        "The response should start with { and end with } with no other characters before or after.",
-        "Do not use special quotes or characters in the JSON - use only standard ASCII characters.",
-        "",
-        "Job description text:",
-        text
-      ].join('\n');
+If any field is not found in the text, omit it from the response. For the salary, only include it if specific numbers are mentioned.
 
-      const result = await model.generateContent(structuringPrompt);
-      const response = result.response;
-      let jsonText = response.text();
-      
-      // Remove code block markers if present
-      jsonText = jsonText.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
-      
-      // Clean the JSON text before parsing
-      const cleanedJson = jsonText
-        .replace(/[""]/g, '"') // Replace curly quotes with straight quotes
-        .replace(/[']/g, "'") // Replace curly single quotes with straight single quotes
-        .replace(/[\u200B-\u200D\uFEFF]/g, '') // Remove zero-width spaces
-        .replace(/\r\n/g, '\n') // Normalize line endings
-        .replace(/[^\x20-\x7E\n]/g, '') // Remove all non-ASCII characters except newlines
-        .trim(); // Remove leading/trailing whitespace
+Job Description:
+${text}`;
 
-      console.log('Attempting to parse JSON:', cleanedJson);
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response.text();
       
-      try {
-        return JSON.parse(cleanedJson);
-      } catch (parseError) {
-        // If parsing fails, try to clean the JSON further by removing any problematic characters
-        const furtherCleanedJson = cleanedJson
-          .replace(/[\u2018\u2019]/g, "'") // Replace smart single quotes
-          .replace(/[\u201C\u201D]/g, '"') // Replace smart double quotes
-          .replace(/[\u2013\u2014]/g, '-') // Replace em/en dashes
-          .replace(/\s+/g, ' ') // Normalize whitespace
-          .replace(/\\/g, '\\\\'); // Escape backslashes
-        
-        console.log('Attempting to parse cleaned JSON:', furtherCleanedJson);
-        return JSON.parse(furtherCleanedJson);
-      }
+      return JSON.parse(response);
     } catch (error) {
-      console.log('Failed to parse JSON response. Raw response:', text);
+      console.log('Failed to parse job description. Raw text:', text);
       throw error;
     }
   }

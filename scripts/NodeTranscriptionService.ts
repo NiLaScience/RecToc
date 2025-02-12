@@ -27,12 +27,9 @@ class NodeTranscriptionService {
           .save(audioPath);
       });
 
-      // Read the audio file
-      const audioData = await fs.readFile(audioPath);
-
       // Create form data
       const form = new FormData();
-      form.append('file', audioData, {
+      form.append('file', await fs.readFile(audioPath), {
         filename: 'audio.mp3',
         contentType: 'audio/mp3',
       });
@@ -44,7 +41,6 @@ class NodeTranscriptionService {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${process.env.NEXT_PUBLIC_OPENAI_API_KEY}`,
-          ...form.getHeaders()
         },
         body: form
       });
