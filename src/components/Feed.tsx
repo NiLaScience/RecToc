@@ -34,8 +34,8 @@ const HEADER_HEIGHT = 56; // Fixed header height
 const feedContainerStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(2, 1fr)',
-  gap: '1.5px',
-  backgroundColor: 'black'
+  gap: '1px',
+  backgroundColor: 'silver'
 };
 
 const emptyStateStyle: React.CSSProperties = {
@@ -46,14 +46,12 @@ const emptyStateStyle: React.CSSProperties = {
 };
 
 const fullscreenVideoStyle: React.CSSProperties = {
-  height: '100%',
-  width: '100%',
-  backgroundColor: '#000',
   position: 'absolute',
-  top: 0,
+  top: '23px', // Header height
   left: 0,
   right: 0,
-  bottom: 0,
+  bottom: '23px', // Tab bar height
+  backgroundColor: '#000',
   overflow: 'hidden'
 };
 

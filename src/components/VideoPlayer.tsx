@@ -29,7 +29,8 @@ const containerStyle: React.CSSProperties = {
 const videoStyle: React.CSSProperties = {
   width: '100%',
   height: '100%',
-  objectFit: 'cover'
+  objectFit: 'contain',
+  backgroundColor: '#000'
 };
 
 const overlayStyle: React.CSSProperties = {

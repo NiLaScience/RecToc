@@ -19,7 +19,7 @@ const PDFParserService = require('../src/services/PDFParserService');
 import NodeThumbnailService from './NodeThumbnailService';
 import NodeTranscriptionService from './NodeTranscriptionService';
 import type { JobDescriptionSchema } from '../src/services/OpenAIService';
-const NodeGeminiParserService = require('./NodeGeminiParserService');
+import { NodeGeminiParserService } from './NodeGeminiParserService';
 
 // Initialize Firebase Admin
 const serviceAccount = require('../service-account.json');
