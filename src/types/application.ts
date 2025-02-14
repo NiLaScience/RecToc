@@ -7,7 +7,13 @@ export type ApplicationStatus =
   | 'shortlisted'// Candidate shortlisted
   | 'rejected'   // Application rejected
   | 'accepted'   // Application accepted
-  | 'withdrawn'; // Candidate withdrew application
+  | 'withdrawn'; // Application withdrawn
+
+export type AgentStatus =
+  | 'queued'     // Waiting to be processed by agent
+  | 'processing' // Being processed by agent
+  | 'completed'  // Agent has completed the application
+  | 'failed';    // Agent failed to complete the application
 
 export interface JobApplication {
   id: string;
@@ -22,6 +28,11 @@ export interface JobApplication {
   updatedAt: string;       // Last update timestamp
   submittedAt?: string;    // When application was submitted
   notes?: string;          // Internal notes for recruiters
+  // New agent-related fields
+  agentStatus?: AgentStatus;
+  agentRequestId?: string;
+  agentGifUrl?: string;    // URL to the application process GIF
+  agentError?: string;     // Error message if agent failed
 }
 
 export interface JobApplicationCreate extends Omit<JobApplication, 'id' | 'createdAt' | 'updatedAt'> {

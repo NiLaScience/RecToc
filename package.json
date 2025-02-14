@@ -27,6 +27,7 @@
     "@capacitor/dialog": "^7.0.0",
     "@capacitor/filesystem": "^7.0.0",
     "@capacitor/network": "^7.0.0",
+    "@capacitor/preferences": "^7.0.0",
     "@google/generative-ai": "^0.21.0",
     "@ionic/react": "^7.8.6",
     "@ionic/react-router": "^7.8.6",

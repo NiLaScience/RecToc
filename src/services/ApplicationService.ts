@@ -19,6 +19,7 @@ import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import type { JobApplication, JobApplicationCreate, JobApplicationUpdate, ApplicationStatus } from '../types/application';
 import TranscriptionService from './TranscriptionService';
 import ThumbnailService from './ThumbnailService';
+import { Preferences } from '@capacitor/preferences';
 
 interface FirestoreDocument {
   id: string;
@@ -570,6 +571,99 @@ class ApplicationService {
 
   static async removeApplicationListener(id: string): Promise<void> {
     // No-op since we're not using real-time listeners
+  }
+
+  static async submitApplicationToAIAgent(applicationId: string): Promise<void> {
+    const result = await FirebaseAuthentication.getCurrentUser();
+    if (!result.user) {
+      throw new Error('User must be authenticated to submit application to AI agent');
+    }
+
+    // Get the application data
+    const application = await this.getApplication(applicationId);
+    
+    // Get the job details
+    const jobResponse = await FirebaseFirestore.getDocument({
+      reference: `videos/${application.jobId}`
+    });
+    
+    if (!jobResponse.snapshot?.data) {
+      throw new Error('Job not found');
+    }
+    
+    const jobData = jobResponse.snapshot.data;
+
+    // Check if the job has an application URL
+    if (!jobData.applicationUrl) {
+      throw new Error('This job does not have an application URL');
+    }
+
+    // Get the user's profile for CV data
+    const profileResponse = await FirebaseFirestore.getDocument({
+      reference: `users/${result.user.uid}`
+    });
+
+    if (!profileResponse.snapshot?.data) {
+      throw new Error('User profile not found');
+    }
+
+    const profileData = profileResponse.snapshot.data;
+
+    // Verify we have a CV file URL
+    if (!profileData.cvFileUrl) {
+      throw new Error('No CV file found. Please upload your resume in your profile before applying.');
+    }
+
+    // Get stored credentials
+    let loginCredentials = null;
+    try {
+      const { value } = await Preferences.get({ key: 'job_board_credentials' });
+      if (value) {
+        // The credentials are already stored in the correct format
+        // {linkedin: {username, password}, indeed: {username, password}, ...}
+        loginCredentials = JSON.parse(value);
+      }
+    } catch (error) {
+      console.warn('Could not retrieve job board credentials:', error);
+    }
+
+    // Prepare the payload for the AI agent
+    const payload = {
+      request_id: applicationId,
+      cv: profileData.cv,  // Send the entire CV object
+      job_description: jobData.jobDescription,  // Send the entire job description object
+      job_url: jobData.applicationUrl,
+      cv_file_url: profileData.cvFileUrl,
+      login_credentials: loginCredentials || {}  // Send the entire credentials object
+    };
+
+    // Update Firestore with initial agent status
+    await FirebaseFirestore.updateDocument({
+      reference: `${this.COLLECTION}/${applicationId}`,
+      data: {
+        agentStatus: 'queued',
+        agentRequestId: applicationId,
+        updatedAt: new Date().toISOString()
+      }
+    });
+
+    // Send to EC2 endpoint
+    const EC2_ENDPOINT = process.env.NEXT_PUBLIC_AGENT_API_ENDPOINT;
+    if (!EC2_ENDPOINT) {
+      throw new Error('Agent API endpoint not configured');
+    }
+
+    const response = await fetch(`${EC2_ENDPOINT}/apply`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to submit application to AI agent');
+    }
   }
 }
 

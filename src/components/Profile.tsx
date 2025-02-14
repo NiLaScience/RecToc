@@ -53,6 +53,7 @@ import { FirebaseStorage } from '@capacitor-firebase/storage';
 import OnboardingModal from './OnboardingModal';
 import ApplicationService from '../services/ApplicationService';
 import CVAccordion from './shared/CVAccordion';
+import JobBoardCredentials from './JobBoardCredentials';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -226,12 +227,72 @@ const Profile = () => {
 
   const handleCVUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file || !user) return;
 
     setCVUploading(true);
     try {
-      let parsedData;
+      // First upload the file to Firebase Storage
+      let cvFileUrl: string;
       
+      if (Capacitor.isNativePlatform()) {
+        // For native platforms, we need to write to filesystem first
+        const blob = await file.arrayBuffer();
+        const fileName = `cv_${Date.now()}.pdf`;
+        await Filesystem.writeFile({
+          path: fileName,
+          data: Buffer.from(blob).toString('base64'),
+          directory: Directory.Cache
+        });
+
+        // Get the file URI
+        const fileInfo = await Filesystem.getUri({
+          path: fileName,
+          directory: Directory.Cache
+        });
+
+        // Upload to Firebase Storage
+        cvFileUrl = await new Promise<string>((resolve, reject) => {
+          FirebaseStorage.uploadFile({
+            path: `users/${user.uid}/cv/${fileName}`,
+            uri: fileInfo.uri,
+            metadata: { contentType: file.type }
+          }, (progress, error) => {
+            if (error) {
+              reject(error);
+            } else if (progress?.completed) {
+              FirebaseStorage.getDownloadUrl({ path: `users/${user.uid}/cv/${fileName}` })
+                .then(result => resolve(result.downloadUrl))
+                .catch(reject);
+            }
+          });
+        });
+
+        // Clean up the temporary file
+        await Filesystem.deleteFile({
+          path: fileName,
+          directory: Directory.Cache
+        });
+      } else {
+        // For web, use the blob directly
+        cvFileUrl = await new Promise<string>((resolve, reject) => {
+          FirebaseStorage.uploadFile({
+            path: `users/${user.uid}/cv/cv_${Date.now()}.pdf`,
+            blob: file,
+            metadata: { contentType: file.type }
+          }, (progress, error) => {
+            if (error) {
+              reject(error);
+            } else if (progress?.completed) {
+              FirebaseStorage.getDownloadUrl({ path: `users/${user.uid}/cv/cv_${Date.now()}.pdf` })
+                .then(result => resolve(result.downloadUrl))
+                .catch(reject);
+            }
+          });
+        });
+      }
+
+      // Now parse the CV
+      let parsedData;
       if (useGemini) {
         const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
         if (!geminiApiKey) {
@@ -246,9 +307,10 @@ const Profile = () => {
         parsedData = await CVParserService.parseCV(file);
       }
       
-      // Update user profile with CV data
-      await updateDocument(`users/${user!.uid}`, {
+      // Update user profile with both CV data and file URL
+      await updateDocument(`users/${user.uid}`, {
         cv: parsedData,
+        cvFileUrl,
         updatedAt: new Date().toISOString()
       });
 
@@ -773,6 +835,14 @@ const Profile = () => {
               },
             ]}
           />
+
+          <div className="ion-margin-top">
+            <h2>Job Board Credentials</h2>
+            <p className="ion-padding-bottom">
+              Manage your login credentials for various job boards. These will be used by the AI agent to apply on your behalf.
+            </p>
+            <JobBoardCredentials />
+          </div>
         </div>
 
         <style>{`

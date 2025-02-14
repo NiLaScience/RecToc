@@ -9,5 +9,5 @@ export interface JobDescriptionSchema {
   skills: string[];
   employmentType?: string;
   experienceLevel?: string;
-  applicationUrl?: string;
+  applicationUrl?: string;  // URL for the job application page
 } 

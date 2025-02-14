@@ -14,6 +14,14 @@ import {
   IonToolbar,
   IonTitle,
   IonModal,
+  IonCard,
+  IonCardHeader,
+  IonCardTitle,
+  IonCardSubtitle,
+  IonCardContent,
+  IonChip,
+  IonText,
+  IonSpinner,
 } from '@ionic/react';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +33,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import VideoDetails from './VideoDetails';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
+import type { ApplicationStatus, AgentStatus } from '../types/application';
 
 const Applications: React.FC = () => {
   const { user } = useAuth();
@@ -162,31 +171,26 @@ const Applications: React.FC = () => {
     ));
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: ApplicationStatus | AgentStatus): string => {
     switch (status) {
+      case 'draft':
+        return 'medium';
       case 'submitted':
+      case 'queued':
+      case 'processing':
+        return 'primary';
       case 'reviewing':
-        return {
-          background: 'rgba(255, 213, 52, 0.15)',
-          color: '#ffd534'
-        };
       case 'shortlisted':
+        return 'warning';
       case 'accepted':
-        return {
-          background: 'rgba(45, 211, 111, 0.15)',
-          color: '#2dd36f'
-        };
+      case 'completed':
+        return 'success';
       case 'rejected':
       case 'withdrawn':
-        return {
-          background: 'rgba(235, 68, 90, 0.15)',
-          color: '#eb445a'
-        };
+      case 'failed':
+        return 'danger';
       default:
-        return {
-          background: 'rgba(102, 102, 102, 0.15)',
-          color: '#666'
-        };
+        return 'medium';
     }
   };
 
@@ -208,121 +212,144 @@ const Applications: React.FC = () => {
             renderSkeletons()
           ) : applications.length > 0 ? (
             applications.map((application) => (
-              <IonItem 
-                key={application.id}
-                button
-                onClick={() => {
-                  if (application.jobDetails) {
-                    setSelectedVideo(application.jobDetails);
-                  }
-                }}
-                style={{
-                  '--background': '#2a2a2a',
-                  '--background-hover': '#333',
-                  marginBottom: '1rem',
-                  borderRadius: '12px',
-                  '--border-color': 'transparent',
-                  '--border-style': 'none',
-                  '--padding-start': '1rem',
-                  '--padding-end': '1rem',
-                  '--padding-top': '0.75rem',
-                  '--padding-bottom': '0.75rem',
-                }}
-                lines="none"
-              >
-                <IonThumbnail slot="start" style={{ 
-                  width: '80px', 
-                  height: '80px',
-                  marginRight: '1rem'
-                }}>
-                  {application.jobDetails?.thumbnailUrl ? (
-                    <img 
-                      src={application.jobDetails.thumbnailUrl} 
-                      alt="Video thumbnail"
-                      style={{ 
-                        width: '100%', 
-                        height: '100%', 
-                        objectFit: 'cover',
-                        borderRadius: '8px'
-                      }}
-                    />
-                  ) : (
-                    <div style={{
-                      width: '100%',
-                      height: '100%',
-                      backgroundColor: '#333',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: '8px'
-                    }}>
-                      <IonIcon
-                        icon={documentTextOutline}
-                        style={{
-                          fontSize: '1.5rem',
-                          color: '#666',
-                        }}
+              <IonCard key={application.id} className="ion-margin-vertical">
+                <IonCardHeader>
+                  <IonCardTitle>{application.jobDetails?.title || 'Loading...'}</IonCardTitle>
+                  <IonCardSubtitle>
+                    {application.jobDetails?.jobDescription?.company || 'Company not available'}
+                  </IonCardSubtitle>
+                </IonCardHeader>
+                <IonCardContent>
+                  <div className="ion-padding-bottom">
+                    <IonChip color={getStatusColor(application.status)}>
+                      {application.status}
+                    </IonChip>
+                    {application.agentStatus && (
+                      <IonChip color={getStatusColor(application.agentStatus)}>
+                        AI Agent: {application.agentStatus}
+                      </IonChip>
+                    )}
+                  </div>
+                  
+                  {/* Show agent GIF if available */}
+                  {application.agentGifUrl && (
+                    <div className="ion-padding-vertical">
+                      <h4>Application Process Recording</h4>
+                      <img 
+                        src={application.agentGifUrl} 
+                        alt="Application process" 
+                        style={{ maxWidth: '100%', borderRadius: '8px' }}
                       />
                     </div>
                   )}
-                </IonThumbnail>
-                <IonLabel>
-                  <h2 style={{ 
-                    color: '#fff',
-                    fontSize: '1.1rem',
-                    fontWeight: '600',
-                    marginBottom: '0.5rem'
-                  }}>
-                    {application.jobDetails?.title || 'Unknown Position'}
-                  </h2>
-                  {application.jobDetails?.jobDescription?.company && (
-                    <p style={{ 
-                      color: 'rgba(255, 255, 255, 0.7)',
-                      fontSize: '0.9rem',
-                      marginBottom: '0.25rem'
-                    }}>
-                      <IonIcon icon={businessOutline} style={{ 
-                        verticalAlign: 'middle', 
-                        marginRight: '5px',
-                        color: 'rgba(255, 255, 255, 0.5)'
-                      }} />
-                      {application.jobDetails.jobDescription.company}
-                      {application.jobDetails.jobDescription?.location && ` • ${application.jobDetails.jobDescription.location}`}
-                    </p>
-                  )}
-                  <p style={{ 
-                    color: 'rgba(255, 255, 255, 0.5)',
-                    fontSize: '0.9rem',
-                    marginBottom: '0.5rem'
-                  }}>
-                    <IonIcon icon={timeOutline} style={{ 
-                      verticalAlign: 'middle', 
-                      marginRight: '5px',
-                      color: 'rgba(255, 255, 255, 0.4)'
-                    }} />
-                    Applied {formatDistanceToNow(new Date(application.createdAt), { addSuffix: true })}
-                  </p>
-                  {application.status && (
-                    <div 
-                      style={{
-                        display: 'inline-block',
-                        padding: '4px 12px',
-                        borderRadius: '100px',
-                        fontSize: '0.8rem',
-                        fontWeight: '500',
-                        background: getStatusColor(application.status).background,
-                        color: getStatusColor(application.status).color,
-                        marginTop: '4px'
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                      }}
-                    >
-                      {application.status.charAt(0).toUpperCase() + application.status.slice(1)}
+                  
+                  {/* Show agent error if any */}
+                  {application.agentError && (
+                    <div className="ion-padding-vertical">
+                      <IonText color="danger">
+                        <p>Error: {application.agentError}</p>
+                      </IonText>
                     </div>
                   )}
-                </IonLabel>
-              </IonItem>
+                  
+                  {/* Rest of the existing card content */}
+                  <IonItem 
+                    button
+                    onClick={() => {
+                      if (application.jobDetails) {
+                        setSelectedVideo(application.jobDetails);
+                      }
+                    }}
+                    style={{
+                      '--background': '#2a2a2a',
+                      '--background-hover': '#333',
+                      marginBottom: '1rem',
+                      borderRadius: '12px',
+                      '--border-color': 'transparent',
+                      '--border-style': 'none',
+                      '--padding-start': '1rem',
+                      '--padding-end': '1rem',
+                      '--padding-top': '0.75rem',
+                      '--padding-bottom': '0.75rem',
+                    }}
+                    lines="none"
+                  >
+                    <IonThumbnail slot="start" style={{ 
+                      width: '80px', 
+                      height: '80px',
+                      marginRight: '1rem'
+                    }}>
+                      {application.jobDetails?.thumbnailUrl ? (
+                        <img 
+                          src={application.jobDetails.thumbnailUrl} 
+                          alt="Video thumbnail"
+                          style={{ 
+                            width: '100%', 
+                            height: '100%', 
+                            objectFit: 'cover',
+                            borderRadius: '8px'
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '100%',
+                          height: '100%',
+                          backgroundColor: '#333',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '8px'
+                        }}>
+                          <IonIcon
+                            icon={documentTextOutline}
+                            style={{
+                              fontSize: '1.5rem',
+                              color: '#666',
+                            }}
+                          />
+                        </div>
+                      )}
+                    </IonThumbnail>
+                    <IonLabel>
+                      <h2 style={{ 
+                        color: '#fff',
+                        fontSize: '1.1rem',
+                        fontWeight: '600',
+                        marginBottom: '0.5rem'
+                      }}>
+                        {application.jobDetails?.title || 'Unknown Position'}
+                      </h2>
+                      {application.jobDetails?.jobDescription?.company && (
+                        <p style={{ 
+                          color: 'rgba(255, 255, 255, 0.7)',
+                          fontSize: '0.9rem',
+                          marginBottom: '0.25rem'
+                        }}>
+                          <IonIcon icon={businessOutline} style={{ 
+                            verticalAlign: 'middle', 
+                            marginRight: '5px',
+                            color: 'rgba(255, 255, 255, 0.5)'
+                          }} />
+                          {application.jobDetails.jobDescription.company}
+                          {application.jobDetails.jobDescription?.location && ` • ${application.jobDetails.jobDescription.location}`}
+                        </p>
+                      )}
+                      <p style={{ 
+                        color: 'rgba(255, 255, 255, 0.5)',
+                        fontSize: '0.9rem',
+                        marginBottom: '0.5rem'
+                      }}>
+                        <IonIcon icon={timeOutline} style={{ 
+                          verticalAlign: 'middle', 
+                          marginRight: '5px',
+                          color: 'rgba(255, 255, 255, 0.4)'
+                        }} />
+                        Applied {formatDistanceToNow(new Date(application.createdAt), { addSuffix: true })}
+                      </p>
+                    </IonLabel>
+                  </IonItem>
+                </IonCardContent>
+              </IonCard>
             ))
           ) : (
             <IonItem style={{

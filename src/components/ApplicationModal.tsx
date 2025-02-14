@@ -257,12 +257,32 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
       
       // Submit the application
       await ApplicationService.submitApplication(application.id);
+
+      // Submit to AI agent if the job has an application URL
+      if (jobPost?.applicationUrl) {
+        try {
+          await ApplicationService.submitApplicationToAIAgent(application.id);
+          presentToast({
+            message: 'Application submitted and queued for AI processing',
+            duration: 3000,
+            color: 'success',
+          });
+        } catch (error) {
+          console.error('Error submitting to AI agent:', error);
+          presentToast({
+            message: 'Application submitted, but AI processing failed',
+            duration: 3000,
+            color: 'warning',
+          });
+        }
+      } else {
+        presentToast({
+          message: 'Application submitted successfully',
+          duration: 3000,
+          color: 'success',
+        });
+      }
       
-      presentToast({
-        message: 'Application submitted successfully',
-        duration: 3000,
-        color: 'success',
-      });
       onClose();
     } catch (error) {
       console.error('Error submitting application:', error);

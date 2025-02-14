@@ -9,6 +9,7 @@ export interface UserProfile {
   photoURL?: string;  // Keep using photoURL in our database schema
   description?: string;
   cv?: CVSchema;
+  cvFileUrl?: string;  // URL to the stored CV PDF file
   createdAt: string;
   updatedAt: string;
 }
