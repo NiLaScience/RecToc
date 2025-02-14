@@ -1,0 +1,10 @@
+{
+    "LinkedIn": {
+        "username": "test@example.com",
+        "password": "test_password"
+    },
+    "Indeed": {
+        "username": "test@example.com",
+        "password": "test_password"
+    }
+} 
