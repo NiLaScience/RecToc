@@ -15,8 +15,10 @@ import {
   IonSpinner,
   IonSelect,
   IonSelectOption,
+  IonModal,
+  IonButtons,
 } from '@ionic/react';
-import { addOutline, trashOutline } from 'ionicons/icons';
+import { addOutline, trashOutline, closeOutline, pencilOutline, checkmarkOutline, eyeOutline, eyeOffOutline } from 'ionicons/icons';
 import { Preferences } from '@capacitor/preferences';
 
 interface PlatformCredentials {
@@ -26,6 +28,11 @@ interface PlatformCredentials {
 
 interface JobBoardCredentials {
   [platform: string]: PlatformCredentials;
+}
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 const STORAGE_KEY = 'job_board_credentials';
@@ -42,7 +49,7 @@ const SUPPORTED_PLATFORMS = [
   'lever'
 ];
 
-const JobBoardCredentials: React.FC = () => {
+const JobBoardCredentials: React.FC<Props> = ({ isOpen, onClose }) => {
   const [credentials, setCredentials] = useState<JobBoardCredentials>({});
   const [loading, setLoading] = useState(true);
   const [showDeleteAlert, setShowDeleteAlert] = useState<string | null>(null);
@@ -52,11 +59,17 @@ const JobBoardCredentials: React.FC = () => {
     password: ''
   });
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingPlatform, setEditingPlatform] = useState<string | null>(null);
+  const [editCredential, setEditCredential] = useState<PlatformCredentials>({ username: '', password: '' });
   const [presentToast] = useIonToast();
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
 
   useEffect(() => {
-    loadCredentials();
-  }, []);
+    if (isOpen) {
+      loadCredentials();
+    }
+  }, [isOpen]);
 
   const loadCredentials = async () => {
     try {
@@ -128,122 +141,230 @@ const JobBoardCredentials: React.FC = () => {
     setShowDeleteAlert(null);
   };
 
-  if (loading) {
-    return (
-      <div className="ion-padding ion-text-center">
-        <IonSpinner />
-      </div>
-    );
-  }
+  const handleStartEdit = (platform: string) => {
+    setEditingPlatform(platform);
+    setEditCredential({ ...credentials[platform] });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingPlatform || !editCredential.username || !editCredential.password) {
+      presentToast({
+        message: 'Please fill in all fields',
+        duration: 3000,
+        color: 'warning',
+      });
+      return;
+    }
+
+    const updatedCredentials = {
+      ...credentials,
+      [editingPlatform]: editCredential
+    };
+
+    await saveCredentials(updatedCredentials);
+    setEditingPlatform(null);
+    setEditCredential({ username: '', password: '' });
+    setShowEditPassword(false);
+  };
+
+  const handleClose = () => {
+    setShowAddForm(false);
+    setNewCredential({ platform: '', username: '', password: '' });
+    setEditingPlatform(null);
+    setEditCredential({ username: '', password: '' });
+    setShowNewPassword(false);
+    setShowEditPassword(false);
+    onClose();
+  };
 
   return (
-    <div className="ion-padding">
+    <IonModal isOpen={isOpen} onDidDismiss={handleClose}>
       <IonHeader>
         <IonToolbar>
           <IonTitle>Job Board Credentials</IonTitle>
+          <IonButtons slot="end">
+            <IonButton onClick={handleClose}>
+              <IonIcon icon={closeOutline} />
+            </IonButton>
+          </IonButtons>
         </IonToolbar>
       </IonHeader>
 
       <IonContent>
-        <IonList>
-          {Object.entries(credentials).map(([platform, cred]) => (
-            <IonItem key={platform}>
-              <IonLabel>
-                <h2 style={{ textTransform: 'capitalize' }}>{platform}</h2>
-                <p>{cred.username}</p>
-              </IonLabel>
-              <IonButton
-                fill="clear"
-                slot="end"
-                onClick={() => setShowDeleteAlert(platform)}
-              >
-                <IonIcon icon={trashOutline} slot="icon-only" />
-              </IonButton>
-            </IonItem>
-          ))}
-        </IonList>
-
-        {showAddForm ? (
-          <div className="ion-padding">
-            <IonItem>
-              <IonLabel position="stacked">Platform</IonLabel>
-              <IonSelect
-                value={newCredential.platform}
-                onIonChange={e => setNewCredential(prev => ({ ...prev, platform: e.detail.value }))}
-                placeholder="Select Platform"
-              >
-                {SUPPORTED_PLATFORMS.map(platform => (
-                  <IonSelectOption 
-                    key={platform} 
-                    value={platform}
-                    disabled={platform in credentials}
-                  >
-                    {platform.charAt(0).toUpperCase() + platform.slice(1)}
-                  </IonSelectOption>
-                ))}
-              </IonSelect>
-            </IonItem>
-            <IonItem>
-              <IonLabel position="stacked">Username</IonLabel>
-              <IonInput
-                value={newCredential.username}
-                onIonChange={e => setNewCredential(prev => ({ ...prev, username: e.detail.value! }))}
-                placeholder="Email or username"
-              />
-            </IonItem>
-            <IonItem>
-              <IonLabel position="stacked">Password</IonLabel>
-              <IonInput
-                type="password"
-                value={newCredential.password}
-                onIonChange={e => setNewCredential(prev => ({ ...prev, password: e.detail.value! }))}
-                placeholder="Password"
-              />
-            </IonItem>
-            <div className="ion-padding-top">
-              <IonButton expand="block" onClick={handleAddCredential}>
-                Save Credential
-              </IonButton>
-              <IonButton expand="block" fill="clear" onClick={() => {
-                setShowAddForm(false);
-                setNewCredential({ platform: '', username: '', password: '' });
-              }}>
-                Cancel
-              </IonButton>
-            </div>
+        {loading ? (
+          <div className="ion-padding ion-text-center">
+            <IonSpinner />
           </div>
         ) : (
           <div className="ion-padding">
-            <IonButton expand="block" onClick={() => setShowAddForm(true)}>
-              <IonIcon icon={addOutline} slot="start" />
-              Add New Credential
-            </IonButton>
+            <p className="ion-padding-bottom">
+              Add your login credentials for various job boards. These will be used by the AI agent to apply on your behalf.
+            </p>
+
+            <IonList>
+              {Object.entries(credentials).map(([platform, cred]) => (
+                <IonItem key={platform}>
+                  {editingPlatform === platform ? (
+                    // Edit mode
+                    <div style={{ width: '100%' }}>
+                      <IonInput
+                        value={editCredential.username}
+                        onIonInput={e => setEditCredential(prev => ({ ...prev, username: e.detail.value! }))}
+                        placeholder="Username"
+                        className="ion-margin-bottom"
+                      />
+                      <IonInput
+                        type={showEditPassword ? 'text' : 'password'}
+                        value={editCredential.password}
+                        onIonInput={e => setEditCredential(prev => ({ ...prev, password: e.detail.value! }))}
+                        placeholder="Password"
+                        className="ion-margin-bottom"
+                      >
+                        <IonButton
+                          fill="clear"
+                          slot="end"
+                          onClick={() => setShowEditPassword(!showEditPassword)}
+                          style={{ margin: 0 }}
+                        >
+                          <IonIcon icon={showEditPassword ? eyeOffOutline : eyeOutline} style={{ color: '#666' }} />
+                        </IonButton>
+                      </IonInput>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                        <IonButton
+                          fill="clear"
+                          onClick={() => {
+                            setEditingPlatform(null);
+                            setEditCredential({ username: '', password: '' });
+                            setShowEditPassword(false);
+                          }}
+                        >
+                          Cancel
+                        </IonButton>
+                        <IonButton onClick={handleSaveEdit}>
+                          <IonIcon icon={checkmarkOutline} slot="start" />
+                          Save
+                        </IonButton>
+                      </div>
+                    </div>
+                  ) : (
+                    // View mode
+                    <>
+                      <IonLabel>
+                        <h2 style={{ textTransform: 'capitalize' }}>{platform}</h2>
+                        <p>{cred.username}</p>
+                      </IonLabel>
+                      <IonButton
+                        fill="clear"
+                        slot="end"
+                        onClick={() => handleStartEdit(platform)}
+                      >
+                        <IonIcon icon={pencilOutline} slot="icon-only" />
+                      </IonButton>
+                      <IonButton
+                        fill="clear"
+                        slot="end"
+                        onClick={() => setShowDeleteAlert(platform)}
+                      >
+                        <IonIcon icon={trashOutline} slot="icon-only" />
+                      </IonButton>
+                    </>
+                  )}
+                </IonItem>
+              ))}
+            </IonList>
+
+            {showAddForm ? (
+              <div className="ion-padding">
+                <IonItem>
+                  <IonLabel position="stacked">Platform</IonLabel>
+                  <IonSelect
+                    value={newCredential.platform}
+                    onIonChange={e => setNewCredential(prev => ({ ...prev, platform: e.detail.value }))}
+                    placeholder="Select Platform"
+                  >
+                    {SUPPORTED_PLATFORMS.map(platform => (
+                      <IonSelectOption 
+                        key={platform} 
+                        value={platform}
+                        disabled={platform in credentials}
+                      >
+                        {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                      </IonSelectOption>
+                    ))}
+                  </IonSelect>
+                </IonItem>
+                <IonItem>
+                  <IonLabel position="stacked">Username</IonLabel>
+                  <IonInput
+                    value={newCredential.username}
+                    onIonInput={e => setNewCredential(prev => ({ ...prev, username: e.detail.value! }))}
+                    placeholder="Email or username"
+                  />
+                </IonItem>
+                <IonItem>
+                  <IonLabel position="stacked">Password</IonLabel>
+                  <IonInput
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newCredential.password}
+                    onIonInput={e => setNewCredential(prev => ({ ...prev, password: e.detail.value! }))}
+                    placeholder="Password"
+                  >
+                    <IonButton
+                      fill="clear"
+                      slot="end"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      style={{ margin: 0 }}
+                    >
+                      <IonIcon icon={showNewPassword ? eyeOffOutline : eyeOutline} style={{ color: '#666' }} />
+                    </IonButton>
+                  </IonInput>
+                </IonItem>
+                <div className="ion-padding-top">
+                  <IonButton expand="block" onClick={handleAddCredential}>
+                    Save Credential
+                  </IonButton>
+                  <IonButton expand="block" fill="clear" onClick={() => {
+                    setShowAddForm(false);
+                    setNewCredential({ platform: '', username: '', password: '' });
+                  }}>
+                    Cancel
+                  </IonButton>
+                </div>
+              </div>
+            ) : (
+              <div className="ion-padding">
+                <IonButton expand="block" onClick={() => setShowAddForm(true)}>
+                  <IonIcon icon={addOutline} slot="start" />
+                  Add New Credential
+                </IonButton>
+              </div>
+            )}
+
+            <IonAlert
+              isOpen={!!showDeleteAlert}
+              onDidDismiss={() => setShowDeleteAlert(null)}
+              header="Delete Credential"
+              message="Are you sure you want to delete this credential?"
+              buttons={[
+                {
+                  text: 'Cancel',
+                  role: 'cancel',
+                },
+                {
+                  text: 'Delete',
+                  role: 'destructive',
+                  handler: () => {
+                    if (showDeleteAlert) {
+                      handleDeleteCredential(showDeleteAlert);
+                    }
+                  },
+                },
+              ]}
+            />
           </div>
         )}
-
-        <IonAlert
-          isOpen={!!showDeleteAlert}
-          onDidDismiss={() => setShowDeleteAlert(null)}
-          header="Delete Credential"
-          message="Are you sure you want to delete this credential?"
-          buttons={[
-            {
-              text: 'Cancel',
-              role: 'cancel',
-            },
-            {
-              text: 'Delete',
-              role: 'destructive',
-              handler: () => {
-                if (showDeleteAlert) {
-                  handleDeleteCredential(showDeleteAlert);
-                }
-              },
-            },
-          ]}
-        />
       </IonContent>
-    </div>
+    </IonModal>
   );
 };
 

@@ -77,6 +77,7 @@ const Profile = () => {
   const [editMode, setEditMode] = useState(false);
   const [useGemini, setUseGemini] = useState(true);
   const [isRealtimeModalOpen, setIsRealtimeModalOpen] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
 
   // Helper function to update all profile-related state
   const updateProfileState = (profileData: UserProfile) => {
@@ -775,6 +776,22 @@ const Profile = () => {
 
           <IonCard>
             <IonCardHeader>
+              <IonCardTitle>Account Settings</IonCardTitle>
+            </IonCardHeader>
+            <IonCardContent>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <IonButton
+                  expand="block"
+                  onClick={() => setShowCredentialsModal(true)}
+                >
+                  Manage Job Board Credentials
+                </IonButton>
+              </div>
+            </IonCardContent>
+          </IonCard>
+
+          <IonCard>
+            <IonCardHeader>
               <IonCardTitle>Danger Zone</IonCardTitle>
             </IonCardHeader>
             <IonCardContent>
@@ -836,13 +853,10 @@ const Profile = () => {
             ]}
           />
 
-          <div className="ion-margin-top">
-            <h2>Job Board Credentials</h2>
-            <p className="ion-padding-bottom">
-              Manage your login credentials for various job boards. These will be used by the AI agent to apply on your behalf.
-            </p>
-            <JobBoardCredentials />
-          </div>
+          <JobBoardCredentials
+            isOpen={showCredentialsModal}
+            onClose={() => setShowCredentialsModal(false)}
+          />
         </div>
 
         <style>{`
