@@ -260,21 +260,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
 
       // Submit to AI agent if the job has an application URL
       if (jobPost?.applicationUrl) {
-        try {
-          await ApplicationService.submitApplicationToAIAgent(application.id);
-          presentToast({
-            message: 'Application submitted and queued for AI processing',
-            duration: 3000,
-            color: 'success',
-          });
-        } catch (error) {
-          console.error('Error submitting to AI agent:', error);
-          presentToast({
-            message: 'Application submitted, but AI processing failed',
-            duration: 3000,
-            color: 'warning',
-          });
-        }
+        await ApplicationService.submitApplicationToAIAgent(application.id);
       } else {
         presentToast({
           message: 'Application submitted successfully',
@@ -398,6 +384,25 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                         benefits={jobPost.jobDescription?.benefits}
                         transcript={jobPost.transcript}
                       />
+                      
+                      {/* Debug Info */}
+                      {jobPost.applicationUrl && (
+                        <div style={{ 
+                          marginTop: '1rem', 
+                          padding: '0.5rem',
+                          background: '#333',
+                          borderRadius: '4px',
+                          fontSize: '0.8rem'
+                        }}>
+                          <p style={{ 
+                            color: '#888',
+                            margin: 0,
+                            wordBreak: 'break-all'
+                          }}>
+                            🔗 Application URL: {jobPost.applicationUrl}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </IonCardContent>
                 </IonCard>
@@ -585,22 +590,39 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                 </>
               ) : (
                 <div className="ion-margin-top ion-justify-content-between" 
-                     style={{ display: 'flex', gap: '1rem' }}>
-                  <IonButton 
-                    expand="block"
-                    fill="outline"
-                    onClick={handleSaveDraft}
-                    disabled={!videoFile && !application?.videoURL}
-                  >
-                    Save Draft
-                  </IonButton>
-                  <IonButton 
-                    expand="block"
-                    onClick={handleSubmit}
-                    disabled={!videoFile && !application?.videoURL}
-                  >
-                    Submit Application
-                  </IonButton>
+                     style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    <IonButton 
+                      expand="block"
+                      fill="outline"
+                      onClick={handleSaveDraft}
+                      disabled={!videoFile && !application?.videoURL}
+                    >
+                      Save Draft
+                    </IonButton>
+                    <IonButton 
+                      expand="block"
+                      onClick={handleSubmit}
+                      disabled={!videoFile && !application?.videoURL}
+                    >
+                      Submit Application
+                    </IonButton>
+                  </div>
+                  
+                  {jobPost?.applicationUrl && (
+                    <IonButton
+                      expand="block"
+                      color="tertiary"
+                      onClick={() => {
+                        if (application?.id) {
+                          ApplicationService.submitApplicationToAIAgent(application.id);
+                        }
+                      }}
+                      disabled={!application?.id || !application?.videoURL}
+                    >
+                      🤖 Submit to AI Agent
+                    </IonButton>
+                  )}
                 </div>
               )}
             </div>

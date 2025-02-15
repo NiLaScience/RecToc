@@ -6,6 +6,10 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
+    function isAgent() {
+      return request.auth != null && request.auth.token.agent == true;
+    }
+
     match /videos/{videoId} {
       allow read: if true;
       allow create: if request.auth != null 
@@ -31,17 +35,43 @@ service cloud.firestore {
     }
 
     match /applications/{applicationId} {
-      allow read: if request.auth != null;
+      // Users can read their own applications
+      allow read: if request.auth != null 
+        && (resource.data.candidateId == request.auth.uid || isAgent());
+      
+      // Users can create applications for themselves
       allow create: if request.auth != null 
         && request.resource.data.candidateId == request.auth.uid
         && request.resource.data.createdAt is string
         && request.resource.data.updatedAt is string;
-      allow update: if request.auth != null 
-        && resource.data.candidateId == request.auth.uid
-        && request.resource.data.candidateId == request.auth.uid
-        && request.resource.data.updatedAt is string;
+      
+      // Users can update their applications if not completed
+      // Agent can update status and recording-related fields
+      allow update: if (
+        request.auth != null && (
+          // User updates before completion
+          (resource.data.candidateId == request.auth.uid
+           && request.resource.data.candidateId == request.auth.uid
+           && request.resource.data.updatedAt is string
+           && resource.data.status != 'completed'
+           && !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['agentGifUrl', 'agentStatus']))
+          ||
+          // Agent updates for status and recordings
+          (isAgent() 
+           && request.resource.data.candidateId == resource.data.candidateId
+           && request.resource.data.diff(resource.data).affectedKeys()
+              .hasAll(['status', 'updatedAt'])
+           && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'updatedAt', 'agentStatus', 'agentGifUrl', 
+                       'error', 'completed_at', 'started_at']))
+        )
+      );
+      
+      // Only allow deletion of draft applications by the owner
       allow delete: if request.auth != null 
-        && resource.data.candidateId == request.auth.uid;
+        && resource.data.candidateId == request.auth.uid
+        && resource.data.status == 'draft';
     }
 
     match /parsedPDFs/{jobId} {
@@ -49,7 +79,10 @@ service cloud.firestore {
     }
 
     match /parsedCVs/{cvId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null 
+        && (resource.data.userId == request.auth.uid || isAgent());
+      allow write: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid;
     }
 
     match /rejectedJobs/{document} {

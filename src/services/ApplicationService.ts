@@ -20,6 +20,7 @@ import type { JobApplication, JobApplicationCreate, JobApplicationUpdate, Applic
 import TranscriptionService from './TranscriptionService';
 import ThumbnailService from './ThumbnailService';
 import { Preferences } from '@capacitor/preferences';
+import { Dialog } from '@capacitor/dialog';
 
 interface FirestoreDocument {
   id: string;
@@ -186,10 +187,8 @@ class ApplicationService {
       // Update application with URL
       const updateData = {
         videoURL,
-        status: 'submitted',
         updatedAt: new Date().toISOString(),
-        candidateId: result.user.uid,
-        submittedAt: new Date().toISOString()
+        candidateId: result.user.uid
       };
 
       console.log('Updating application with data:', {
@@ -579,6 +578,11 @@ class ApplicationService {
       throw new Error('User must be authenticated to submit application to AI agent');
     }
 
+    await Dialog.alert({
+      title: '🤖 AI Agent',
+      message: 'Starting automated application process...'
+    });
+
     // Get the application data
     const application = await this.getApplication(applicationId);
     
@@ -619,8 +623,6 @@ class ApplicationService {
     try {
       const { value } = await Preferences.get({ key: 'job_board_credentials' });
       if (value) {
-        // The credentials are already stored in the correct format
-        // {linkedin: {username, password}, indeed: {username, password}, ...}
         loginCredentials = JSON.parse(value);
       }
     } catch (error) {
@@ -630,39 +632,73 @@ class ApplicationService {
     // Prepare the payload for the AI agent
     const payload = {
       request_id: applicationId,
-      cv: profileData.cv,  // Send the entire CV object
-      job_description: jobData.jobDescription,  // Send the entire job description object
+      user_id: result.user.uid,
+      job_id: jobData.id,
+      cv: profileData.cv,
+      job_description: jobData.jobDescription,
       job_url: jobData.applicationUrl,
       cv_file_url: profileData.cvFileUrl,
-      login_credentials: loginCredentials || {}  // Send the entire credentials object
+      login_credentials: loginCredentials || {}
     };
-
-    // Update Firestore with initial agent status
-    await FirebaseFirestore.updateDocument({
-      reference: `${this.COLLECTION}/${applicationId}`,
-      data: {
-        agentStatus: 'queued',
-        agentRequestId: applicationId,
-        updatedAt: new Date().toISOString()
-      }
-    });
 
     // Send to EC2 endpoint
     const EC2_ENDPOINT = process.env.NEXT_PUBLIC_AGENT_API_ENDPOINT;
     if (!EC2_ENDPOINT) {
+      console.error('❌ Agent API endpoint not configured in environment');
       throw new Error('Agent API endpoint not configured');
     }
 
-    const response = await fetch(`${EC2_ENDPOINT}/apply`, {
+    console.log('🤖 AI Agent Request:', {
+      url: `${EC2_ENDPOINT}/apply`,
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload)
+      headers: { 'Content-Type': 'application/json' },
+      payload: {
+        ...payload,
+        login_credentials: '***REDACTED***' // Don't log credentials
+      }
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to submit application to AI agent');
+    try {
+      const response = await fetch(`${EC2_ENDPOINT}/apply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const responseData = await response.json();
+      console.log('🤖 AI Agent Response:', {
+        status: response.status,
+        ok: response.ok,
+        body: responseData,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      if (!response.ok) {
+        console.error('❌ AI Agent Error:', {
+          status: response.status,
+          body: responseData
+        });
+        await Dialog.alert({
+          title: '❌ Error',
+          message: 'Failed to submit application to AI agent'
+        });
+        throw new Error('Failed to submit application to AI agent');
+      }
+
+      console.log('✅ AI Agent Success: Application queued for processing');
+      await Dialog.alert({
+        title: '✅ Success',
+        message: 'Application submitted to AI agent. You can track progress in the Applications tab.'
+      });
+    } catch (error) {
+      console.error('❌ AI Agent Network Error:', error);
+      await Dialog.alert({
+        title: '❌ Error',
+        message: `Failed to contact AI agent: ${error instanceof Error ? error.message : 'Unknown error occurred'}`
+      });
+      throw error;
     }
   }
 }

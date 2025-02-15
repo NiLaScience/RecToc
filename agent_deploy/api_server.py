@@ -10,16 +10,19 @@ import logging
 import os
 from datetime import datetime
 from typing import Dict, Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 import firebase_admin
 from firebase_admin import credentials, storage, firestore
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse
-from fastapi_limiter import FastAPILimiter
-from fastapi_limiter.depends import RateLimiter
 from pydantic import BaseModel, HttpUrl
 from redis import Redis
 from rq import Queue
+import requests
 
 from llm_apply_o1_login import (
     CandidateProfile,
@@ -31,13 +34,44 @@ from llm_apply_o1_login import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize Firebase
+# Load agent credentials from environment
+AGENT_EMAIL = os.getenv('AGENT_EMAIL')
+AGENT_PASSWORD = os.getenv('AGENT_PASSWORD')
+if not AGENT_EMAIL or not AGENT_PASSWORD:
+    raise ValueError("AGENT_EMAIL and AGENT_PASSWORD environment variables must be set")
+
+# Initialize Firebase Admin SDK
 cred = credentials.Certificate("firebase-credentials.json")
 firebase_admin.initialize_app(cred, {
     'storageBucket': 'your-bucket-name.appspot.com'
 })
 db = firestore.client()
 bucket = storage.bucket()
+
+# Initialize Firebase Auth for the agent
+FIREBASE_API_KEY = os.getenv('FIREBASE_API_KEY')
+if not FIREBASE_API_KEY:
+    raise ValueError("FIREBASE_API_KEY environment variable must be set")
+
+def get_agent_token():
+    """Get a Firebase ID token for the agent service account."""
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
+    payload = {
+        "email": AGENT_EMAIL,
+        "password": AGENT_PASSWORD,
+        "returnSecureToken": True
+    }
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+    return response.json()['idToken']
+
+# Get initial token
+try:
+    agent_token = get_agent_token()
+    logger.info("Successfully authenticated agent with Firebase")
+except Exception as e:
+    logger.error(f"Failed to authenticate agent: {e}")
+    raise
 
 # Initialize Redis and RQ
 redis_conn = Redis(
@@ -50,39 +84,42 @@ queue = Queue('applications', connection=redis_conn)
 # Initialize FastAPI
 app = FastAPI(title="Job Application API")
 
-# Setup rate limiting
+# No rate limiting for now
 @app.on_event("startup")
 async def startup():
-    await FastAPILimiter.init(redis_conn)
+    pass
 
 class ApplicationRequest(BaseModel):
+    request_id: str
+    user_id: str
+    job_id: str
+    cv: Dict
+    job_description: Dict
     job_url: HttpUrl
-    candidate_info: Dict
+    cv_file_url: HttpUrl
     login_credentials: Optional[Dict[str, Dict[str, str]]] = None
 
 async def process_application(
     request_id: str,
+    user_id: str,
+    job_id: str,
     job_url: str,
-    candidate_info: Dict,
+    cv: Dict,
+    job_description: Dict,
+    cv_file_url: str,
     login_credentials: Optional[Dict] = None
 ) -> None:
     """
     Background task to process the job application and upload results to Firebase.
     """
     try:
-        # Create a temporary credentials file if login credentials provided
-        if login_credentials:
-            temp_creds_file = f"temp_creds_{request_id}.json"
-            with open(temp_creds_file, "w") as f:
-                json.dump(login_credentials, f)
-            load_login_credentials(temp_creds_file)
-            os.remove(temp_creds_file)  # Clean up
-
-        # Create candidate profile
-        candidate_profile = CandidateProfile(**candidate_info)
-
-        # Run the application process
-        await run_job_application(str(job_url), candidate_profile)
+        # Pass the complete data to the agent
+        await run_job_application(str(job_url), {
+            'cv': cv,
+            'cv_file_url': cv_file_url,
+            'job_description': job_description,
+            'login_credentials': login_credentials
+        })
 
         # Upload GIF to Firebase Storage if it exists
         gif_path = "agent_history.gif"
@@ -96,11 +133,11 @@ async def process_application(
 
         # Store application result in Firestore
         doc_ref = db.collection('applications').document(request_id)
-        doc_ref.set({
+        doc_ref.update({
             'status': 'completed',
             'job_url': str(job_url),
             'timestamp': datetime.utcnow(),
-            'recording_url': gif_url,
+            'agentGifUrl': gif_url,
             'error': None
         })
 
@@ -108,7 +145,7 @@ async def process_application(
         logger.error(f"Error processing application {request_id}: {str(e)}")
         # Store error in Firestore
         doc_ref = db.collection('applications').document(request_id)
-        doc_ref.set({
+        doc_ref.update({
             'status': 'failed',
             'job_url': str(job_url),
             'timestamp': datetime.utcnow(),
@@ -117,18 +154,14 @@ async def process_application(
 
 @app.post("/apply")
 async def apply_to_job(
-    request: ApplicationRequest,
-    _: str = Depends(RateLimiter(times=2, seconds=60))  # Rate limit: 2 requests per minute
+    request: ApplicationRequest
 ) -> JSONResponse:
     """
     Endpoint to start a job application process.
     Returns a request ID that can be used to check the status.
     """
-    # Generate unique request ID
-    request_id = f"app_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
-
     # Initialize document in Firestore
-    doc_ref = db.collection('applications').document(request_id)
+    doc_ref = db.collection('applications').document(request.request_id)
     doc_ref.set({
         'status': 'queued',
         'job_url': str(request.job_url),
@@ -140,17 +173,21 @@ async def apply_to_job(
     queue.enqueue(
         'worker.process_application',
         args=(
-            request_id,
+            request.request_id,
+            request.user_id,
+            request.job_id,
             str(request.job_url),
-            request.candidate_info,
+            request.cv,
+            request.job_description,
+            request.cv_file_url,
             request.login_credentials
         ),
-        job_id=request_id,
+        job_id=request.request_id,
         job_timeout='1h'  # Set timeout to 1 hour
     )
 
     return JSONResponse({
-        'request_id': request_id,
+        'request_id': request.request_id,
         'status': 'queued',
         'position_in_queue': queue.count,
         'message': 'Application queued for processing'
@@ -158,8 +195,7 @@ async def apply_to_job(
 
 @app.get("/status/{request_id}")
 async def get_status(
-    request_id: str,
-    _: str = Depends(RateLimiter(times=10, seconds=60))  # Rate limit: 10 requests per minute
+    request_id: str
 ) -> JSONResponse:
     """
     Get the status of a job application request.
@@ -186,9 +222,7 @@ async def get_status(
     return JSONResponse(response_data)
 
 @app.get("/queue/status")
-async def get_queue_status(
-    _: str = Depends(RateLimiter(times=30, seconds=60))  # Rate limit: 30 requests per minute
-) -> JSONResponse:
+async def get_queue_status() -> JSONResponse:
     """
     Get the current status of the application queue.
     """

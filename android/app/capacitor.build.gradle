@@ -20,6 +20,7 @@ dependencies {
     implementation project(':capacitor-dialog')
     implementation project(':capacitor-filesystem')
     implementation project(':capacitor-network')
+    implementation project(':capacitor-preferences')
 
 }
 

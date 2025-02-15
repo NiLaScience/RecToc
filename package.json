@@ -34,6 +34,7 @@
     "@openai/realtime-api-beta": "github:openai/openai-realtime-api-beta",
     "@types/fluent-ffmpeg": "^2.1.27",
     "@web-std/file": "^3.0.3",
+    "aws": "^0.0.3-2",
     "axios": "^1.7.9",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",

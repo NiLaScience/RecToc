@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+
+  api:
+    image: 474668398195.dkr.ecr.eu-north-1.amazonaws.com/nexus-agent:latest
+    command: uvicorn api_server:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AGENT_EMAIL=${AGENT_EMAIL}
+      - AGENT_PASSWORD=${AGENT_PASSWORD}
+      - AGENT_UID=${AGENT_UID}
+      - FIREBASE_API_KEY=${FIREBASE_API_KEY}
+      - FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}
+      - DISPLAY=:99
+    depends_on:
+      - redis
+
+  worker:
+    image: 474668398195.dkr.ecr.eu-north-1.amazonaws.com/nexus-agent:latest
+    command: python worker.py
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AGENT_EMAIL=${AGENT_EMAIL}
+      - AGENT_PASSWORD=${AGENT_PASSWORD}
+      - AGENT_UID=${AGENT_UID}
+      - FIREBASE_API_KEY=${FIREBASE_API_KEY}
+      - FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}
+      - DISPLAY=:99
+    depends_on:
+      - redis
+
+volumes:
+  redis_data: 

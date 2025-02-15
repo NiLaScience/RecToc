@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -22,7 +22,7 @@ import type { JobDescriptionSchema } from '../src/services/OpenAIService';
 const serviceAccount = require('../service-account.json');
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  storageBucket: 'rec-toc-56a25.firebasestorage.app',  // Explicitly set the bucket
 });
 
 const db = getFirestore();
@@ -34,7 +34,7 @@ const bucket = getStorage().bucket();
 const DB_PATH = '/Users/gauntlet/Documents/projects/jobs/data/my_database.db';
 const VIDEOS_DIR = '/Users/gauntlet/Documents/projects/jobs/videos';
 
-// The local DB “jobs” table has records shaped roughly like:
+// The local DB "jobs" table has records shaped roughly like:
 interface JobRecord {
   id: number;
   title: string;
@@ -138,7 +138,7 @@ async function parseJobDescription(
     return await geminiParser.parseJobDescription(text);
   } else {
     // Fall back to PDF parser
-    // (But you’re feeding it text, so adapt if needed.)
+    // (But you're feeding it text, so adapt if needed.)
     const fakePDFFile = new File([text], 'job_description.pdf', {
       type: 'application/pdf',
     });
@@ -187,9 +187,9 @@ async function uploadJobs(adminUid: string, useGemini = true) {
   });
 
   try {
-    // Grab relevant job rows
-    const rows = (await sqliteDb.all(`
-      SELECT
+    // Get all jobs from the database with required fields
+    const jobs = await sqliteDb.all(`
+      SELECT 
         id,
         title,
         company,
@@ -199,17 +199,19 @@ async function uploadJobs(adminUid: string, useGemini = true) {
         job_description,
         pitch_script,
         date_loaded
-      FROM jobs
+      FROM jobs 
       WHERE pitch_script IS NOT NULL
         AND length(job_description) > 100
-    `)) as JobRecord[];
+        AND job_url IS NOT NULL
+        AND trim(job_url) != ''
+    `) as JobRecord[];
 
-    console.log(`Found ${rows.length} jobs to process.`);
+    console.log(`Found ${jobs.length} jobs to process`);
 
     let processedCount = 0;
     let skippedCount = 0;
 
-    for (const job of rows) {
+    for (const job of jobs) {
       try {
         // In your existing logic you matched files named "job.id.mp4"
         const videoFileName = `${job.id}.mp4`; // or .mov, etc.
@@ -263,8 +265,7 @@ async function uploadJobs(adminUid: string, useGemini = true) {
           requirements: parsed.requirements || [],
           skills: parsed.skills || [],
           benefits: parsed.benefits || [],
-          salary: parsed.salary ?? null,
-          applicationUrl: job.job_url,
+          salary: parsed.salary ?? null
         };
 
         //
@@ -274,17 +275,17 @@ async function uploadJobs(adminUid: string, useGemini = true) {
         //    to match `job.id.toString()`, you must explicitly do doc(job.id.toString()).set(...).
         //
         const documentData = {
-          // No `id` field! We'll let Firestore do the doc ID
           title: job.title,
           videoUrl,
           thumbnailUrl,
           jobDescription,
+          applicationUrl: job.job_url,
           tags,
           userId: adminUid,
           createdAt: new Date().toISOString(),
           views: 0,
           likes: 0,
-          transcript, // same shape as from Upload.tsx
+          transcript
         };
 
         //
@@ -303,7 +304,7 @@ async function uploadJobs(adminUid: string, useGemini = true) {
     }
 
     console.log(
-      `Finished. Processed = ${processedCount}, Skipped = ${skippedCount}, total = ${rows.length}`
+      `Finished. Processed = ${processedCount}, Skipped = ${skippedCount}, total = ${jobs.length}`
     );
   } catch (error) {
     console.error('Unhandled error in uploadJobs:', error);

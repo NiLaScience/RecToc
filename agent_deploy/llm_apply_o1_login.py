@@ -760,11 +760,13 @@ async def run_job_application(job_url: str, candidate_profile: CandidateProfile)
         )
     )
 
-    # We'll define a prompt that instructs the agent:
-    #   - open the job url
-    #   - if needed, attempt to login using "perform_login_flow"
-    #   - fill out the application form using fill_fields_iteratively approach
-    instructions_for_agent = f"""
+    agent = None
+    try:
+        # We'll define a prompt that instructs the agent:
+        #   - open the job url
+        #   - if needed, attempt to login using "perform_login_flow"
+        #   - fill out the application form using fill_fields_iteratively approach
+        instructions_for_agent = f"""
 1. If you see you are on a known site that requires login (like LinkedIn, Indeed),
    call 'perform_login_flow' with the site name to login first.
 2. Navigate to: {job_url}
@@ -793,16 +795,15 @@ Note:
 """
 
 
-    agent = Agent(
-        task=instructions_for_agent,
-        llm=ChatOpenAI(model="gpt-4o", temperature=0),
-        browser=browser,
-        controller=controller,
-        max_actions_per_step=6,
-        use_vision=True
-    )
+        agent = Agent(
+            task=instructions_for_agent,
+            llm=ChatOpenAI(model="gpt-4o", temperature=0),
+            browser=browser,
+            controller=controller,
+            max_actions_per_step=6,
+            use_vision=True
+        )
 
-    try:
         # 1) Start the agent's main instructions
         await agent.run(max_steps=50)
 
@@ -821,13 +822,19 @@ Note:
                     {"index": idx},
                     agent.browser_context
                 )
-                await asyncio.sleep(3)
+                await asyncio.sleep(3)  # Wait for submission to complete
                 break
 
-        logger.info("Done with application flow. Possibly we are at the confirmation page now.")
+        # After form submission, wait a moment for any final page loads
+        await asyncio.sleep(3)
+        logger.info("Done with application flow. Browser-use will create GIF automatically.")
+            
     except Exception as e:
-        logger.error(f"Error in agent run: {e}")
+        logger.error(f"Error in agent run: {str(e)}")
+        raise
     finally:
+        if agent:
+            await agent.browser_context.close()
         logger.info("Closing browser.")
         await browser.close()
 

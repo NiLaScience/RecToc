@@ -9,23 +9,25 @@
   - [x] Add CV file storage and URL transmission to the agent.
   - [x] Structure login credentials as platform-keyed object (e.g., `{linkedin: {username, password}, indeed: {username, password}}`)
 
-- [ ] **Refine the `/apply` Endpoint on the EC2 Server**  
-  - [ ] Update the Pydantic model to include:
+- [x] **Refine the `/apply` Endpoint on the EC2 Server**  
+  - [x] Update the Pydantic model to include:
     - `request_id`
+    - `user_id`
+    - `job_id`
     - Complete `cv` object
     - Complete `job_description` object
     - `cv_file_url`
     - Platform-keyed `login_credentials` object
-  - [ ] Write or update the Firestore document using the provided `request_id`, setting `agentStatus` to "queued."  
-  - [ ] Enqueue the processing job in a worker or background task.  
+  - [x] Write or update the Firestore document using the provided `request_id`, setting `agentStatus` to "queued."  
+  - [x] Enqueue the processing job in a worker or background task.  
 
-- [ ] **Implement the Worker Logic**  
-  - [ ] Accept the `request_id` and any other needed fields (e.g., `job_url`, `cv`, `job_description`, `cv_file_url`, credentials).  
-  - [ ] Download CV file from Firebase Storage URL.
-  - [ ] Update Firestore to `agentStatus` = "processing" when the job starts.  
-  - [ ] Perform the automated application steps and generate the GIF.  
-  - [ ] Upload the GIF to Firebase Storage and store the public URL in Firestore (`agentGifUrl`).  
-  - [ ] Update Firestore to `agentStatus` = "completed" or "failed" when done.  
+- [x] **Implement the Worker Logic**  
+  - [x] Accept the `request_id` and any other needed fields (e.g., `job_url`, `cv`, `job_description`, `cv_file_url`, credentials).  
+  - [x] Download CV file from Firebase Storage URL.
+  - [x] Update Firestore to `agentStatus` = "processing" when the job starts.  
+  - [x] Perform the automated application steps and generate the GIF.  
+  - [x] Upload the GIF to Firebase Storage and store the public URL in Firestore (`agentGifUrl`).  
+  - [x] Update Firestore to `agentStatus` = "completed" or "failed" when done.  
 
 - [x] **Integrate Firebase Updates in the App**  
   - [x] Extend the Firestore document schema to include fields like `agentRequestId`, `agentStatus`, and `agentGifUrl`.  
@@ -46,8 +48,14 @@
   - [x] Implement credential management UI with add/delete functionality.
   - [x] Send complete credentials object to agent for flexible platform handling.
 
+- [ ] **Security and Infrastructure**
+  - [ ] Configure TLS on the EC2 endpoint
+  - [ ] Set up proper Firestore rules for agent access
+  - [ ] Implement rate limiting and request validation
+  - [ ] Add monitoring and error tracking
+  - [ ] Set up automated backups for Redis queue
+
 - [ ] **Ensure End-to-End HTTPS**  
-  - [ ] Configure TLS on the EC2 endpoint to protect credentials and application data.  
   - [ ] Verify all communication between the Capacitor app, EC2 server, and Firebase is over secure channels.  
 
 - [ ] **Confirm Firestore Rules**  

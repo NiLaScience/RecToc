@@ -73,3 +73,9 @@ logs
 service-account.json
 
 scripts/firestore-queries/*
+
+agent_deploy/*.json
+
+agent_deploy/*.csv
+
+agent_deploy/__pycache__
