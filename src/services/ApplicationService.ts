@@ -17,6 +17,7 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import type { JobApplication, JobApplicationCreate, JobApplicationUpdate, ApplicationStatus } from '../types/application';
+import type { VideoItem } from '../types/video';
 import TranscriptionService from './TranscriptionService';
 import ThumbnailService from './ThumbnailService';
 import { Preferences } from '@capacitor/preferences';
@@ -595,7 +596,10 @@ class ApplicationService {
       throw new Error('Job not found');
     }
     
-    const jobData = jobResponse.snapshot.data;
+    const jobData = {
+      id: application.jobId,
+      ...jobResponse.snapshot.data
+    } as VideoItem;  // Type assertion since we know this is a VideoItem
 
     // Check if the job has an application URL
     if (!jobData.applicationUrl) {
@@ -628,6 +632,18 @@ class ApplicationService {
     } catch (error) {
       console.warn('Could not retrieve job board credentials:', error);
     }
+
+    // Create or update the application document with initial agent status
+    await FirebaseFirestore.updateDocument({
+      reference: `${this.COLLECTION}/${applicationId}`,
+      data: {
+        agentStatus: 'queued',
+        status: 'submitted',
+        submittedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        jobUrl: jobData.applicationUrl
+      }
+    });
 
     // Prepare the payload for the AI agent
     const payload = {

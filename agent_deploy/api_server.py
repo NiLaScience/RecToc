@@ -17,8 +17,10 @@ load_dotenv()
 
 import firebase_admin
 from firebase_admin import credentials, storage, firestore
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, HttpUrl
 from redis import Redis
 from rq import Queue
@@ -83,6 +85,15 @@ queue = Queue('applications', connection=redis_conn)
 
 # Initialize FastAPI
 app = FastAPI(title="Job Application API")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
 # No rate limiting for now
 @app.on_event("startup")
@@ -232,6 +243,24 @@ async def get_queue_status() -> JSONResponse:
         'scheduled_jobs': len(queue.scheduled_job_registry),
         'started_jobs': len(queue.started_job_registry)
     })
+
+# Add error handler for validation errors
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    body = await request.json()
+    logger.error(f"Validation error details: {exc.errors()}")
+    logger.error(f"Request body: {json.dumps(body, indent=2)}")
+    logger.error(f"Missing fields: {[err['loc'] for err in exc.errors() if err['type'] == 'missing']}")
+    logger.error(f"Field types: {[(k, type(v).__name__) for k,v in body.items()]}")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": exc.errors(),
+            "body": body,
+            "missing_fields": [err['loc'] for err in exc.errors() if err['type'] == 'missing'],
+            "field_types": {k: type(v).__name__ for k,v in body.items()}
+        },
+    )
 
 if __name__ == "__main__":
     import uvicorn

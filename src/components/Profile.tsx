@@ -234,11 +234,12 @@ const Profile = () => {
     try {
       // First upload the file to Firebase Storage
       let cvFileUrl: string;
+      const fileName = `cv_${Date.now()}.pdf`;
+      const storagePath = `users/${user.uid}/cv/${fileName}`;
       
       if (Capacitor.isNativePlatform()) {
         // For native platforms, we need to write to filesystem first
         const blob = await file.arrayBuffer();
-        const fileName = `cv_${Date.now()}.pdf`;
         await Filesystem.writeFile({
           path: fileName,
           data: Buffer.from(blob).toString('base64'),
@@ -254,16 +255,21 @@ const Profile = () => {
         // Upload to Firebase Storage
         cvFileUrl = await new Promise<string>((resolve, reject) => {
           FirebaseStorage.uploadFile({
-            path: `users/${user.uid}/cv/${fileName}`,
+            path: storagePath,
             uri: fileInfo.uri,
             metadata: { contentType: file.type }
-          }, (progress, error) => {
+          }, async (progress, error) => {
             if (error) {
               reject(error);
             } else if (progress?.completed) {
-              FirebaseStorage.getDownloadUrl({ path: `users/${user.uid}/cv/${fileName}` })
-                .then(result => resolve(result.downloadUrl))
-                .catch(reject);
+              try {
+                // Wait a short time before getting the download URL
+                await new Promise(r => setTimeout(r, 1000));
+                const result = await FirebaseStorage.getDownloadUrl({ path: storagePath });
+                resolve(result.downloadUrl);
+              } catch (err) {
+                reject(err);
+              }
             }
           });
         });
@@ -277,16 +283,21 @@ const Profile = () => {
         // For web, use the blob directly
         cvFileUrl = await new Promise<string>((resolve, reject) => {
           FirebaseStorage.uploadFile({
-            path: `users/${user.uid}/cv/cv_${Date.now()}.pdf`,
+            path: storagePath,
             blob: file,
             metadata: { contentType: file.type }
-          }, (progress, error) => {
+          }, async (progress, error) => {
             if (error) {
               reject(error);
             } else if (progress?.completed) {
-              FirebaseStorage.getDownloadUrl({ path: `users/${user.uid}/cv/cv_${Date.now()}.pdf` })
-                .then(result => resolve(result.downloadUrl))
-                .catch(reject);
+              try {
+                // Wait a short time before getting the download URL
+                await new Promise(r => setTimeout(r, 1000));
+                const result = await FirebaseStorage.getDownloadUrl({ path: storagePath });
+                resolve(result.downloadUrl);
+              } catch (err) {
+                reject(err);
+              }
             }
           });
         });

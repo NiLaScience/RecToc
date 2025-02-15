@@ -618,7 +618,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
                           ApplicationService.submitApplicationToAIAgent(application.id);
                         }
                       }}
-                      disabled={!application?.id || !application?.videoURL}
+                      disabled={!application?.id}
                     >
                       🤖 Submit to AI Agent
                     </IonButton>
