@@ -1,9 +1,5 @@
 import {
   IonContent,
-  IonHeader,
-  IonToolbar,
-  IonTitle,
-  IonButtons,
   IonButton,
   IonIcon,
   IonCard,
@@ -11,11 +7,7 @@ import {
   IonCardHeader,
   IonCardTitle,
   IonCardSubtitle,
-  IonList,
-  IonItem,
-  IonLabel,
   IonChip,
-  IonRouterLink,
   IonToast,
 } from '@ionic/react';
 import { closeOutline, paperPlaneOutline, chatbubbleOutline } from 'ionicons/icons';
@@ -30,7 +22,7 @@ import { useAuth } from '../context/AuthContext';
 interface JobDetailsProps {
   job: JobOpening;
   onClose?: () => void;
-  mode?: 'modal' | 'page';
+  mode?: 'modal' | 'page' | 'details';
 }
 
 interface JobDescription {
