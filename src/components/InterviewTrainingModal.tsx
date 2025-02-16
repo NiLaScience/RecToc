@@ -26,10 +26,9 @@ import type { UserProfile } from '../types/user';
 import type { JobOpening } from '../types/job_opening';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
-import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
+import { ListContent, ChipsContent } from './shared/AccordionContent';
 import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
 import CVAccordion from './shared/CVAccordion';
-import ChatMessage from './ChatMessage';
 
 import ApplicationService from '../services/ApplicationService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';

@@ -3,12 +3,11 @@ import { IonIcon, IonButton, IonAvatar, IonSpinner } from '@ionic/react';
 import { volumeHighOutline, volumeMuteOutline, eyeOutline, eyeOffOutline, playCircleOutline, pauseCircleOutline } from 'ionicons/icons';
 import { JobOpening } from '../types/job_opening';
 import type { UserProfile } from '../types/user';
-import SubtitleService from '../services/SubtitleService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import VideoDetails from './VideoDetails';
 import { App } from '@capacitor/app';
 import { useHistory } from 'react-router-dom';
-import { useSwipeable } from 'react-swipeable';
+
 
 interface VideoPlayerProps {
   video: JobOpening;
