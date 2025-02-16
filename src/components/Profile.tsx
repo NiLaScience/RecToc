@@ -31,6 +31,7 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { useRouter } from 'next/navigation';
 import type { UserProfile } from '../types/user';
+import type { CVSchema } from '../types/parser';
 import { 
   uploadFile, 
   addSnapshotListener, 
@@ -41,8 +42,7 @@ import {
   unrejectJob,
   rejectJob,
 } from '../config/firebase';
-import CVParserService from '../services/CVParserService';
-import { GeminiParserService } from '../services/GeminiParserService';
+import { ParserService } from '../services/ParserService';
 import AppHeader from './AppHeader';
 import { pencilOutline, chatbubbleOutline } from 'ionicons/icons';
 import AccordionGroup from './shared/AccordionGroup';
@@ -78,6 +78,7 @@ const Profile = () => {
   const [useGemini, setUseGemini] = useState(true);
   const [isRealtimeModalOpen, setIsRealtimeModalOpen] = useState(false);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const parser = new ParserService(process.env.NEXT_PUBLIC_GEMINI_API_KEY!);
 
   // Helper function to update all profile-related state
   const updateProfileState = (profileData: UserProfile) => {
@@ -257,90 +258,54 @@ const Profile = () => {
           FirebaseStorage.uploadFile({
             path: storagePath,
             uri: fileInfo.uri,
-            metadata: { contentType: file.type }
-          }, async (progress, error) => {
-            if (error) {
-              reject(error);
-            } else if (progress?.completed) {
-              try {
-                // Wait a short time before getting the download URL
-                await new Promise(r => setTimeout(r, 1000));
-                const result = await FirebaseStorage.getDownloadUrl({ path: storagePath });
-                resolve(result.downloadUrl);
-              } catch (err) {
-                reject(err);
-              }
+            metadata: { contentType: 'application/pdf' }
+          }, (progress, error) => {
+            if (error) reject(error);
+            if (progress?.completed) {
+              FirebaseStorage.getDownloadUrl({ path: storagePath })
+                .then(result => resolve(result.downloadUrl))
+                .catch(reject);
             }
           });
         });
 
-        // Clean up the temporary file
+        // Clean up temp file
         await Filesystem.deleteFile({
           path: fileName,
           directory: Directory.Cache
         });
       } else {
-        // For web, use the blob directly
-        cvFileUrl = await new Promise<string>((resolve, reject) => {
-          FirebaseStorage.uploadFile({
-            path: storagePath,
-            blob: file,
-            metadata: { contentType: file.type }
-          }, async (progress, error) => {
-            if (error) {
-              reject(error);
-            } else if (progress?.completed) {
-              try {
-                // Wait a short time before getting the download URL
-                await new Promise(r => setTimeout(r, 1000));
-                const result = await FirebaseStorage.getDownloadUrl({ path: storagePath });
-                resolve(result.downloadUrl);
-              } catch (err) {
-                reject(err);
-              }
-            }
-          });
+        // For web platform, upload directly
+        cvFileUrl = await uploadFile(storagePath, undefined, {
+          contentType: 'application/pdf',
+          blob: file
         });
       }
 
-      // Now parse the CV
-      let parsedData;
-      if (useGemini) {
-        const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-        if (!geminiApiKey) {
-          throw new Error('NEXT_PUBLIC_GEMINI_API_KEY is not configured in your environment');
-        }
-        const geminiParser = new GeminiParserService(geminiApiKey);
-        // Convert File to base64 for Gemini
-        const fileBuffer = await file.arrayBuffer();
-        const base64String = Buffer.from(fileBuffer).toString('base64');
-        parsedData = await geminiParser.parseCV(base64String);
-      } else {
-        parsedData = await CVParserService.parseCV(file);
-      }
-      
-      // Update user profile with both CV data and file URL
+      // Parse the CV
+      const parsedCV = await parser.uploadAndParsePDF<CVSchema>(file, 'parsedCVs');
+
+      // Update the profile document
       await updateDocument(`users/${user.uid}`, {
-        cv: parsedData,
         cvFileUrl,
+        cv: parsedCV,
         updatedAt: new Date().toISOString()
       });
 
       presentToast({
         message: 'CV uploaded and parsed successfully',
-        duration: 2000,
+        duration: 3000,
         color: 'success'
       });
     } catch (error) {
       console.error('Error uploading CV:', error);
       presentToast({
-        message: 'Failed to upload CV. Please try again.',
-        duration: 2000,
-        color: 'danger'
+        message: 'Failed to upload CV',
+        duration: 3000,
+        color: 'warning'
       });
     } finally {
       setCVUploading(false);
-      setCVFile(null);
     }
   };
 

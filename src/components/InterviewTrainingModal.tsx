@@ -34,7 +34,7 @@ import ChatMessage from './ChatMessage';
 import ApplicationService from '../services/ApplicationService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import { useInterviewCoach } from '../hooks/useInterviewCoach';
-import type { JobDescriptionSchema } from '../services/OpenAIService';
+import type { JobDescriptionSchema } from '../types/parser';
 import '../styles/chat.css';
 
 interface InterviewTrainingModalProps {

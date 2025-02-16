@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useBaseRealtimeConnection, ServerEvent, SessionStatus } from './useBaseRealtimeConnection';
-import type { CVSchema, JobDescriptionSchema } from '../services/OpenAIService';
+import type { CVSchema, JobDescriptionSchema } from '../types/parser';
 
 export type InterviewStage = 'intro' | 'technical' | 'behavioral' | 'problemSolving' | 'cultureFit' | 'closing';
 

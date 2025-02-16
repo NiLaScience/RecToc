@@ -30,7 +30,7 @@ import { Capacitor } from '@capacitor/core';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
-import type { CVSchema, JobDescriptionSchema } from '../services/OpenAIService';
+import type { CVSchema, JobDescriptionSchema } from '../types/parser';
 import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
 import CVAccordion from './shared/CVAccordion';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';

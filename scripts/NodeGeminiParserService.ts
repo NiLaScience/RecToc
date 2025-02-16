@@ -1,17 +1,10 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import type { JobDescriptionSchema } from '../src/services/OpenAIService';
-import { JobDescriptionSchemaObj } from '../src/services/OpenAIService';
+import type { JobDescriptionSchema } from '../src/types/parser';
+import { JobDescriptionSchemaObj } from '../src/types/parser';
 
 function cleanJsonResponse(text: string): string {
   // Remove markdown code block markers and any language identifier
-  text = text.replace(/```(?:json)?\s*/g, '');
-  // Remove any trailing backticks
-  text = text.replace(/\s*```\s*$/g, '');
-  // Normalize line breaks and whitespace
-  text = text.replace(/\r\n/g, '\n');
-  text = text.replace(/\n\s+/g, '\n');
-  // Remove any non-printable characters
-  text = text.replace(/[^\x20-\x7E\n]/g, '');
+  text = text.replace(/```(?:json)?\n/g, '').replace(/\n```$/g, '');
   // Remove any leading/trailing whitespace
   text = text.trim();
   return text;

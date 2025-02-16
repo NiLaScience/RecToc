@@ -9,11 +9,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import { File } from '@web-std/file';
 
-import { NodeGeminiParserService } from './NodeGeminiParserService';
-import PDFParserService from '../src/services/PDFParserService';
+import { ParserService } from '../src/services/ParserService';
 import NodeThumbnailService from './NodeThumbnailService';
 import NodeTranscriptionService from './NodeTranscriptionService';
-import type { JobDescriptionSchema } from '../src/services/OpenAIService';
+import type { JobDescriptionSchema } from '../src/types/parser';
 
 //
 // 1) Initialize Firebase Admin
@@ -119,31 +118,15 @@ async function uploadVideo(
 }
 
 //
-// 5) Parse a job description with optional Gemini or PDF approach
+// 5) Parse a job description with Gemini
 //
-async function parseJobDescription(
-  text: string,
-  useGemini = true
-): Promise<JobDescriptionSchema> {
-  if (useGemini) {
-    const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    if (!geminiApiKey) {
-      throw new Error(
-        'NEXT_PUBLIC_GEMINI_API_KEY is not configured in your environment'
-      );
-    }
-    const geminiParser = new NodeGeminiParserService(geminiApiKey);
-    // The parseJobDescription in NodeGeminiParserService expects plain text,
-    // but your local code base64-encodes job text. If that's correct, do:
-    return await geminiParser.parseJobDescription(text);
-  } else {
-    // Fall back to PDF parser
-    // (But you're feeding it text, so adapt if needed.)
-    const fakePDFFile = new File([text], 'job_description.pdf', {
-      type: 'application/pdf',
-    });
-    return await PDFParserService.parsePDF(fakePDFFile);
+async function parseJobDescription(text: string): Promise<JobDescriptionSchema> {
+  const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  if (!geminiApiKey) {
+    throw new Error('NEXT_PUBLIC_GEMINI_API_KEY is not configured in your environment');
   }
+  const parser = new ParserService(geminiApiKey);
+  return await parser.parseJobDescription(text);
 }
 
 //
@@ -156,17 +139,14 @@ async function transcribeVideo(videoPath: string): Promise<TranscriptionResult> 
 //
 // 7) Generate tags from job data + parsed fields
 //
-function generateTags(
-  job: JobRecord,
-  parsed: JobDescriptionSchema
-): string[] {
+function generateTags(job: JobRecord, parsed: JobDescriptionSchema): string[] {
   const tags = new Set<string>();
 
   if (job.company) tags.add(job.company.trim());
   if (parsed.employmentType) tags.add(parsed.employmentType.trim());
   if (parsed.experienceLevel) tags.add(parsed.experienceLevel.trim());
   if (parsed.skills && parsed.skills.length > 0) {
-    parsed.skills.slice(0, 3).forEach((skill) => tags.add(skill.trim()));
+    parsed.skills.slice(0, 3).forEach((skill: string) => tags.add(skill.trim()));
   }
   if (job.location) tags.add(job.location.trim());
 
@@ -177,7 +157,7 @@ function generateTags(
 // 8) Main function that processes jobs from local SQLite
 //    and uploads them to Firestore
 //
-async function uploadJobs(adminUid: string, useGemini = true) {
+async function uploadJobs(adminUid: string) {
   await ensureDirectoriesExist();
 
   // Open the SQLite DB
@@ -229,7 +209,7 @@ async function uploadJobs(adminUid: string, useGemini = true) {
 
         // Parse job description
         console.log(`Parsing job description for job ID ${job.id}...`);
-        const parsed = await parseJobDescription(job.job_description, useGemini);
+        const parsed = await parseJobDescription(job.job_description);
 
         // Transcribe the video
         console.log(`Transcribing video for job ID ${job.id}...`);
@@ -250,22 +230,6 @@ async function uploadJobs(adminUid: string, useGemini = true) {
 
         // Build tags
         const tags = generateTags(job, parsed);
-
-        // Prepare the jobDescription to fit the app's shape
-        // (making sure salary is `parsed.salary || null`)
-        const jobDescription = {
-          title: parsed.title || job.title || 'Untitled',
-          company: parsed.company || job.company || '',
-          location: parsed.location || job.location || '',
-          employmentType: parsed.employmentType || 'Full-time',
-          experienceLevel: parsed.experienceLevel || '',
-          responsibilities: parsed.responsibilities || [],
-          requirements: parsed.requirements || [],
-          skills: parsed.skills || [],
-          benefits: parsed.benefits || [],
-          salary: parsed.salary ?? null,
-          applicationUrl: job.job_url,
-        };
 
         //
         // This is the crucial part:
@@ -321,15 +285,13 @@ async function uploadJobs(adminUid: string, useGemini = true) {
 //
 if (require.main === module) {
   const adminUid = process.argv[2];
-  const geminiArg = process.argv[3];
-  const useGemini = geminiArg !== 'false';
 
   if (!adminUid) {
-    console.error('Usage: ts-node upload_jobs.ts <admin_firebase_uid> [use_gemini]');
+    console.error('Usage: ts-node upload_jobs.ts <admin_firebase_uid>');
     process.exit(1);
   }
 
-  uploadJobs(adminUid, useGemini)
+  uploadJobs(adminUid)
     .then(() => {
       console.log('All jobs uploaded successfully');
       process.exit(0);

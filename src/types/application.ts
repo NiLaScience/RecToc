@@ -1,4 +1,4 @@
-import type { CVSchema } from '../services/OpenAIService';
+import type { CVSchema } from './parser';
 
 export type ApplicationStatus = 'draft' | 'submitted' | 'withdrawn' | 'rejected' | 'accepted';
 export type AgentStatus = 'queued' | 'processing' | 'completed' | 'failed';

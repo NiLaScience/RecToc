@@ -1,4 +1,4 @@
-import type { CVSchema } from '../services/OpenAIService';
+import type { CVSchema } from './parser';
 
 export interface UserProfile {
   id: string;
