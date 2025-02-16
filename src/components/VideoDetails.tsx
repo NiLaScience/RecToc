@@ -18,7 +18,7 @@ import {
   IonRouterLink,
 } from '@ionic/react';
 import { closeOutline, paperPlaneOutline, chatbubbleOutline } from 'ionicons/icons';
-import { VideoItem } from '../types/video';
+import type { JobOpening } from '../types/job_opening';
 import { useState } from 'react';
 import ApplicationModal from './ApplicationModal';
 import AppHeader from './AppHeader';
@@ -26,9 +26,9 @@ import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
 import InterviewTrainingModal from './InterviewTrainingModal';
 
 interface VideoDetailsProps {
-  video: VideoItem;
-  onClose: () => void;
-  onApplicationModalChange?: (isOpen: boolean) => void;
+  video: JobOpening;
+  onClose?: () => void;
+  mode?: 'modal' | 'page';
 }
 
 interface JobDescription {
@@ -44,7 +44,7 @@ interface JobDescription {
   applicationUrl?: string;
 }
 
-const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, onApplicationModalChange }) => {
+const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, mode = 'modal' }) => {
   const [showApplication, setShowApplication] = useState(false);
   const [showTraining, setShowTraining] = useState(false);
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
@@ -73,7 +73,7 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, onApplicati
     if (Math.abs(diffX) > Math.abs(diffY)) {
       // Right to left swipe (close details)
       if (diffX > 50) {
-        onClose();
+        onClose?.();
       }
     }
 
@@ -82,12 +82,10 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, onApplicati
 
   const handleApply = () => {
     setShowApplication(true);
-    onApplicationModalChange?.(true);
   };
 
   const handleCloseApplication = () => {
     setShowApplication(false);
-    onApplicationModalChange?.(false);
   };
 
   const formatTime = (seconds: number) => {

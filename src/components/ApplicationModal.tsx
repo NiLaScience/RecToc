@@ -22,8 +22,8 @@ import { videocamOutline, cameraOutline, closeOutline } from 'ionicons/icons';
 import { useAuth } from '../context/AuthContext';
 import VideoRecorder from './VideoRecorder';
 import type { JobApplication } from '../types/application';
-import type { VideoItem } from '../types/video';
 import type { UserProfile } from '../types/user';
+import type { JobOpening } from '../types/job_opening';
 import ApplicationService from '../services/ApplicationService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import { Capacitor } from '@capacitor/core';
@@ -33,6 +33,7 @@ import { ListContent, ChipsContent, ExperienceContent, EducationContent } from '
 import type { CVSchema, JobDescriptionSchema } from '../services/OpenAIService';
 import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
 import CVAccordion from './shared/CVAccordion';
+import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 
 interface ApplicationModalProps {
   isOpen: boolean;
@@ -45,13 +46,14 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
   const [presentToast] = useIonToast();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [jobPost, setJobPost] = useState<VideoItem | null>(null);
+  const [jobPost, setJobPost] = useState<JobOpening | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [application, setApplication] = useState<JobApplication | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadMode, setUploadMode] = useState<'record' | 'file'>('record');
+  const [error, setError] = useState<string | null>(null);
 
   const defaultJobDescription: JobDescriptionSchema = {
     title: 'Untitled Position',
@@ -78,7 +80,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
           `videos/${jobId}`,
           (data) => {
             if (data) {
-              setJobPost(data as VideoItem);
+              setJobPost(data as JobOpening);
               setLoading(false);
             }
           }
@@ -129,6 +131,29 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
       setLoading(true);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    const fetchJobPost = async () => {
+      try {
+        const response = await FirebaseFirestore.getDocument({
+          reference: `job_openings/${jobId}`
+        });
+
+        if (!response.snapshot?.data) {
+          throw new Error('Job post not found');
+        }
+
+        setJobPost({ id: jobId, ...response.snapshot.data } as JobOpening);
+      } catch (error) {
+        console.error('Error fetching job post:', error);
+        setError('Failed to load job post');
+      }
+    };
+
+    if (jobId) {
+      fetchJobPost();
+    }
+  }, [jobId]);
 
   const handleVideoRecorded = async (uri: string, format: string) => {
     try {

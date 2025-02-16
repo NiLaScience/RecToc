@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { IonIcon, IonButton, IonAvatar, IonSpinner } from '@ionic/react';
 import { volumeHighOutline, volumeMuteOutline, eyeOutline, eyeOffOutline, playCircleOutline, pauseCircleOutline } from 'ionicons/icons';
-import { VideoItem } from '../types/video';
+import { JobOpening } from '../types/job_opening';
 import type { UserProfile } from '../types/user';
 import SubtitleService from '../services/SubtitleService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import VideoDetails from './VideoDetails';
 import { App } from '@capacitor/app';
 import { useHistory } from 'react-router-dom';
+import { useSwipeable } from 'react-swipeable';
 
 interface VideoPlayerProps {
-  video: VideoItem;
+  video: JobOpening;
   onSwipe?: (direction: 'up' | 'down' | 'left' | 'right') => void;
   autoPlay?: boolean;
   onEnded?: () => void;
@@ -670,7 +671,7 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
         <VideoDetails
           video={video}
           onClose={() => setShowDetails(false)}
-          onApplicationModalChange={(isOpen) => setShowApplication(isOpen)}
+          mode="modal"
         />
       )}
 

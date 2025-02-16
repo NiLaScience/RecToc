@@ -17,7 +17,7 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import type { JobApplication, JobApplicationCreate, JobApplicationUpdate, ApplicationStatus } from '../types/application';
-import type { VideoItem } from '../types/video';
+import type { JobOpening } from '../types/job_opening';
 import TranscriptionService from './TranscriptionService';
 import ThumbnailService from './ThumbnailService';
 import { Preferences } from '@capacitor/preferences';
@@ -592,7 +592,7 @@ class ApplicationService {
     
     // Get the job details
     const jobResponse = await FirebaseFirestore.getDocument({
-      reference: `videos/${application.jobId}`
+      reference: `job_openings/${application.jobId}`
     });
     
     if (!jobResponse.snapshot?.data) {
@@ -602,7 +602,7 @@ class ApplicationService {
     const jobData = {
       id: application.jobId,
       ...jobResponse.snapshot.data
-    } as VideoItem;  // Type assertion since we know this is a VideoItem
+    } as JobOpening;  // Type assertion since we know this is a JobOpening
 
     // Check if the job has an application URL
     if (!jobData.applicationUrl) {

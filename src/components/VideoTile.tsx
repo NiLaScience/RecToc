@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import type { VideoItem } from '../types/video';
+import type { JobOpening } from '../types/job_opening';
 import type { UserProfile } from '../types/user';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
+import { IonCard, IonCardContent, IonCardHeader, IonCardTitle } from '@ionic/react';
 
 interface VideoTileProps {
-  video: VideoItem;
+  video: JobOpening;
   onClick: () => void;
 }
 

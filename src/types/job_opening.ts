@@ -26,7 +26,7 @@ export interface Transcript {
   }[];
 }
 
-export interface VideoItem {
+export interface JobOpening {
   id: string;
   title: string;
   videoUrl: string;
@@ -40,4 +40,4 @@ export interface VideoItem {
   transcript?: Transcript | null;
   sourceVideo?: string;
   applicationUrl?: string;
-}
+} 

@@ -4,7 +4,7 @@ import AccordionGroup from './AccordionGroup';
 import AccordionSection from './AccordionSection';
 import { ListContent, ChipsContent } from './AccordionContent';
 import { formatTime } from '../../utils/time';
-import { Transcript } from '../../types/video';
+import { Transcript } from '../../types/job_opening';
 
 interface Segment {
   id: string;

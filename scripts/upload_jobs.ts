@@ -34,7 +34,7 @@ const bucket = getStorage().bucket();
 const DB_PATH = '/Users/gauntlet/Documents/projects/jobs/data/my_database.db';
 const VIDEOS_DIR = '/Users/gauntlet/Documents/projects/jobs/videos';
 
-// The local DB “jobs” table has records shaped roughly like:
+// The local DB "jobs" table has records shaped roughly like:
 interface JobRecord {
   id: number;
   title: string;
@@ -87,7 +87,7 @@ async function uploadVideo(
   // Upload the video
   //
   const videoFileName = path.basename(videoPath); // e.g. "1234.mp4"
-  const videoStoragePath = `videos/${userId}/${videoFileName}`;
+  const videoStoragePath = `job_openings/${userId}/${videoFileName}`;
   const videoFile = bucket.file(videoStoragePath);
 
   await videoFile.save(fileBuffer, {
@@ -138,7 +138,7 @@ async function parseJobDescription(
     return await geminiParser.parseJobDescription(text);
   } else {
     // Fall back to PDF parser
-    // (But you’re feeding it text, so adapt if needed.)
+    // (But you're feeding it text, so adapt if needed.)
     const fakePDFFile = new File([text], 'job_description.pdf', {
       type: 'application/pdf',
     });
@@ -274,17 +274,20 @@ async function uploadJobs(adminUid: string, useGemini = true) {
         //    to match `job.id.toString()`, you must explicitly do doc(job.id.toString()).set(...).
         //
         const documentData = {
-          // No `id` field! We'll let Firestore do the doc ID
           title: job.title,
+          company: job.company,
+          location: job.location,
+          jobUrl: job.job_url,
           videoUrl,
           thumbnailUrl,
-          jobDescription,
-          tags,
+          jobDescription: parsed,
+          tags: generateTags(job, parsed),
           userId: adminUid,
           createdAt: new Date().toISOString(),
           views: 0,
           likes: 0,
-          transcript, // same shape as from Upload.tsx
+          transcript,
+          sourceVideo: videoFileName,
         };
 
         //
@@ -292,7 +295,7 @@ async function uploadJobs(adminUid: string, useGemini = true) {
         // or:
         //   .doc(job.id.toString()).set(documentData)   // if you want the doc ID = local job ID
         //
-        await db.collection('videos').add(documentData);
+        await db.collection('job_openings').add(documentData);
 
         console.log(`Successfully uploaded job ${job.id}`);
         processedCount++;

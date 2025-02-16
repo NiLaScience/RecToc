@@ -19,7 +19,7 @@ import Notifications from './Notifications';
 import VideoPlayer from './VideoPlayer';
 import VideoTile from './VideoTile';
 import ApplicationModal from './ApplicationModal';
-import type { VideoItem } from '../types/video';
+import type { JobOpening } from '../types/job_opening';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import { rejectJob, unrejectJob, getRejectedJobs } from '../config/firebase';
 import type { RejectedJob } from '../config/firebase';
@@ -59,11 +59,11 @@ type FeedMode = 'grid' | 'fullscreen' | 'details';
 
 const Feed = () => {
   const { user } = useAuth();
-  const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [jobs, setJobs] = useState<JobOpening[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
   const [mode, setMode] = useState<FeedMode>('grid');
-  const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
+  const [selectedJob, setSelectedJob] = useState<JobOpening | null>(null);
   const [showApplication, setShowApplication] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [rejectedJobIds, setRejectedJobIds] = useState<Set<string>>(new Set());
@@ -97,7 +97,7 @@ const Feed = () => {
 
         // Listen to all videos
         unsubscribeId = await addSnapshotListener(
-          'videos',
+          'job_openings',
           (videoData) => {
             if (Array.isArray(videoData)) {
               const sortedVideos = videoData.sort((a, b) => {
@@ -106,8 +106,8 @@ const Feed = () => {
                 return dateB - dateA;
               });
               
-              console.log('Processed videos:', sortedVideos);
-              setVideos(sortedVideos as VideoItem[]);
+              console.log('Processed jobs:', sortedVideos);
+              setJobs(sortedVideos as JobOpening[]);
             }
             setLoading(false);
           }
@@ -135,11 +135,8 @@ const Feed = () => {
     event.detail.complete();
   };
 
-  const handleVideoClick = (video: VideoItem) => {
-    if (mode === 'grid') {
-      setSelectedVideo(video);
-      setMode('fullscreen');
-    }
+  const handleJobClick = (job: JobOpening) => {
+    setSelectedJob(job);
   };
 
   const handleApply = (jobId: string) => {
@@ -152,52 +149,52 @@ const Feed = () => {
     setSelectedJobId(null);
   };
 
-  const handleSwipe = async (direction: 'up' | 'down' | 'left' | 'right', video: VideoItem) => {
+  const handleSwipe = async (direction: 'up' | 'down' | 'left' | 'right', job: JobOpening) => {
     if (direction === 'up') {
       // Previous video
-      const currentIndex = videos.findIndex(v => v.id === video.id);
+      const currentIndex = jobs.findIndex(v => v.id === job.id);
       if (currentIndex > 0) {
         // Find the previous non-rejected video if we're not showing rejected videos
         if (!showRejected) {
           for (let i = currentIndex - 1; i >= 0; i--) {
-            const videoId = videos[i].id;
+            const videoId = jobs[i].id;
             if (videoId && !rejectedJobIds.has(videoId)) {
-              setSelectedVideo(videos[i]);
+              setSelectedJob(jobs[i]);
               break;
             }
           }
         } else {
-          setSelectedVideo(videos[currentIndex - 1]);
+          setSelectedJob(jobs[currentIndex - 1]);
         }
       }
     } else if (direction === 'down') {
       // Next video
-      const currentIndex = videos.findIndex(v => v.id === video.id);
-      if (currentIndex < videos.length - 1) {
+      const currentIndex = jobs.findIndex(v => v.id === job.id);
+      if (currentIndex < jobs.length - 1) {
         // Find the next non-rejected video if we're not showing rejected videos
         if (!showRejected) {
-          for (let i = currentIndex + 1; i < videos.length; i++) {
-            if (!rejectedJobIds.has(videos[i].id)) {
-              setSelectedVideo(videos[i]);
+          for (let i = currentIndex + 1; i < jobs.length; i++) {
+            if (!rejectedJobIds.has(jobs[i].id)) {
+              setSelectedJob(jobs[i]);
               break;
             }
           }
         } else {
-          setSelectedVideo(videos[currentIndex + 1]);
+          setSelectedJob(jobs[currentIndex + 1]);
         }
       }
     } else if (direction === 'right') {
       // Reject job
       const newRejectedJobIds = new Set(rejectedJobIds);
-      newRejectedJobIds.add(video.id);
+      newRejectedJobIds.add(job.id);
       setRejectedJobIds(newRejectedJobIds);
       setShowToast(true);
 
       // Find next non-rejected video
-      const currentIndex = filteredVideos.findIndex(v => v.id === video.id);
-      const nextVideo = filteredVideos.slice(currentIndex + 1).find(v => !newRejectedJobIds.has(v.id));
-      if (nextVideo) {
-        setSelectedVideo(nextVideo);
+      const currentIndex = jobs.findIndex(v => v.id === job.id);
+      const nextJob = jobs.slice(currentIndex + 1).find(v => !newRejectedJobIds.has(v.id));
+      if (nextJob) {
+        setSelectedJob(nextJob);
       } else {
         setMode('grid');
       }
@@ -206,7 +203,7 @@ const Feed = () => {
       try {
         const userRef = doc(db, 'users', user?.uid || '');
         await updateDoc(userRef, {
-          [`rejectedJobs.${video.id}`]: serverTimestamp()
+          [`rejectedJobs.${job.id}`]: serverTimestamp()
         });
       } catch (error) {
         console.error('Error updating rejected jobs:', error);
@@ -214,7 +211,7 @@ const Feed = () => {
     } else if (direction === 'left') {
       // Show details
       setMode('details');
-      setSelectedJobId(video.id);
+      setSelectedJobId(job.id);
     }
   };
 
@@ -233,12 +230,12 @@ const Feed = () => {
   };
 
   // Filter videos in memory based on rejection status
-  const filteredVideos = useMemo(() => {
-    return videos.filter(video => {
-      const isRejected = rejectedJobIds.has(video.id);
+  const filteredJobs = useMemo(() => {
+    return jobs.filter(job => {
+      const isRejected = rejectedJobIds.has(job.id);
       return showRejected ? isRejected : !isRejected;
     });
-  }, [videos, rejectedJobIds, showRejected]);
+  }, [jobs, rejectedJobIds, showRejected]);
 
   return (
     <IonPage>
@@ -249,12 +246,12 @@ const Feed = () => {
           showFeedButtons
           onToggleView={() => {
             if (mode === 'grid') {
-              if (!selectedVideo && videos.length > 0) {
-                const firstVideo = !showRejected 
-                  ? videos.find(v => !rejectedJobIds.has(v.id))
-                  : videos[0];
-                if (firstVideo) {
-                  setSelectedVideo(firstVideo);
+              if (!selectedJob && jobs.length > 0) {
+                const firstJob = !showRejected 
+                  ? jobs.find(v => !rejectedJobIds.has(v.id))
+                  : jobs[0];
+                if (firstJob) {
+                  setSelectedJob(firstJob);
                 }
               }
               setMode('fullscreen');
@@ -294,7 +291,7 @@ const Feed = () => {
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
             <IonSpinner />
           </div>
-        ) : videos.length === 0 ? (
+        ) : jobs.length === 0 ? (
           <div style={emptyStateStyle}>
             <p>No videos available</p>
           </div>
@@ -304,33 +301,33 @@ const Feed = () => {
               ...feedContainerStyle,
               marginTop: '-56px'
             }}>
-              {filteredVideos.map((video) => (
+              {filteredJobs.map((job) => (
                 <VideoTile
-                  key={video.id}
-                  video={video}
-                  onClick={() => handleVideoClick(video)}
+                  key={job.id}
+                  video={job}
+                  onClick={() => handleJobClick(job)}
                 />
               ))}
             </div>
           </div>
         ) : (
           <div style={fullscreenVideoStyle}>
-            {selectedVideo && (
+            {selectedJob && (
               <VideoPlayer
-                video={selectedVideo}
+                video={selectedJob}
                 autoPlay
                 mode="feed"
                 onEnded={() => {
                   // Find next video
-                  const currentIndex = filteredVideos.findIndex(v => v.id === selectedVideo.id);
-                  const nextVideo = filteredVideos[currentIndex + 1];
-                  if (nextVideo) {
-                    setSelectedVideo(nextVideo);
+                  const currentIndex = jobs.findIndex(v => v.id === selectedJob.id);
+                  const nextJob = jobs[currentIndex + 1];
+                  if (nextJob) {
+                    setSelectedJob(nextJob);
                   } else {
                     setMode('grid');
                   }
                 }}
-                onSwipe={(direction) => handleSwipe(direction, selectedVideo)}
+                onSwipe={(direction) => handleSwipe(direction, selectedJob)}
               />
             )}
           </div>

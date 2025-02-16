@@ -18,11 +18,12 @@ import {
   IonIcon,
 } from '@ionic/react';
 import { closeOutline } from 'ionicons/icons';
+import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 
 import { useAuth } from '../context/AuthContext';
 import type { JobApplication } from '../types/application';
-import type { VideoItem } from '../types/video';
 import type { UserProfile } from '../types/user';
+import type { JobOpening } from '../types/job_opening';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
@@ -57,8 +58,9 @@ const defaultJobDescription: JobDescriptionSchema = {
 const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen, onClose, jobId }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [jobPost, setJobPost] = useState<VideoItem | null>(null);
+  const [jobPost, setJobPost] = useState<JobOpening | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Set up the interview coach
   const {
@@ -95,9 +97,9 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
       if (!user) return;
 
       try {
-        jobUnsubscribeId = await addSnapshotListener(`videos/${jobId}`, (data) => {
+        jobUnsubscribeId = await addSnapshotListener(`job_openings/${jobId}`, (data) => {
           if (data) {
-            setJobPost(data as VideoItem);
+            setJobPost(data as JobOpening);
             setLoading(false);
           }
         });
@@ -120,6 +122,29 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
       if (profileUnsubscribeId) removeSnapshotListener(profileUnsubscribeId);
     };
   }, [user, jobId, isOpen]);
+
+  useEffect(() => {
+    const fetchJobPost = async () => {
+      try {
+        const response = await FirebaseFirestore.getDocument({
+          reference: `job_openings/${jobId}`
+        });
+
+        if (!response.snapshot?.data) {
+          throw new Error('Job post not found');
+        }
+
+        setJobPost({ id: jobId, ...response.snapshot.data } as JobOpening);
+      } catch (error) {
+        console.error('Error fetching job post:', error);
+        setError('Failed to load job post');
+      }
+    };
+
+    if (jobId) {
+      fetchJobPost();
+    }
+  }, [jobId]);
 
   // Handle cleanup when modal closes
   useEffect(() => {

@@ -18,11 +18,12 @@ import {
   IonIcon,
 } from '@ionic/react';
 import { closeOutline } from 'ionicons/icons';
+import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 
 import { useAuth } from '../context/AuthContext';
 import type { JobApplication } from '../types/application';
-import type { VideoItem } from '../types/video';
 import type { UserProfile } from '../types/user';
+import type { JobOpening } from '../types/job_opening';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
@@ -43,6 +44,8 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [jobPost, setJobPost] = useState<JobOpening | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Set up the onboarding coach
   const {
@@ -94,6 +97,39 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
       if (profileUnsubscribeId) removeSnapshotListener(profileUnsubscribeId);
     };
   }, [user, isOpen]);
+
+  useEffect(() => {
+    const fetchJobPost = async () => {
+      try {
+        const response = await FirebaseFirestore.getCollection({
+          reference: 'job_openings',
+          queryConstraints: [
+            {
+              fieldPath: 'createdAt',
+              directionStr: 'desc',
+              type: 'orderBy'
+            }
+          ]
+        });
+
+        if (!response.snapshots?.[0]?.data) {
+          throw new Error('No job posts found');
+        }
+
+        setJobPost({
+          id: response.snapshots[0].id,
+          ...response.snapshots[0].data
+        } as JobOpening);
+      } catch (error) {
+        console.error('Error fetching job post:', error);
+        setError('Failed to load job post');
+      }
+    };
+
+    if (isOpen) {
+      fetchJobPost();
+    }
+  }, [isOpen]);
 
   // Handle cleanup when modal closes
   useEffect(() => {

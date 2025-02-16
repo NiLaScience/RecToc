@@ -27,34 +27,35 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import ApplicationService from '../services/ApplicationService';
 import { JobApplication } from '../types/application';
-import { VideoItem } from '../types/video';
 import { timeOutline, documentTextOutline, businessOutline } from 'ionicons/icons';
 import { formatDistanceToNow } from 'date-fns';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import VideoDetails from './VideoDetails';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import type { ApplicationStatus, AgentStatus } from '../types/application';
+import type { JobOpening } from '../types/job_opening';
 
 const Applications: React.FC = () => {
   const { user } = useAuth();
-  const [applications, setApplications] = useState<(JobApplication & { jobDetails?: VideoItem })[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [applications, setApplications] = useState<(JobApplication & { jobDetails?: JobOpening })[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedJob, setSelectedJob] = useState<JobOpening | null>(null);
 
-  const fetchJobDetails = async (jobId: string): Promise<VideoItem | null> => {
+  const fetchJobDetails = async (jobId: string): Promise<JobOpening | null> => {
     try {
-      const result = await FirebaseFirestore.getDocument({
-        reference: `videos/${jobId}`
+      const response = await FirebaseFirestore.getDocument({
+        reference: `job_openings/${jobId}`
       });
-      
-      if (!result.snapshot?.data) {
+
+      if (!response.snapshot?.data) {
         return null;
       }
 
       return {
         id: jobId,
-        ...result.snapshot.data
-      } as VideoItem;
+        ...response.snapshot.data
+      } as JobOpening;
     } catch (error) {
       console.error('Error fetching job details:', error);
       return null;
@@ -69,7 +70,7 @@ const Applications: React.FC = () => {
       if (!user) return;
 
       try {
-        setLoading(true);
+        setIsLoading(true);
         
         // Listen to applications collection with query for current user
         applicationsUnsubscribeId = await addSnapshotListener(
@@ -106,12 +107,12 @@ const Applications: React.FC = () => {
               const jobId = app.job_id || app.jobId;
               if (jobId && !jobDetailsUnsubscribers[jobId]) {
                 jobDetailsUnsubscribers[jobId] = await addSnapshotListener(
-                  `videos/${jobId}`,
+                  `job_openings/${jobId}`,
                   (jobData) => {
                     if (jobData) {
                       setApplications(prev => prev.map(prevApp => 
                         (prevApp.job_id === jobId || prevApp.jobId === jobId)
-                          ? { ...prevApp, jobDetails: { id: jobId, ...jobData } as VideoItem }
+                          ? { ...prevApp, jobDetails: { id: jobId, ...jobData } as JobOpening }
                           : prevApp
                       ));
                     }
@@ -137,12 +138,12 @@ const Applications: React.FC = () => {
 
             console.log('Setting applications:', appsWithDetails);
             setApplications(appsWithDetails);
-            setLoading(false);
+            setIsLoading(false);
           }
         );
       } catch (error) {
         console.error('Error setting up listeners:', error);
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
@@ -218,7 +219,7 @@ const Applications: React.FC = () => {
         </IonRefresher>
 
         <IonList style={{ background: 'transparent', padding: '1rem' }}>
-          {loading ? (
+          {isLoading ? (
             renderSkeletons()
           ) : applications.length > 0 ? (
             applications.map((application) => (
@@ -267,7 +268,7 @@ const Applications: React.FC = () => {
                     button
                     onClick={() => {
                       if (application.jobDetails) {
-                        setSelectedVideo(application.jobDetails);
+                        setSelectedJob(application.jobDetails);
                       }
                     }}
                     style={{
@@ -379,13 +380,13 @@ const Applications: React.FC = () => {
         </IonList>
 
         <IonModal 
-          isOpen={!!selectedVideo} 
-          onDidDismiss={() => setSelectedVideo(null)}
+          isOpen={!!selectedJob} 
+          onDidDismiss={() => setSelectedJob(null)}
         >
-          {selectedVideo && (
+          {selectedJob && (
             <VideoDetails
-              video={selectedVideo}
-              onClose={() => setSelectedVideo(null)}
+              video={selectedJob}
+              onClose={() => setSelectedJob(null)}
             />
           )}
         </IonModal>
