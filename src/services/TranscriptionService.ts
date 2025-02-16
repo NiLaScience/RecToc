@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import CloudFunctionService from './CloudFunctionService';
 
 interface TranscriptionResult {
   text: string;
@@ -13,14 +14,6 @@ interface TranscriptionResult {
 
 class TranscriptionService {
   private static readonly MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB in bytes
-
-  private static async getOpenAIKey(): Promise<string> {
-    const key = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-    if (!key) {
-      throw new Error('OpenAI API key not found in environment variables');
-    }
-    return key;
-  }
 
   private static async extractAudioFromVideo(videoBlob: Blob): Promise<Blob> {
     return new Promise((resolve, reject) => {
@@ -146,7 +139,6 @@ class TranscriptionService {
 
   static async transcribeVideo(videoUri: string | File): Promise<TranscriptionResult> {
     try {
-      const apiKey = await this.getOpenAIKey();
       let audioBlob: Blob;
 
       if (videoUri instanceof File) {
@@ -174,37 +166,57 @@ class TranscriptionService {
         throw new Error('Failed to prepare audio for transcription');
       }
 
-      console.log('Preparing form data for transcription...');
-      const formData = new FormData();
-      formData.append('file', audioBlob, 'audio.webm');
-      formData.append('model', 'whisper-1');
-      formData.append('response_format', 'verbose_json');
-      formData.append('language', 'en');
-
-      console.log('Sending transcription request...');
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: formData
+      // Convert blob to base64
+      const reader = new FileReader();
+      const audioBase64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result.split(',')[1]); // Remove data URL prefix
+          } else {
+            reject(new Error('Failed to convert audio to base64'));
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlob);
       });
 
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('Transcription API error:', error);
-        throw new Error(`Transcription failed: ${error}`);
-      }
+      // Call the Cloud Function using CloudFunctionService
+      console.log('Sending transcription request to Cloud Function...');
+      const result = await CloudFunctionService.callFunction<
+        {
+          type: string;
+          audioData: string;
+          options: {
+            response_format: string;
+            language: string;
+          };
+        },
+        {
+          text: string;
+          segments: Array<{
+            id: number;
+            start: number;
+            end: number;
+            text: string;
+          }>;
+        }
+      >('callOpenAIAPI', {
+        type: 'transcription',
+        audioData: audioBase64,
+        options: {
+          response_format: 'verbose_json',
+          language: 'en',
+        },
+      });
 
-      const result = await response.json();
       return {
         text: result.text,
-        segments: result.segments.map((segment: any) => ({
+        segments: result.segments.map(segment => ({
           id: segment.id,
           start: segment.start,
           end: segment.end,
-          text: segment.text
-        }))
+          text: segment.text,
+        })),
       };
     } catch (error) {
       console.error('Transcription error:', error);

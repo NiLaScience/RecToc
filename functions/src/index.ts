@@ -9,6 +9,8 @@
 
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
+import OpenAI from "openai";
+import type {JobOpening, UserProfile} from "./types";
 
 // Initialize with explicit permissions
 admin.initializeApp();
@@ -16,235 +18,11 @@ admin.initializeApp();
 // Start writing functions
 // https://firebase.google.com/docs/functions/typescript
 
-interface ParserResult {
-  text: string | null;
-}
-
 // Dynamic imports for ESM modules
 const getFetch = async () => {
   const module = await import("node-fetch");
   return module.default;
 };
-
-const getFormData = async () => {
-  const module = await import("form-data");
-  return module.default;
-};
-
-export const onPDFUploaded = functions.storage
-  .object()
-  .onFinalize(async (object) => {
-    // Only process PDF files in the pdfs-to-parse directory
-    if (
-      !object.name?.startsWith("pdfs-to-parse/") ||
-      !object.name.endsWith(".pdf")
-    ) {
-      return;
-    }
-
-    const jobId = object.name.split("/").pop()?.replace(".pdf", "");
-    if (!jobId) {
-      console.error("Could not extract job ID from file name");
-      return;
-    }
-
-    try {
-      const [fetch, FormData] = await Promise.all([getFetch(), getFormData()]);
-
-      // Get the file directly from the bucket
-      const bucket = admin.storage().bucket();
-      const file = bucket.file(object.name);
-      
-      console.log("Downloading file:", object.name);
-      // Download the file contents
-      const [fileContents] = await file.download();
-      console.log("File downloaded successfully, size:", fileContents.length);
-
-      // Create form data for the parser service
-      const formData = new FormData();
-      const filename = object.name.split("/").pop() || "document.pdf";
-      console.log("Creating form data with filename:", filename);
-      formData.append("files", fileContents, {
-        filename,
-        contentType: "application/pdf",
-      });
-      formData.append("strategy", "fast");
-
-      // Log the form data headers
-      console.log("Form data headers:", formData.getHeaders());
-
-      // Call the parser service
-      console.log("Calling parser service...");
-      const parserResponse = await fetch(
-        "https://parser.gawntlet.com/api/parse",
-        {
-          method: "POST",
-          body: formData,
-          headers: {
-            accept: "application/json",
-            ...formData.getHeaders(),
-          },
-        }
-      );
-
-      if (!parserResponse.ok) {
-        const errorText = await parserResponse.text();
-        console.error("Parser service error:", {
-          status: parserResponse.status,
-          headers: parserResponse.headers,
-          error: errorText,
-        });
-        throw new Error(
-          `Parser service returned ${parserResponse.status}: ${errorText}`
-        );
-      }
-
-      console.log("Parser service response received");
-      const data = (await parserResponse.json()) as ParserResult[];
-      console.log("Parsed results:", data);
-      const text = data
-        .map((el) => el.text?.trim())
-        .filter(Boolean)
-        .join("\n")
-        .replace(/\n{3,}/g, "\n\n");
-
-      // Store the result in Firestore
-      await admin
-        .firestore()
-        .collection("parsedPDFs")
-        .doc(jobId)
-        .set({
-          status: "completed",
-          text,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-      // Clean up: Delete the uploaded PDF
-      await file.delete();
-    } catch (error) {
-      console.error("Error processing PDF:", error);
-
-      // Store the error in Firestore
-      await admin
-        .firestore()
-        .collection("parsedPDFs")
-        .doc(jobId)
-        .set({
-          status: "error",
-          error: error instanceof Error ? error.message : "Unknown error",
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
-    }
-  });
-
-export const onCVUploaded = functions.storage
-  .object()
-  .onFinalize(async (object) => {
-    // Only process PDF files in the cvs-to-parse directory
-    if (
-      !object.name?.startsWith("cvs-to-parse/") ||
-      !object.name.endsWith(".pdf")
-    ) {
-      return;
-    }
-
-    const cvId = object.name.split("/").pop()?.replace(".pdf", "");
-    if (!cvId) {
-      console.error("Could not extract CV ID from file name");
-      return;
-    }
-
-    try {
-      const [fetch, FormData] = await Promise.all([getFetch(), getFormData()]);
-
-      // Get the file directly from the bucket
-      const bucket = admin.storage().bucket();
-      const file = bucket.file(object.name);
-      
-      console.log("Downloading CV file:", object.name);
-      // Download the file contents
-      const [fileContents] = await file.download();
-      console.log(
-        "CV file downloaded successfully, size:",
-        fileContents.length
-      );
-
-      // Create form data for the parser service
-      const formData = new FormData();
-      const filename = object.name.split("/").pop() || "document.pdf";
-      console.log("Creating form data with filename:", filename);
-      formData.append("files", fileContents, {
-        filename,
-        contentType: "application/pdf",
-      });
-      formData.append("strategy", "fast");
-
-      // Log the form data headers
-      console.log("Form data headers:", formData.getHeaders());
-
-      // Call the parser service
-      console.log("Calling parser service...");
-      const parserResponse = await fetch(
-        "https://parser.gawntlet.com/api/parse",
-        {
-          method: "POST",
-          body: formData,
-          headers: {
-            accept: "application/json",
-            ...formData.getHeaders(),
-          },
-        }
-      );
-
-      if (!parserResponse.ok) {
-        const errorText = await parserResponse.text();
-        console.error("Parser service error:", {
-          status: parserResponse.status,
-          headers: parserResponse.headers,
-          error: errorText,
-        });
-        throw new Error(
-          `Parser service returned ${parserResponse.status}: ${errorText}`
-        );
-      }
-
-      console.log("Parser service response received");
-      const data = (await parserResponse.json()) as ParserResult[];
-      console.log("Parsed CV results:", data);
-      const text = data
-        .map((el) => el.text?.trim())
-        .filter(Boolean)
-        .join("\n")
-        .replace(/\n{3,}/g, "\n\n");
-
-      // Store the result in Firestore
-      await admin
-        .firestore()
-        .collection("parsedCVs")
-        .doc(cvId)
-        .set({
-          status: "completed",
-          text,
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-      // Clean up: Delete the uploaded PDF
-      await file.delete();
-    } catch (error) {
-      console.error("Error processing CV:", error);
-
-      // Store the error in Firestore
-      await admin
-        .firestore()
-        .collection("parsedCVs")
-        .doc(cvId)
-        .set({
-          status: "error",
-          error: error instanceof Error ? error.message : "Unknown error",
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
-    }
-  });
 
 interface OpenAIRealtimeResponse {
   client_secret: {
@@ -315,6 +93,269 @@ export const generateRealtimeToken = functions.https.onCall(async (data, context
     throw new functions.https.HttpsError(
       "internal",
       "Internal error while generating token"
+    );
+  }
+});
+
+const openai = new OpenAI({
+  apiKey: functions.config().openai?.key,
+});
+
+export const onJobOpeningWrite = functions.firestore
+  .document("job_openings/{docId}")
+  .onWrite(async (change, context) => {
+    const beforeData = change.before.exists 
+      ? change.before.data() as JobOpening 
+      : { jobDescription: {} } as JobOpening;
+    const afterData = change.after.data() as JobOpening || {};
+
+    // Extract relevant text fields from jobDescription
+    const { jobDescription } = afterData;
+    const combinedText = [
+      jobDescription?.title || "",
+      jobDescription?.company || "",
+      jobDescription?.location || "",
+      jobDescription?.employmentType || "",
+      jobDescription?.experienceLevel || "",
+      jobDescription?.responsibilities ? jobDescription.responsibilities.join(". ") : "",
+      jobDescription?.requirements ? jobDescription.requirements.join(". ") : "",
+      jobDescription?.skills ? jobDescription.skills.join(". ") : "",
+      jobDescription?.benefits ? jobDescription.benefits.join(". ") : "",
+    ].filter(Boolean).join(". ");
+
+    // Check if text changed from beforeData
+    const { jobDescription: beforeJobDesc } = beforeData;
+    const oldCombinedText = [
+      beforeJobDesc?.title || "",
+      beforeJobDesc?.company || "",
+      beforeJobDesc?.location || "",
+      beforeJobDesc?.employmentType || "",
+      beforeJobDesc?.experienceLevel || "",
+      beforeJobDesc?.responsibilities ? beforeJobDesc.responsibilities.join(". ") : "",
+      beforeJobDesc?.requirements ? beforeJobDesc.requirements.join(". ") : "",
+      beforeJobDesc?.skills ? beforeJobDesc.skills.join(". ") : "",
+      beforeJobDesc?.benefits ? beforeJobDesc.benefits.join(". ") : "",
+    ].filter(Boolean).join(". ");
+
+    if (combinedText === oldCombinedText) {
+      console.log("No relevant text changes detected. Skipping embedding.");
+      return;
+    }
+
+    try {
+      console.log("Generating embedding for job opening:", context.params.docId);
+      const embeddingResponse = await openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: combinedText,
+        encoding_format: "float",
+      });
+      
+      const embeddingArray = embeddingResponse.data[0].embedding;
+
+      await change.after.ref.update({
+        embedding: embeddingArray,
+        last_embedded: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      
+      console.log(
+        `Embedding stored successfully for job_openings/${context.params.docId}`
+      );
+    } catch (err) {
+      console.error(
+        `Error creating embedding for job_openings/${context.params.docId}`,
+        err
+      );
+      await change.after.ref.update({
+        embedding_error: err instanceof Error ? err.message : "Unknown error",
+        last_embedding_attempt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  });
+
+export const onUserProfileWrite = functions.firestore
+  .document("users/{uid}")
+  .onWrite(async (change, context) => {
+    const beforeData = change.before.exists 
+      ? change.before.data() as UserProfile 
+      : { displayName: "", description: "", cv: {} } as UserProfile;
+    const afterData = change.after.data() as UserProfile || {};
+
+    // Extract relevant text fields
+    const { displayName, description, cv } = afterData;
+    const combinedText = [
+      displayName,
+      description,
+      // Personal Info
+      cv?.personalInfo?.summary,
+      cv?.personalInfo?.location,
+      // Experience
+      cv?.experience?.map((exp: { title: string; company: string; highlights: string[] }) => [
+        exp.title,
+        exp.company,
+        ...exp.highlights
+      ].join(". ")).join(". "),
+      // Education
+      cv?.education?.map((edu: { institution: string; degree: string; field: string }) => [
+        edu.institution,
+        edu.degree,
+        edu.field
+      ].join(", ")).join(". "),
+      // Skills
+      cv?.skills?.map((skill: { category: string; items: string[] }) => [
+        skill.category,
+        skill.items.join(", ")
+      ].join(": ")).join(". ")
+    ].filter(Boolean).join(". ");
+
+    const { displayName: oldDisplayName, description: oldDescription, cv: oldCV } = beforeData;
+    const oldCombinedText = [
+      oldDisplayName,
+      oldDescription,
+      // Personal Info
+      oldCV?.personalInfo?.summary,
+      oldCV?.personalInfo?.location,
+      // Experience
+      oldCV?.experience?.map((exp: { title: string; company: string; highlights: string[] }) => [
+        exp.title,
+        exp.company,
+        ...exp.highlights
+      ].join(". ")).join(". "),
+      // Education
+      oldCV?.education?.map((edu: { institution: string; degree: string; field: string }) => [
+        edu.institution,
+        edu.degree,
+        edu.field
+      ].join(", ")).join(". "),
+      // Skills
+      oldCV?.skills?.map((skill: { category: string; items: string[] }) => [
+        skill.category,
+        skill.items.join(", ")
+      ].join(": ")).join(". ")
+    ].filter(Boolean).join(". ");
+
+    if (combinedText === oldCombinedText) {
+      console.log("No relevant text changes detected. Skipping embedding.");
+      return;
+    }
+
+    try {
+      console.log("Generating embedding for user profile:", context.params.uid);
+      const embeddingResponse = await openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: combinedText,
+        encoding_format: "float",
+      });
+      
+      const embeddingArray = embeddingResponse.data[0].embedding;
+
+      await change.after.ref.update({
+        embedding: embeddingArray,
+        last_embedded: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      
+      console.log(
+        `Embedding stored successfully for users/${context.params.uid}`
+      );
+    } catch (err) {
+      console.error(
+        `Error creating embedding for users/${context.params.uid}`,
+        err
+      );
+      await change.after.ref.update({
+        embedding_error: err instanceof Error ? err.message : "Unknown error",
+        last_embedding_attempt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  });
+
+// Gemini API endpoint
+export const callGeminiAPI = functions.https.onCall(async (data, context) => {
+  // Ensure user is authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "The function must be called while authenticated.",
+    );
+  }
+
+  // Get Gemini API key from Firebase config
+  const geminiApiKey = functions.config().gemini?.key;
+  if (!geminiApiKey) {
+    console.error("Gemini API key not configured in Firebase");
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Gemini API key not configured",
+    );
+  }
+
+  try {
+    const fetch = await getFetch();
+    const apiUrl = "https://generativelanguage.googleapis.com/v1/models/" +
+      "gemini-pro:generateContent";
+    const response = await fetch(`${apiUrl}?key=${geminiApiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data.payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error("Error calling Gemini API:", error);
+    throw new functions.https.HttpsError(
+      "internal",
+      "Error processing Gemini API request",
+    );
+  }
+});
+
+// OpenAI API endpoint
+export const callOpenAIAPI = functions.https.onCall(async (data, context) => {
+  // Ensure user is authenticated
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "The function must be called while authenticated.",
+    );
+  }
+
+  // Get OpenAI API key from Firebase config
+  const openaiApiKey = functions.config().openai?.key;
+  if (!openaiApiKey) {
+    console.error("OpenAI API key not configured in Firebase");
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "OpenAI API key not configured",
+    );
+  }
+
+  try {
+    const openai = new OpenAI({ apiKey: openaiApiKey });
+    
+    // Handle different types of OpenAI API calls based on the request type
+    switch (data.type) {
+      case 'transcription':
+        const transcription = await openai.audio.transcriptions.create({
+          file: data.audioData,
+          model: "whisper-1",
+          ...data.options,
+        });
+        return transcription;
+      
+      default:
+        throw new Error(`Unsupported OpenAI API call type: ${data.type}`);
+    }
+  } catch (error) {
+    console.error("Error calling OpenAI API:", error);
+    throw new functions.https.HttpsError(
+      "internal",
+      "Error processing OpenAI API request",
     );
   }
 });

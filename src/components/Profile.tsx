@@ -78,7 +78,7 @@ const Profile = () => {
   const [useGemini, setUseGemini] = useState(true);
   const [isRealtimeModalOpen, setIsRealtimeModalOpen] = useState(false);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
-  const parser = new ParserService(process.env.NEXT_PUBLIC_GEMINI_API_KEY!);
+  const parser = new ParserService();
 
   // Helper function to update all profile-related state
   const updateProfileState = (profileData: UserProfile) => {

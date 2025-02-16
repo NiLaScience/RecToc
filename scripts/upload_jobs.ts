@@ -121,11 +121,7 @@ async function uploadVideo(
 // 5) Parse a job description with Gemini
 //
 async function parseJobDescription(text: string): Promise<JobDescriptionSchema> {
-  const geminiApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-  if (!geminiApiKey) {
-    throw new Error('NEXT_PUBLIC_GEMINI_API_KEY is not configured in your environment');
-  }
-  const parser = new ParserService(geminiApiKey);
+  const parser = new ParserService();
   return await parser.parseJobDescription(text);
 }
 

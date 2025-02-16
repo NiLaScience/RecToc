@@ -10,11 +10,20 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.agent == true;
     }
 
+    function isValidEmbeddingUpdate() {
+      let diff = request.resource.data.diff(resource.data);
+      return !diff.affectedKeys().hasAny(['embedding', 'last_embedded', 'embedding_error', 'last_embedding_attempt']);
+    }
+
     match /job_openings/{jobId} {
       allow read: if true;
       allow create: if request.auth != null 
-        && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid
+        && !request.resource.data.keys().hasAny(['embedding', 'last_embedded', 'embedding_error', 'last_embedding_attempt']);
+      allow update: if request.auth != null 
+        && resource.data.userId == request.auth.uid
+        && isValidEmbeddingUpdate();
+      allow delete: if request.auth != null 
         && resource.data.userId == request.auth.uid;
     }
 
@@ -24,13 +33,15 @@ service cloud.firestore {
         && userId == request.auth.uid
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.createdAt is string
-        && request.resource.data.updatedAt is string;
+        && request.resource.data.updatedAt is string
+        && !request.resource.data.keys().hasAny(['embedding', 'last_embedded', 'embedding_error', 'last_embedding_attempt']);
       allow update: if request.auth != null 
         && userId == request.auth.uid
         && request.resource.data.uid == userId
         && request.resource.data.updatedAt is string
         && (!request.resource.data.diff(resource.data).affectedKeys()
-            .hasAny(['uid', 'createdAt']));
+            .hasAny(['uid', 'createdAt']))
+        && isValidEmbeddingUpdate();
       allow delete: if false;
     }
 

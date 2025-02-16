@@ -62,7 +62,7 @@ const Upload = () => {
   const [webSuccess, setWebSuccess] = useState(false);
   const [jobDescription, setJobDescription] = useState<JobDescriptionSchema | null>(null);
   const [parsingPDF, setParsingPDF] = useState(false);
-  const parser = new ParserService(process.env.NEXT_PUBLIC_GEMINI_API_KEY!);
+  const parser = new ParserService();
 
   // Constants for upload handling
   const CHUNK_UPLOAD_THRESHOLD = 25 * 1024 * 1024; // 25 MB threshold

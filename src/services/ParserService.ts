@@ -1,10 +1,10 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { v4 as uuidv4 } from 'uuid';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { FirebaseStorage } from '@capacitor-firebase/storage';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
+import CloudFunctionService from './CloudFunctionService';
 import type { CVSchema, JobDescriptionSchema } from '../types/parser';
 import { CVSchemaObj, JobDescriptionSchemaObj } from '../types/parser';
 
@@ -17,13 +17,7 @@ function cleanJsonResponse(text: string): string {
 }
 
 export class ParserService {
-  private genAI: any;
-  private model: any;
-
-  constructor(apiKey: string) {
-    this.genAI = new GoogleGenerativeAI(apiKey);
-    this.model = this.genAI.getGenerativeModel({ model: 'models/gemini-1.5-flash' });
-  }
+  constructor() {}
 
   private async fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -42,40 +36,89 @@ export class ParserService {
     });
   }
 
-  private async extractTextFromBase64PDF(base64String: string): Promise<string> {
-    const extractionResult = await this.model.generateContent([
-      {
-        inlineData: {
-          data: base64String,
-          mimeType: "application/pdf",
-        },
-      },
-      'Extract all text content from this document and maintain its structure. Include all text content without any formatting or interpretation.',
-    ]);
-
-    return extractionResult.response.text();
-  }
-
   private async parseWithSchema<T>(content: string | File, schema: typeof CVSchemaObj | typeof JobDescriptionSchemaObj, parseInstructions: string): Promise<T> {
     try {
       // First get the text content
       let extractedText: string;
       if (content instanceof File) {
         const base64 = await this.fileToBase64(content);
-        extractedText = await this.extractTextFromBase64PDF(base64);
+        
+        // Call Cloud Function to extract text from PDF
+        const extractionResult = await CloudFunctionService.callFunction<
+          {
+            payload: {
+              contents: Array<{
+                parts: Array<{
+                  inlineData?: {
+                    data: string;
+                    mimeType: string;
+                  };
+                  text?: string;
+                }>;
+              }>;
+            };
+          },
+          {
+            candidates: Array<{
+              content: {
+                parts: Array<{
+                  text: string;
+                }>;
+              };
+            }>;
+          }
+        >('callGeminiAPI', {
+          payload: {
+            contents: [{
+              parts: [{
+                inlineData: {
+                  data: base64,
+                  mimeType: "application/pdf",
+                },
+              }, {
+                text: 'Extract all text content from this document and maintain its structure. Include all text content without any formatting or interpretation.',
+              }],
+            }],
+          },
+        });
+        
+        extractedText = extractionResult.candidates[0].content.parts[0].text;
       } else {
         extractedText = content;
       }
 
       // Then parse the text according to the schema
-      const parseResult = await this.model.generateContent([
+      const parseResult = await CloudFunctionService.callFunction<
         {
-          text: `${parseInstructions}\n\nSchema:\n${JSON.stringify(schema, null, 2)}\n\nDocument text:\n${extractedText}`
+          payload: {
+            contents: Array<{
+              parts: Array<{
+                text: string;
+              }>;
+            }>;
+          };
+        },
+        {
+          candidates: Array<{
+            content: {
+              parts: Array<{
+                text: string;
+              }>;
+            };
+          }>;
         }
-      ]);
+      >('callGeminiAPI', {
+        payload: {
+          contents: [{
+            parts: [{
+              text: `${parseInstructions}\n\nSchema:\n${JSON.stringify(schema, null, 2)}\n\nDocument text:\n${extractedText}`,
+            }],
+          }],
+        },
+      });
 
-      const response = parseResult.response.text();
-      const cleanedResponse = response.replace(/```(?:json)?\n?/g, '').trim();
+      const response = parseResult.candidates[0].content.parts[0].text;
+      const cleanedResponse = cleanJsonResponse(response);
       return JSON.parse(cleanedResponse);
     } catch (error) {
       console.error('Error parsing document:', error);
