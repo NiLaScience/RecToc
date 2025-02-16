@@ -71,27 +71,27 @@ const Applications: React.FC = () => {
       try {
         setLoading(true);
         
-        // Listen to applications collection
+        // Listen to applications collection with query for current user
         applicationsUnsubscribeId = await addSnapshotListener(
-          'applications',
+          `applications?candidateId==${user.uid}`,
           async (snapshot) => {
-            if (!snapshot || typeof snapshot !== 'object') {
+            if (!snapshot || !Array.isArray(snapshot) || snapshot.length === 0) {
               setApplications([]);
               return;
             }
 
-            const apps = Object.entries(snapshot)
-              .map(([id, data]) => ({
-                id,
-                ...(data as Omit<JobApplication, 'id'>)
-              }))
-              .filter((app): app is JobApplication => 
-                app.candidateId === user.uid
-              )
-              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            // Sort applications by creation date
+            const apps = snapshot
+              .filter(doc => doc && typeof doc === 'object') // Ensure we have valid documents
+              .sort((a, b) => {
+                if (!a.createdAt || !b.createdAt) return 0;
+                const dateA = new Date(a.createdAt).getTime();
+                const dateB = new Date(b.createdAt).getTime();
+                return dateB - dateA;
+              });
 
             // Set up listeners for job details for each application
-            const currentJobIds = new Set(apps.map(app => app.jobId));
+            const currentJobIds = new Set(apps.map(app => app.job_id || app.jobId));
             
             // Remove listeners for jobs that are no longer in the applications list
             Object.entries(jobDetailsUnsubscribers).forEach(([jobId, unsubscriberId]) => {
@@ -103,14 +103,15 @@ const Applications: React.FC = () => {
 
             // Add listeners for new jobs
             for (const app of apps) {
-              if (!jobDetailsUnsubscribers[app.jobId]) {
-                jobDetailsUnsubscribers[app.jobId] = await addSnapshotListener(
-                  `videos/${app.jobId}`,
+              const jobId = app.job_id || app.jobId;
+              if (jobId && !jobDetailsUnsubscribers[jobId]) {
+                jobDetailsUnsubscribers[jobId] = await addSnapshotListener(
+                  `videos/${jobId}`,
                   (jobData) => {
                     if (jobData) {
                       setApplications(prev => prev.map(prevApp => 
-                        prevApp.jobId === app.jobId
-                          ? { ...prevApp, jobDetails: { id: app.jobId, ...jobData } as VideoItem }
+                        (prevApp.job_id === jobId || prevApp.jobId === jobId)
+                          ? { ...prevApp, jobDetails: { id: jobId, ...jobData } as VideoItem }
                           : prevApp
                       ));
                     }
@@ -122,7 +123,11 @@ const Applications: React.FC = () => {
             // Initial job details fetch
             const appsWithDetails = await Promise.all(
               apps.map(async (app) => {
-                const jobDetails = await fetchJobDetails(app.jobId);
+                const jobId = app.job_id || app.jobId;
+                let jobDetails = undefined;
+                if (jobId) {
+                  jobDetails = await fetchJobDetails(jobId);
+                }
                 return {
                   ...app,
                   jobDetails: jobDetails || undefined
@@ -130,6 +135,7 @@ const Applications: React.FC = () => {
               })
             );
 
+            console.log('Setting applications:', appsWithDetails);
             setApplications(appsWithDetails);
             setLoading(false);
           }
@@ -173,20 +179,24 @@ const Applications: React.FC = () => {
 
   const getStatusColor = (status: ApplicationStatus | AgentStatus): string => {
     switch (status) {
+      // Application statuses
       case 'draft':
         return 'medium';
       case 'submitted':
+        return 'primary';
+      case 'withdrawn':
+        return 'medium';
+      case 'rejected':
+        return 'danger';
+      case 'accepted':
+        return 'success';
+      
+      // Agent statuses
       case 'queued':
       case 'processing':
         return 'primary';
-      case 'reviewing':
-      case 'shortlisted':
-        return 'warning';
-      case 'accepted':
       case 'completed':
         return 'success';
-      case 'rejected':
-      case 'withdrawn':
       case 'failed':
         return 'danger';
       default:
@@ -344,7 +354,9 @@ const Applications: React.FC = () => {
                           marginRight: '5px',
                           color: 'rgba(255, 255, 255, 0.4)'
                         }} />
-                        Applied {formatDistanceToNow(new Date(application.createdAt), { addSuffix: true })}
+                        {application.createdAt && !isNaN(new Date(application.createdAt).getTime()) 
+                          ? `Applied ${formatDistanceToNow(new Date(application.createdAt), { addSuffix: true })}`
+                          : 'Recently applied'}
                       </p>
                     </IonLabel>
                   </IonItem>

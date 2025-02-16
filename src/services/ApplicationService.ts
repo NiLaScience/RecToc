@@ -463,9 +463,12 @@ class ApplicationService {
             app.candidateId === result.user!.uid && 
             (!status || app.status === status)
           )
-          .sort((a, b) => 
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
+          .sort((a, b) => {
+            // If either date is missing, treat it as oldest
+            if (!a.createdAt) return 1;
+            if (!b.createdAt) return -1;
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          });
 
         resolve(applications);
       };
@@ -664,9 +667,15 @@ class ApplicationService {
       throw new Error('Agent API endpoint not configured');
     }
 
+    // Use the original endpoint for mobile, force HTTPS for web
+    const agentUrl = Capacitor.isNativePlatform() 
+      ? EC2_ENDPOINT 
+      : EC2_ENDPOINT.replace('http://', 'https://');
+    
     console.log('🤖 AI Agent Request:', {
-      url: `${EC2_ENDPOINT}/apply`,
+      url: `${agentUrl}/apply`,
       method: 'POST',
+      platform: Capacitor.getPlatform(),
       headers: { 'Content-Type': 'application/json' },
       payload: {
         ...payload,
@@ -675,7 +684,7 @@ class ApplicationService {
     });
 
     try {
-      const response = await fetch(`${EC2_ENDPOINT}/apply`, {
+      const response = await fetch(`${agentUrl}/apply`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -698,7 +707,7 @@ class ApplicationService {
         });
         await Dialog.alert({
           title: '❌ Error',
-          message: 'Failed to submit application to AI agent'
+          message: responseData.error || 'Failed to submit application to AI agent'
         });
         throw new Error('Failed to submit application to AI agent');
       }
@@ -710,9 +719,20 @@ class ApplicationService {
       });
     } catch (error) {
       console.error('❌ AI Agent Network Error:', error);
+      let errorMessage = 'Failed to contact AI agent';
+      
+      // Add more specific error messages for common issues
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        if (!Capacitor.isNativePlatform() && EC2_ENDPOINT.startsWith('http://')) {
+          errorMessage = 'Cannot connect to agent server - HTTPS required in web browser. Please use the mobile app or contact support.';
+        } else {
+          errorMessage = 'Failed to connect to agent server. Please check your internet connection and try again.';
+        }
+      }
+      
       await Dialog.alert({
         title: '❌ Error',
-        message: `Failed to contact AI agent: ${error instanceof Error ? error.message : 'Unknown error occurred'}`
+        message: errorMessage
       });
       throw error;
     }

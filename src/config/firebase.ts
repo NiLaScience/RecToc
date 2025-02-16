@@ -270,11 +270,30 @@ export const addSnapshotListener = async (reference: string, callback: (data: an
           if (event?.snapshots) {
             console.log('Collection snapshot received:', path, event.snapshots.length, 'documents');
             const documents = event.snapshots.map(snapshot => {
-              const data = typeof snapshot.data === 'object' ? snapshot.data : {};
-              return {
+              const data = typeof snapshot.data === 'object' && snapshot.data ? snapshot.data : {};
+              console.log('Processing document:', snapshot.id, data);
+              // Convert any Firestore timestamps to ISO strings
+              const processedData = Object.entries(data as Record<string, any>).reduce((acc, [key, value]) => {
+                // Check if the value is a Firestore timestamp-like object
+                if (value && typeof value === 'object' && 'seconds' in value && 'nanoseconds' in value) {
+                  // Convert to milliseconds and create a Date object
+                  const milliseconds = value.seconds * 1000 + Math.floor(value.nanoseconds / 1000000);
+                  acc[key] = new Date(milliseconds).toISOString();
+                } else if (value && typeof value === 'string' && value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+                  // Already an ISO string, keep as is
+                  acc[key] = value;
+                } else {
+                  acc[key] = value;
+                }
+                return acc;
+              }, {} as Record<string, any>);
+
+              const result = {
                 id: snapshot.id,
-                ...data
+                ...processedData
               };
+              console.log('Processed document:', result);
+              return result;
             });
             callback(documents);
           }

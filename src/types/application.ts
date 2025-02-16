@@ -1,38 +1,37 @@
 import type { CVSchema } from '../services/OpenAIService';
 
-export type ApplicationStatus = 
-  | 'draft'      // Application started but not submitted
-  | 'submitted'  // Application submitted to recruiter
-  | 'reviewing'  // Recruiter is reviewing
-  | 'shortlisted'// Candidate shortlisted
-  | 'rejected'   // Application rejected
-  | 'accepted'   // Application accepted
-  | 'withdrawn'; // Application withdrawn
-
-export type AgentStatus =
-  | 'queued'     // Waiting to be processed by agent
-  | 'processing' // Being processed by agent
-  | 'completed'  // Agent has completed the application
-  | 'failed';    // Agent failed to complete the application
+export type ApplicationStatus = 'draft' | 'submitted' | 'withdrawn' | 'rejected' | 'accepted';
+export type AgentStatus = 'queued' | 'processing' | 'completed' | 'failed';
 
 export interface JobApplication {
   id: string;
-  jobId: string;            // Reference to the job posting
-  candidateId: string;      // Reference to the candidate's user profile
+  jobId?: string;
+  job_id?: string;
+  candidateId?: string;
+  candidate_id?: string;
   status: ApplicationStatus;
-  videoURL?: string;        // URL to application video in Firebase Storage
-  videoDuration?: number;   // Video duration in seconds
-  videoThumbnailURL?: string; // URL to video thumbnail
-  transcript?: string;      // Video transcript
-  createdAt: string;       // When application was started
-  updatedAt: string;       // Last update timestamp
-  submittedAt?: string;    // When application was submitted
-  notes?: string;          // Internal notes for recruiters
-  // New agent-related fields
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+  videoURL?: string;
+  video_url?: string;
   agentStatus?: AgentStatus;
-  agentRequestId?: string;
-  agentGifUrl?: string;    // URL to the application process GIF
-  agentError?: string;     // Error message if agent failed
+  agent_status?: AgentStatus;
+  agentGifUrl?: string;
+  agent_gif_url?: string;
+  agentError?: string;
+  agent_error?: string;
+  position_in_queue?: number;
+  positionInQueue?: number;
+  queued_at?: string;
+  queuedAt?: string;
+  started_at?: string;
+  startedAt?: string;
+  completed_at?: string;
+  completedAt?: string;
+  job_url?: string;
+  jobUrl?: string;
 }
 
 export interface JobApplicationCreate extends Omit<JobApplication, 'id' | 'createdAt' | 'updatedAt'> {

@@ -234,12 +234,17 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
   }, [previewUrl]);
 
   const handleSubmit = async () => {
-    if (!user || (!videoFile && !application?.videoURL) || !application?.id) {
+    if (!user || !application?.id) {
       console.log('Missing required data:', { 
         user: !!user, 
-        video: !!(videoFile || application?.videoURL), 
         applicationId: application?.id 
       });
+      return;
+    }
+
+    // For agent applications, we don't require a video
+    if (!jobPost?.applicationUrl && !videoFile && !application?.videoURL) {
+      console.log('Video required for non-agent applications');
       return;
     }
 
@@ -258,7 +263,7 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
       // Submit the application
       await ApplicationService.submitApplication(application.id);
 
-      // Submit to AI agent if the job has an application URL
+      // If job has an application URL, submit to AI agent
       if (jobPost?.applicationUrl) {
         await ApplicationService.submitApplicationToAIAgent(application.id);
       } else {
@@ -591,37 +596,34 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
               ) : (
                 <div className="ion-margin-top ion-justify-content-between" 
                      style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', gap: '1rem' }}>
-                    <IonButton 
-                      expand="block"
-                      fill="outline"
-                      onClick={handleSaveDraft}
-                      disabled={!videoFile && !application?.videoURL}
-                    >
-                      Save Draft
-                    </IonButton>
+                  {jobPost?.applicationUrl ? (
+                    // For jobs with agent application, show a single submit button
                     <IonButton 
                       expand="block"
                       onClick={handleSubmit}
-                      disabled={!videoFile && !application?.videoURL}
-                    >
-                      Submit Application
-                    </IonButton>
-                  </div>
-                  
-                  {jobPost?.applicationUrl && (
-                    <IonButton
-                      expand="block"
-                      color="tertiary"
-                      onClick={() => {
-                        if (application?.id) {
-                          ApplicationService.submitApplicationToAIAgent(application.id);
-                        }
-                      }}
                       disabled={!application?.id}
                     >
-                      🤖 Submit to AI Agent
+                      🤖 Submit Application via AI Agent
                     </IonButton>
+                  ) : (
+                    // For regular jobs, show draft and submit buttons
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                      <IonButton 
+                        expand="block"
+                        fill="outline"
+                        onClick={handleSaveDraft}
+                        disabled={!videoFile && !application?.videoURL}
+                      >
+                        Save Draft
+                      </IonButton>
+                      <IonButton 
+                        expand="block"
+                        onClick={handleSubmit}
+                        disabled={!videoFile && !application?.videoURL}
+                      >
+                        Submit Application
+                      </IonButton>
+                    </div>
                   )}
                 </div>
               )}
