@@ -16,6 +16,7 @@ import {
   IonLabel,
   IonChip,
   IonRouterLink,
+  IonToast,
 } from '@ionic/react';
 import { closeOutline, paperPlaneOutline, chatbubbleOutline } from 'ionicons/icons';
 import type { JobOpening } from '../types/job_opening';
@@ -24,9 +25,10 @@ import ApplicationModal from './ApplicationModal';
 import AppHeader from './AppHeader';
 import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
 import InterviewTrainingModal from './InterviewTrainingModal';
+import { useAuth } from '../context/AuthContext';
 
-interface VideoDetailsProps {
-  video: JobOpening;
+interface JobDetailsProps {
+  job: JobOpening;
   onClose?: () => void;
   mode?: 'modal' | 'page';
 }
@@ -44,11 +46,13 @@ interface JobDescription {
   applicationUrl?: string;
 }
 
-const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, mode = 'modal' }) => {
+const JobDetails: React.FC<JobDetailsProps> = ({ job, onClose, mode = 'modal' }) => {
   const [showApplication, setShowApplication] = useState(false);
   const [showTraining, setShowTraining] = useState(false);
+  const { user } = useAuth();
+  const [showToast, setShowToast] = useState(false);
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
-  const jobDescription = video.jobDescription as JobDescription;
+  const jobDescription = job.jobDescription as JobDescription;
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (showApplication) return; // Disable swipe when application modal is open
@@ -88,6 +92,14 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, mode = 'mod
     setShowApplication(false);
   };
 
+  const handleTraining = () => {
+    setShowTraining(true);
+  };
+
+  const handleCloseTraining = () => {
+    setShowTraining(false);
+  };
+
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
@@ -97,7 +109,7 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, mode = 'mod
   return (
     <>
       <div 
-        className="video-details" 
+        className="job-details" 
         style={{
           position: 'fixed',
           top: 0,
@@ -138,7 +150,7 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, mode = 'mod
                 border: '2px solid rgba(255, 255, 255, 0.1)'
               }}>
                 <IonCardHeader>
-                  <IonCardTitle style={{ color: '#fff' }}>{jobDescription?.title || video.title}</IonCardTitle>
+                  <IonCardTitle style={{ color: '#fff' }}>{jobDescription?.title || job.title}</IonCardTitle>
                   {jobDescription?.company && (
                     <IonCardSubtitle style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
                       {jobDescription.company}
@@ -165,7 +177,7 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, mode = 'mod
                     requirements={jobDescription?.requirements}
                     skills={jobDescription?.skills}
                     benefits={jobDescription?.benefits}
-                    transcript={video.transcript}
+                    transcript={job.transcript}
                   />
                 </IonCardContent>
               </IonCard>
@@ -180,7 +192,7 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, mode = 'mod
               }}>
                 <IonButton
                   expand="block"
-                  onClick={() => setShowTraining(true)}
+                  onClick={handleTraining}
                   style={{ 
                     flex: 1,
                     '--background': '#2a2a2a',
@@ -219,17 +231,27 @@ const VideoDetails: React.FC<VideoDetailsProps> = ({ video, onClose, mode = 'mod
         <ApplicationModal
           isOpen={showApplication}
           onClose={handleCloseApplication}
-          jobId={video.id}
+          jobId={job.id}
         />
       )}
 
-      <InterviewTrainingModal
-        isOpen={showTraining}
-        onClose={() => setShowTraining(false)}
-        jobId={video.id}
+      {showTraining && (
+        <InterviewTrainingModal
+          isOpen={showTraining}
+          onClose={handleCloseTraining}
+          jobId={job.id}
+        />
+      )}
+
+      <IonToast
+        isOpen={showToast}
+        onDidDismiss={() => setShowToast(false)}
+        message="Application submitted successfully!"
+        duration={2000}
+        position="bottom"
       />
     </>
   );
 };
 
-export default VideoDetails;
+export default JobDetails;

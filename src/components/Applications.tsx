@@ -30,7 +30,7 @@ import { JobApplication } from '../types/application';
 import { timeOutline, documentTextOutline, businessOutline } from 'ionicons/icons';
 import { formatDistanceToNow } from 'date-fns';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
-import VideoDetails from './VideoDetails';
+import JobDetails from './JobDetails';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import type { ApplicationStatus, AgentStatus } from '../types/application';
 import type { JobOpening } from '../types/job_opening';
@@ -384,8 +384,8 @@ const Applications: React.FC = () => {
           onDidDismiss={() => setSelectedJob(null)}
         >
           {selectedJob && (
-            <VideoDetails
-              video={selectedJob}
+            <JobDetails
+              job={selectedJob}
               onClose={() => setSelectedJob(null)}
             />
           )}

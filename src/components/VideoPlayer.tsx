@@ -4,7 +4,7 @@ import { volumeHighOutline, volumeMuteOutline, eyeOutline, eyeOffOutline, playCi
 import { JobOpening } from '../types/job_opening';
 import type { UserProfile } from '../types/user';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
-import VideoDetails from './VideoDetails';
+import JobDetails from './JobDetails';
 import { App } from '@capacitor/app';
 import { useHistory } from 'react-router-dom';
 
@@ -667,10 +667,9 @@ export default function VideoPlayer({ video, onSwipe, autoPlay = false, onEnded,
       </div>
 
       {showDetails && (
-        <VideoDetails
-          video={video}
+        <JobDetails
+          job={video}
           onClose={() => setShowDetails(false)}
-          mode="modal"
         />
       )}
 
