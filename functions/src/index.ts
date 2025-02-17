@@ -10,8 +10,27 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import OpenAI from "openai";
-import type {JobOpening, UserProfile, JobDescription} from "./types";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import type {JobOpening, UserProfile, JobDescription, Slide} from "./types";
+import {GoogleGenerativeAI} from "@google/generative-ai";
+
+// Schema for job description parsing
+const JobDescriptionSchemaObj = {
+  title: "Job title",
+  company: "Company name",
+  location: "Job location",
+  employmentType: "full-time/part-time/contract/internship/freelance",
+  experienceLevel: "entry/mid/senior/lead/executive",
+  skills: ["Required skill 1", "Required skill 2"],
+  responsibilities: ["Responsibility 1", "Responsibility 2"],
+  requirements: ["Requirement 1", "Requirement 2"],
+  benefits: ["Benefit 1", "Benefit 2"],
+  salary: {
+    min: "minimum salary (number)",
+    max: "maximum salary (number)",
+    currency: "USD/EUR/etc",
+    period: "yearly/monthly/weekly/hourly",
+  },
+} as const;
 
 // Initialize with explicit permissions
 admin.initializeApp();
@@ -105,13 +124,13 @@ const openai = new OpenAI({
 export const onJobOpeningWrite = functions.firestore
   .document("job_openings/{docId}")
   .onWrite(async (change, context) => {
-    const beforeData = change.before.exists 
-      ? change.before.data() as JobOpening 
-      : { jobDescription: {} } as JobOpening;
+    const beforeData = change.before.exists?
+      change.before.data() as JobOpening:
+      {jobDescription: {}} as JobOpening;
     const afterData = change.after.data() as JobOpening || {};
 
     // Extract relevant text fields from jobDescription
-    const { jobDescription } = afterData;
+    const {jobDescription} = afterData;
     const combinedText = [
       jobDescription?.title || "",
       jobDescription?.company || "",
@@ -125,7 +144,7 @@ export const onJobOpeningWrite = functions.firestore
     ].filter(Boolean).join(". ");
 
     // Check if text changed from beforeData
-    const { jobDescription: beforeJobDesc } = beforeData;
+    const {jobDescription: beforeJobDesc} = beforeData;
     const oldCombinedText = [
       beforeJobDesc?.title || "",
       beforeJobDesc?.company || "",
@@ -455,7 +474,9 @@ interface SlideData {
   title: string;
   heading: string;
   bullet_points: string[];
+  bullets?: string[];  // Add optional bullets field for compatibility
   image_prompt: string;
+  backgroundImageUrl?: string;
 }
 
 async function generateDalleImage(prompt: string, jobId: string, slideIndex: number): Promise<string> {
@@ -815,3 +836,147 @@ async function generateVoiceoverAudio(script: string, jobId: string): Promise<st
     );
   }
 }
+
+// Constants for crawler service
+const CRAWLER_SERVICE_ACCOUNT = 'iml4LDs1lBevOPs94BDYxrneW233';
+
+export const onCrawledJobCreate = functions.firestore
+  .document('jobs/{docId}')
+  .onCreate(async (snapshot, context) => {
+    const jobData = snapshot.data();
+    console.log('Processing new crawled job:', context.params.docId);
+
+    try {
+      // First, parse the raw content into a structured JobDescription
+      const genAI = new GoogleGenerativeAI(functions.config().gemini?.key);
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+      // Parse raw content into JobDescription using Gemini
+      const parseResult = await model.generateContent({
+        contents: [{
+          role: "user",
+          parts: [{
+            text: `Parse the following job description text into a structured format. Return ONLY a JSON object, no markdown formatting or explanation.
+
+First, analyze if the text meets these criteria:
+1. The text must be in English, German, or French
+2. The text must contain sufficient job details (at least title, company, and either responsibilities or requirements)
+3. The text must be a proper job posting (not a random webpage or error message)
+
+If ANY of these criteria are not met, return an empty JSON object: {}
+
+Otherwise, parse the text according to this schema:
+${JSON.stringify(JobDescriptionSchemaObj, null, 2)}
+
+Document text:
+${jobData.raw_content}`
+          }]
+        }]
+      });
+
+      if (!parseResult.response) {
+        throw new Error("No response from Gemini API during parsing");
+      }
+
+      const parsedText = parseResult.response.text().trim()
+        .replace(/```json\n?/, '')
+        .replace(/\n?```$/, '');
+
+      const parsedJobDescription = JSON.parse(parsedText) as JobDescription;
+
+      // Skip processing if we got an empty object (invalid content)
+      if (!parsedJobDescription.title) {
+        console.log('Skipping invalid job content:', context.params.docId);
+        await snapshot.ref.update({
+          processed: false,
+          processed_at: admin.firestore.FieldValue.serverTimestamp(),
+          processing_error: 'Invalid content: Not a valid job posting or unsupported language'
+        });
+        return;
+      }
+
+      // Generate a unique ID for the job opening
+      const jobOpeningId = `crawled-${context.params.docId}`;
+
+      // Generate slides and voiceover
+      const slidesResult = await generateSlidesContent(parsedJobDescription, jobOpeningId);
+      
+      console.log('Generated slides result:', JSON.stringify(slidesResult, null, 2));
+      
+      // Generate tags from job description
+      const tags = [
+        // Include employment type if available
+        parsedJobDescription.employmentType,
+        // Include experience level if available
+        parsedJobDescription.experienceLevel,
+        // Include location if available
+        parsedJobDescription.location,
+        // Include company if available
+        parsedJobDescription.company,
+        // Include all skills
+        ...(parsedJobDescription.skills || []),
+      ].filter((tag): tag is string => typeof tag === 'string') // Type guard to ensure string
+       .map(tag => tag.toLowerCase()) // Normalize tags
+       .filter((tag, index, self) => self.indexOf(tag) === index); // Remove duplicates
+
+      // Clean and format title
+      const cleanTitle = parsedJobDescription.title
+        .trim()
+        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+        .replace(/[^\w\s-]/g, ''); // Remove special characters except spaces and hyphens
+
+      // Create the job opening document
+      const jobOpeningData: JobOpening = {
+        id: jobOpeningId,
+        title: cleanTitle,
+        jobDescription: parsedJobDescription,
+        slides: slidesResult.slides.map(slide => {
+          console.log('Processing slide:', JSON.stringify(slide, null, 2));
+          // Ensure we have valid bullets array
+          const bullets = Array.isArray(slide.bullet_points) ? slide.bullet_points : 
+                         Array.isArray(slide.bullets) ? slide.bullets :
+                         ["No bullet points available"];
+          return {
+            title: slide.title || "Untitled",
+            heading: slide.heading || "No Heading",
+            bullets: bullets,
+            backgroundImageUrl: slide.backgroundImageUrl
+          };
+        }) as Slide[],
+        userId: CRAWLER_SERVICE_ACCOUNT,
+        createdAt: new Date().toISOString(),
+        views: 0,
+        likes: 0,
+        applicationUrl: jobData.url,
+        tags: tags
+      };
+
+      // Store in job_openings collection
+      await admin.firestore().collection('job_openings')
+        .doc(jobOpeningId)
+        .set(jobOpeningData);
+
+      // Store metadata in original document
+      await snapshot.ref.update({
+        processed: true,
+        processed_at: admin.firestore.FieldValue.serverTimestamp(),
+        job_opening_id: jobOpeningId,
+        source_url: jobData.source_url,
+        is_crawled: true,
+        last_crawled: new Date().toISOString()
+      });
+
+      console.log(`Successfully processed crawled job ${context.params.docId} into job opening ${jobOpeningId}`);
+    } catch (error) {
+      console.error(`Error processing crawled job ${context.params.docId}:`, error);
+      
+      // Update job document with error status
+      await snapshot.ref.update({
+        processed: false,
+        processed_at: admin.firestore.FieldValue.serverTimestamp(),
+        processing_error: error instanceof Error ? error.message : 'Unknown error'
+      });
+
+      throw error;
+    }
+  });

@@ -1,0 +1,121 @@
+{
+    "urls": [
+        {
+            "url": "https://careers.roche.com/global/en/job/",
+            "params": {
+                "limit": 20,
+                "maxDepth": 2,
+                "scrapeOptions": {
+                    "formats": ["markdown"],
+                    "onlyMainContent": false,
+                    "waitFor": 2
+                }
+            },
+            "interval_days": 2
+        },
+        {
+            "url": "https://jobdetails.nestle.com/job/",
+            "params": {
+                "limit": 20,
+                "maxDepth": 2,
+                "scrapeOptions": {
+                    "formats": ["markdown"],
+                    "onlyMainContent": false,
+                    "waitFor": 2
+                }
+            },
+            "interval_days": 2
+        },
+        {
+            "url": "https://www.novartis.com/careers/career-search/job/details/",
+            "params": {
+                "limit": 20,
+                "maxDepth": 1,
+                "scrapeOptions": {
+                    "formats": ["markdown"],
+                    "onlyMainContent": false,
+                    "waitFor": 2
+                }
+            },
+            "interval_days": 2
+        },
+        {
+            "url": "https://careers.abb/global/en/job/",
+            "params": {
+                "limit": 20,
+                "maxDepth": 1,
+                "scrapeOptions": {
+                    "formats": ["markdown"],
+                    "onlyMainContent": false,
+                    "waitFor": 2
+                }
+            },
+            "interval_days": 2
+        },
+        {
+            "url": "https://careers.zurich.com/job/",
+            "params": {
+                "limit": 20,
+                "maxDepth": 1,
+                "scrapeOptions": {
+                    "formats": ["markdown"],
+                    "onlyMainContent": false,
+                    "waitFor": 2
+                }
+            },
+            "interval_days": 2
+        },
+        {
+            "url": "https://juliusbaer.wd3.myworkdayjobs.com/en-US/External/details/",
+            "params": {
+                "limit": 20,
+                "maxDepth": 1,
+                "scrapeOptions": {
+                    "formats": ["markdown"],
+                    "onlyMainContent": false,
+                    "waitFor": 2
+                }
+            },
+            "interval_days": 2
+        },
+        {
+            "url": "https://headcount.ch/job/",
+            "params": {
+                "limit": 25,
+                "maxDepth": 1,
+                "scrapeOptions": {
+                    "formats": ["markdown"],
+                    "onlyMainContent": false,
+                    "waitFor": 2
+                }
+            },
+            "interval_days": 2
+        },
+        {
+            "url": "https://www.randstad.ch/jobs/",
+            "params": {
+                "limit": 20,
+                "maxDepth": 1,
+                "scrapeOptions": {
+                    "formats": ["markdown"],
+                    "onlyMainContent": false,
+                    "waitFor": 2
+                }
+            },
+            "interval_days": 2
+        },
+        {
+            "url": "https://www.jobs.ethz.ch/job/view/",
+            "params": {
+                "limit": 20,
+                "maxDepth": 1,
+                "scrapeOptions": {
+                    "formats": ["markdown"],
+                    "onlyMainContent": false,
+                    "waitFor": 2
+                }
+            },
+            "interval_days": 2
+        }
+    ]
+} 

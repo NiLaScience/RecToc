@@ -79,3 +79,6 @@ agent_deploy/*.json
 agent_deploy/*.csv
 
 agent_deploy/__pycache__
+
+job_crawler/venv/
+job_crawler/firebase-credentials.json

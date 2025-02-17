@@ -9,10 +9,10 @@ export interface JobDescription {
   skills?: string[];
   benefits?: string[];
   salary?: {
-    min: number;
-    max: number;
-    currency: string;
-    period: string;
+    min?: number;
+    max?: number;
+    currency?: string;
+    period?: string;
   };
 }
 
@@ -39,15 +39,20 @@ export interface JobOpening {
   videoUrl?: string;
   slides: Slide[];
   voiceoverUrl?: string;
-  jobDescription?: JobDescription;
+  jobDescription: JobDescription;
   pdfUrl?: string;
   userId: string;
   createdAt: string;
-  views?: number;
-  likes?: number;
+  views: number;
+  likes: number;
   transcript?: Transcript | null;
   sourceVideo?: string;
   applicationUrl?: string;
+  tags?: string[];
+  embedding?: number[];
+  embedding_error?: string;
+  last_embedded?: string;
+  last_embedding_attempt?: string;
 }
 
 export interface CVSchema {
@@ -87,9 +92,13 @@ export interface UserProfile {
   username: string;
   email: string;
   photoURL?: string;
-  description?: string;
+  description: string;
   cv?: CVSchema;
   cvFileUrl?: string;
   createdAt: string;
   updatedAt: string;
+  embedding?: number[];
+  embedding_error?: string;
+  last_embedded?: string;
+  last_embedding_attempt?: string;
 }

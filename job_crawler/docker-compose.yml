@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  job-crawler:
+    build: .
+    container_name: job-crawler
+    restart: always
+    environment:
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+    volumes:
+      - ./firebase-credentials.json:/app/firebase-credentials.json
+      - ./config.json:/app/config.json
+      - ./.env:/app/.env
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3" 
