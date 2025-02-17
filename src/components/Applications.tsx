@@ -290,10 +290,10 @@ const Applications: React.FC = () => {
                       height: '80px',
                       marginRight: '1rem'
                     }}>
-                      {application.jobDetails?.thumbnailUrl ? (
+                      {application.jobDetails?.slides?.[0]?.backgroundImageUrl ? (
                         <img 
-                          src={application.jobDetails.thumbnailUrl} 
-                          alt="Video thumbnail"
+                          src={application.jobDetails.slides[0].backgroundImageUrl} 
+                          alt={application.jobDetails.title}
                           style={{ 
                             width: '100%', 
                             height: '100%', 

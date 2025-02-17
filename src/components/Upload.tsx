@@ -36,6 +36,7 @@ import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent } from './shared/AccordionContent';
 import { FirebaseStorage } from '@capacitor-firebase/storage';
 import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
+import { SlideGenerationService } from '../services/SlideGenerationService';
 
 interface User {
   uid: string;
@@ -44,6 +45,7 @@ interface User {
 
 const Upload = () => {
   const [title, setTitle] = useState('');
+  const [applicationUrl, setApplicationUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [currentTag, setCurrentTag] = useState('');
@@ -62,7 +64,11 @@ const Upload = () => {
   const [webSuccess, setWebSuccess] = useState(false);
   const [jobDescription, setJobDescription] = useState<JobDescriptionSchema | null>(null);
   const [parsingPDF, setParsingPDF] = useState(false);
+  const [generatingSlides, setGeneratingSlides] = useState(false);
+  const [slideGenerationError, setSlideGenerationError] = useState<string | null>(null);
+  const slideGenerationService = new SlideGenerationService();
   const parser = new ParserService();
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   // Constants for upload handling
   const CHUNK_UPLOAD_THRESHOLD = 25 * 1024 * 1024; // 25 MB threshold
@@ -217,6 +223,7 @@ const Upload = () => {
   const resetForm = () => {
     console.log('resetForm called');
     setTitle('');
+    setApplicationUrl('');
     setFile(null);
     setTags([]);
     setCurrentTag('');
@@ -275,12 +282,15 @@ const Upload = () => {
     setError('');
 
     try {
-      const parsed = await parser.uploadAndParsePDF<JobDescriptionSchema>(pdfFile, 'parsedPDFs');
-      setJobDescription(parsed);
+      const result = await parser.uploadAndParsePDF<JobDescriptionSchema>(pdfFile, 'parsedPDFs');
+      setJobDescription(result.parsed);
       
       // Auto-populate title and tags if available
-      if (parsed.title) setTitle(parsed.title);
-      if (parsed.skills && Array.isArray(parsed.skills)) setTags(parsed.skills);
+      if (result.parsed.title) setTitle(result.parsed.title);
+      if (result.parsed.skills && Array.isArray(result.parsed.skills)) setTags(result.parsed.skills);
+
+      // Store the PDF URL for later use in handleUpload
+      setPdfUrl(result.pdfUrl);
     } catch (error) {
       console.error('Error parsing PDF:', error);
       setError('Failed to parse PDF. Please try again.');
@@ -290,8 +300,8 @@ const Upload = () => {
   };
 
   const handleUpload = async () => {
-    if (!file || !title.trim()) {
-      setError('Please fill in all fields and select a video');
+    if (!jobDescription) {
+      setError('Please upload a job description first');
       return;
     }
 
@@ -309,98 +319,32 @@ const Upload = () => {
       setUploadProgress(0);
 
       try {
-        // Generate thumbnail
-        console.log('Generating thumbnail for file:', file.name, 'type:', file.type, 'size:', file.size);
-        const thumbnailFile = await ThumbnailService.generateThumbnail(file);
-        console.log('Thumbnail generated successfully');
+        // Generate slides first
+        setGeneratingSlides(true);
+        setSlideGenerationError(null);
+        const { slides, voiceoverUrl, status } = await slideGenerationService.generateJobPresentation(
+          jobDescription,
+          `${Date.now()}-${title.replace(/\s+/g, '-').toLowerCase()}`
+        );
+
+        // Optional: If video is provided, handle it
+        let videoUrl: string | undefined;
+        let thumbnailUrl: string | undefined;
         
-        // Generate unique file names and upload paths
-        const videoFileName = `${Date.now()}-${file.name}`;
-        const thumbnailFileName = `${Date.now()}-thumbnail.jpg`;
-        const videoPath = `videos/${currentUser.uid}/${videoFileName}`;
-        const thumbnailPath = `thumbnails/${currentUser.uid}/${thumbnailFileName}`;
-        
-        console.log('Uploading files to Firebase Storage...');
+        if (file) {
+          console.log('Generating thumbnail for file:', file.name, 'type:', file.type, 'size:', file.size);
+          const thumbnailFile = await ThumbnailService.generateThumbnail(file);
+          console.log('Thumbnail generated successfully');
+          
+          // Generate unique file names and upload paths
+          const videoFileName = `${Date.now()}-${file.name}`;
+          const thumbnailFileName = `${Date.now()}-thumbnail.jpg`;
+          const videoPath = `videos/${currentUser.uid}/${videoFileName}`;
+          const thumbnailPath = `thumbnails/${currentUser.uid}/${thumbnailFileName}`;
+          
+          console.log('Uploading files to Firebase Storage...');
+          const cleanMimeType = file.type.split(';')[0];
 
-        let videoUrl: string;
-        let thumbnailUrl: string;
-        const cleanMimeType = file.type.split(';')[0];
-
-        if (Capacitor.isNativePlatform()) {
-          // For native platforms (e.g., Android), use chunking if the file is very large
-          if (file.size > CHUNK_UPLOAD_THRESHOLD) {
-            // Write the video file in chunks to avoid memory issues
-            await writeFileInChunks(videoFileName, file);
-          } else {
-            // For smaller files, convert directly to base64 and write to filesystem
-            const videoBuffer = await file.arrayBuffer();
-            const videoBase64 = Buffer.from(videoBuffer).toString('base64');
-            await Filesystem.writeFile({
-              path: videoFileName,
-              data: videoBase64,
-              directory: Directory.Cache,
-            });
-          }
-          const videoFileInfo = await Filesystem.getUri({
-            path: videoFileName,
-            directory: Directory.Cache,
-          });
-          videoUrl = await new Promise<string>((resolve, reject) => {
-            FirebaseStorage.uploadFile(
-              {
-                path: videoPath,
-                uri: videoFileInfo.uri,
-                metadata: { contentType: cleanMimeType },
-              },
-              (progress, error) => {
-                if (error) {
-                  reject(error);
-                } else if (progress) {
-                  if (progress.progress) {
-                    setUploadProgress(progress.progress * 100);
-                  }
-                  if (progress.completed) {
-                    FirebaseStorage.getDownloadUrl({ path: videoPath })
-                      .then((result) => resolve(result.downloadUrl))
-                      .catch(reject);
-                  }
-                }
-              }
-            );
-          });
-
-          // Upload Thumbnail (thumbnails are expected to be small; no chunking needed)
-          const thumbBuffer = await thumbnailFile.arrayBuffer();
-          const thumbBase64 = Buffer.from(thumbBuffer).toString('base64');
-          await Filesystem.writeFile({
-            path: thumbnailFileName,
-            data: thumbBase64,
-            directory: Directory.Cache,
-          });
-          const thumbnailFileInfo = await Filesystem.getUri({
-            path: thumbnailFileName,
-            directory: Directory.Cache,
-          });
-          thumbnailUrl = await new Promise<string>((resolve, reject) => {
-            FirebaseStorage.uploadFile(
-              {
-                path: thumbnailPath,
-                uri: thumbnailFileInfo.uri,
-                metadata: { contentType: 'image/jpeg' }
-              },
-              (progress, error) => {
-                if (error) {
-                  reject(error);
-                } else if (progress?.completed) {
-                  FirebaseStorage.getDownloadUrl({ path: thumbnailPath })
-                    .then(result => resolve(result.downloadUrl))
-                    .catch(reject);
-                }
-              }
-            );
-          });
-        } else {
-          // For web platforms, use the blob directly
           [videoUrl, thumbnailUrl] = await Promise.all([
             new Promise<string>((resolve, reject) => {
               FirebaseStorage.uploadFile(
@@ -434,27 +378,32 @@ const Upload = () => {
         
         console.log('Files uploaded to Firebase Storage successfully');
 
-        // Save video metadata to Firestore
-        const videoData = {
+        // Save job metadata to Firestore
+        const jobData = {
           title,
-          videoUrl,
-          thumbnailUrl,
+          ...(videoUrl && { videoUrl }),
+          ...(thumbnailUrl && { thumbnailUrl }),
           jobDescription,
+          slides,
+          voiceoverUrl,
+          slidesStatus: status,
+          pdfUrl,
           tags,
           userId: currentUser.uid,
           createdAt: new Date().toISOString(),
           views: 0,
           likes: 0,
           transcript: transcript || null,
+          applicationUrl: applicationUrl || null,
         };
         
-        await addDocument('videos', videoData);
+        await addDocument('job_openings', jobData);
 
         setUploading(false);
         await showUploadSuccess();
       } catch (err: any) {
         console.error('Upload error:', err);
-        setError(err.message || 'Failed to upload video');
+        setError(err.message || 'Failed to upload job');
         setUploading(false);
       }
     } catch (error: any) {
@@ -472,36 +421,22 @@ const Upload = () => {
       />
       <IonContent>
         <div style={{ padding: '1rem', paddingTop: '56px' }}>
-          {!Capacitor.isNativePlatform() && (
-            <IonSegment 
-              value={uploadMode} 
-              onIonChange={e => {
-                const newMode = e.detail.value as 'file' | 'record';
-                setUploadMode(newMode);
-                if (newMode === 'record') {
-                  setFile(null);
-                  if (previewUrl) {
-                    URL.revokeObjectURL(previewUrl);
-                    setPreviewUrl(null);
-                  }
-                }
-              }}
-            >
-              <IonSegmentButton value="file">
-                <IonLabel>Choose File</IonLabel>
-              </IonSegmentButton>
-              <IonSegmentButton value="record">
-                <IonLabel>Record Pitch</IonLabel>
-              </IonSegmentButton>
-            </IonSegment>
-          )}
-
           <div className="input-container">
             <IonInput
               value={title}
               onIonChange={e => setTitle(e.detail.value!)}
               placeholder="Job title"
               className={title ? 'has-value' : ''}
+            />
+          </div>
+
+          <div className="input-container">
+            <IonInput
+              value={applicationUrl}
+              onIonChange={e => setApplicationUrl(e.detail.value!)}
+              placeholder="Application URL"
+              type="url"
+              className={applicationUrl ? 'has-value' : ''}
             />
           </div>
 
@@ -542,160 +477,7 @@ const Upload = () => {
             )}
           </div>
 
-          {(uploadMode === 'file' || Capacitor.isNativePlatform()) ? (
-            <div className="ion-padding-vertical">
-              {previewUrl && (
-                <div style={{ 
-                  width: '100%', 
-                  aspectRatio: '16/9',
-                  backgroundColor: '#000',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  marginBottom: '1rem'
-                }}>
-                  <video
-                    src={previewUrl}
-                    controls
-                    playsInline
-                    style={{ 
-                      width: '100%', 
-                      height: '100%', 
-                      objectFit: 'contain'
-                    }}
-                  />
-                </div>
-              )}
-              
-              {/* Input for camera recording */}
-              <input
-                type="file"
-                accept="video/*"
-                capture="environment"
-                onChange={handleFileChange}
-                style={{ display: 'none' }}
-                id="video-record"
-              />
-              
-              {/* Input for file selection */}
-              <input
-                type="file"
-                accept="video/*"
-                onChange={handleFileChange}
-                style={{ display: 'none' }}
-                id="video-select"
-              />
-
-              {Capacitor.isNativePlatform() ? (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <IonButton
-                    expand="block"
-                    onClick={() => document.getElementById('video-record')?.click()}
-                    style={{ flex: 1 }}
-                  >
-                    Record Pitch
-                  </IonButton>
-                  <IonButton
-                    expand="block"
-                    onClick={() => document.getElementById('video-select')?.click()}
-                    style={{ flex: 1 }}
-                  >
-                    Choose Video
-                  </IonButton>
-                </div>
-              ) : (
-                <IonButton
-                  expand="block"
-                  onClick={() => document.getElementById('video-select')?.click()}
-                >
-                  {file ? 'Change Video' : 'Select Video'}
-                </IonButton>
-              )}
-
-              {file && Capacitor.isNativePlatform() && (
-                <IonButton
-                  expand="block"
-                  onClick={() => {
-                    setFile(null);
-                    if (previewUrl) {
-                      URL.revokeObjectURL(previewUrl);
-                      setPreviewUrl(null);
-                    }
-                  }}
-                  className="ion-margin-top"
-                >
-                  Remove Video
-                </IonButton>
-              )}
-
-              {/* Add transcription button after video selection/recording */}
-              {(file || previewUrl) && !uploading && (
-                <div className="ion-padding-vertical">
-                  <IonButton
-                    expand="block"
-                    onClick={handleTranscribe}
-                    disabled={transcribing}
-                    color={transcript ? 'success' : 'primary'}
-                  >
-                    <IonIcon icon={micOutline} slot="start" />
-                    {transcribing ? (
-                      <>
-                        <IonSpinner name="crescent" />
-                        <span className="ion-padding-start">Transcribing...</span>
-                      </>
-                    ) : transcript ? (
-                      'Transcription Complete'
-                    ) : (
-                      'Transcribe Video'
-                    )}
-                  </IonButton>
-
-                  {transcript && (
-                    <div className="transcript-preview">
-                      <h2 style={{ color: '#fff', marginBottom: '12px' }}>Transcript Preview</h2>
-                      <div style={{ 
-                        background: '#2a2a2a',
-                        padding: '16px',
-                        borderRadius: '8px',
-                        border: '2px solid rgba(255, 255, 255, 0.2)',
-                        color: '#fff',
-                        whiteSpace: 'pre-wrap',
-                        fontSize: '14px',
-                        lineHeight: '1.5'
-                      }}>
-                        {transcript.text}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              <VideoRecorder
-                onVideoRecorded={handleRecordedVideo}
-                onError={setError}
-              />
-              {file && previewUrl && (
-                <div className="ion-padding-vertical">
-                  <IonButton
-                    expand="block"
-                    color="medium"
-                    onClick={() => {
-                      setFile(null);
-                      if (previewUrl) {
-                        URL.revokeObjectURL(previewUrl);
-                        setPreviewUrl(null);
-                      }
-                      setUploadMode('record');
-                    }}
-                  >
-                    Record Again
-                  </IonButton>
-                </div>
-              )}
-            </>
-          )}
-
+          {/* Job Description Upload */}
           <input
             type="file"
             accept="application/pdf"
@@ -703,14 +485,6 @@ const Upload = () => {
             style={{ display: 'none' }}
             id="pdf-upload"
           />
-          <IonItem>
-            <IonLabel>Use Gemini for parsing</IonLabel>
-            <IonToggle 
-              checked={true}
-              onIonChange={e => {}}
-              style={{ '--background': 'black', '--background-checked': 'black', '--handle-background': 'white', '--handle-background-checked': 'white' }}
-            />
-          </IonItem>
           <IonButton
             expand="block"
             onClick={() => document.getElementById('pdf-upload')?.click()}
@@ -764,30 +538,158 @@ const Upload = () => {
             </div>
           )}
 
+          {/* Optional Video Upload Section */}
+          <div style={{ marginTop: '1rem' }}>
+            <IonLabel style={{ color: 'rgba(255, 255, 255, 0.7)', display: 'block', marginBottom: '0.5rem' }}>
+              Optional: Add a Video Pitch
+            </IonLabel>
+            {!Capacitor.isNativePlatform() && (
+              <IonSegment 
+                value={uploadMode} 
+                onIonChange={e => {
+                  const newMode = e.detail.value as 'file' | 'record';
+                  setUploadMode(newMode);
+                  if (newMode === 'record') {
+                    setFile(null);
+                    if (previewUrl) {
+                      URL.revokeObjectURL(previewUrl);
+                      setPreviewUrl(null);
+                    }
+                  }
+                }}
+              >
+                <IonSegmentButton value="file">
+                  <IonLabel>Choose File</IonLabel>
+                </IonSegmentButton>
+                <IonSegmentButton value="record">
+                  <IonLabel>Record Pitch</IonLabel>
+                </IonSegmentButton>
+              </IonSegment>
+            )}
+
+            {uploadMode === 'file' ? (
+              <div className="ion-padding-vertical">
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={handleFileChange}
+                  style={{ display: 'none' }}
+                  id="video-upload"
+                />
+                <IonButton
+                  expand="block"
+                  onClick={() => document.getElementById('video-upload')?.click()}
+                  disabled={uploading}
+                >
+                  {file ? 'Change Video' : 'Choose Video'}
+                </IonButton>
+
+                {file && (
+                  <div className="ion-padding-vertical">
+                    <video
+                      src={previewUrl || undefined}
+                      controls
+                      style={{
+                        width: '100%',
+                        borderRadius: '8px',
+                        backgroundColor: '#000'
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Transcription Section */}
+                {(file || previewUrl) && !uploading && (
+                  <div className="ion-padding-vertical">
+                    <IonButton
+                      expand="block"
+                      onClick={handleTranscribe}
+                      disabled={transcribing}
+                      color={transcript ? 'success' : 'primary'}
+                    >
+                      <IonIcon icon={micOutline} slot="start" />
+                      {transcribing ? (
+                        <>
+                          <IonSpinner name="crescent" />
+                          <span className="ion-padding-start">Transcribing...</span>
+                        </>
+                      ) : transcript ? (
+                        'Transcription Complete'
+                      ) : (
+                        'Transcribe Video'
+                      )}
+                    </IonButton>
+
+                    {transcript && (
+                      <div className="transcript-preview">
+                        <h2 style={{ color: '#fff', marginBottom: '12px' }}>Transcript Preview</h2>
+                        <div style={{ 
+                          background: '#2a2a2a',
+                          padding: '16px',
+                          borderRadius: '8px',
+                          border: '2px solid rgba(255, 255, 255, 0.2)',
+                          color: '#fff',
+                          whiteSpace: 'pre-wrap',
+                          fontSize: '14px',
+                          lineHeight: '1.5'
+                        }}>
+                          {transcript.text}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <VideoRecorder
+                  onVideoRecorded={handleRecordedVideo}
+                  onError={setError}
+                />
+                {file && previewUrl && (
+                  <div className="ion-padding-vertical">
+                    <IonButton
+                      expand="block"
+                      color="medium"
+                      onClick={() => {
+                        setFile(null);
+                        if (previewUrl) {
+                          URL.revokeObjectURL(previewUrl);
+                          setPreviewUrl(null);
+                        }
+                        setUploadMode('record');
+                      }}
+                    >
+                      Record Again
+                    </IonButton>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           {error && (
             <div className="ion-padding-vertical ion-text-center">
               <IonLabel color="danger">{error}</IonLabel>
             </div>
           )}
 
-          <IonButton
-            expand="block"
-            onClick={handleUpload}
-            disabled={uploading || !file || !title.trim()}
-          >
-            <IonIcon icon={cloudUploadOutline} slot="start" />
-            {uploading ? 'Uploading...' : 'Upload Job'}
-          </IonButton>
-
-          {webSuccess && !Capacitor.isNativePlatform() && (
-            <div className="ion-text-center ion-padding">
-              <IonLabel color="success" style={{ fontSize: '1.2em', fontWeight: 'bold' }}>
-                Upload Complete! Clearing form...
-              </IonLabel>
+          {slideGenerationError && (
+            <div className="ion-padding-vertical ion-text-center">
+              <IonLabel color="danger">Error generating slides: {slideGenerationError}</IonLabel>
             </div>
           )}
 
-          {uploading && (
+          <IonButton
+            expand="block"
+            onClick={handleUpload}
+            disabled={uploading || !jobDescription || generatingSlides}
+          >
+            <IonIcon icon={cloudUploadOutline} slot="start" />
+            {uploading ? 'Uploading...' : generatingSlides ? 'Generating Slides...' : 'Post Job'}
+          </IonButton>
+
+          {(uploading || generatingSlides) && (
             <div style={{ maxWidth: '600px', margin: '1.5rem auto' }}>
               <IonProgressBar 
                 value={uploadProgress / 100}
@@ -798,7 +700,7 @@ const Upload = () => {
                 marginTop: '0.5rem',
                 color: 'rgba(255, 255, 255, 0.7)'
               }}>
-                Uploading... {Math.round(uploadProgress)}%
+                {generatingSlides ? 'Generating slides and voiceover...' : `Uploading... ${Math.round(uploadProgress)}%`}
               </p>
             </div>
           )}

@@ -26,11 +26,19 @@ export interface Transcript {
   }[];
 }
 
+export interface Slide {
+  title: string;        // e.g. "Highlights"
+  heading: string;      // Short tagline
+  bullets: string[];    // Bullet points for the slide
+  backgroundImageUrl?: string;  // DALLE or other AI-generated image
+}
+
 export interface JobOpening {
   id: string;
   title: string;
-  videoUrl: string;
-  thumbnailUrl?: string;
+  videoUrl?: string;  // Now optional
+  slides: Slide[];    // Required array of 4 slides
+  voiceoverUrl?: string;  // Optional TTS audio URL
   jobDescription?: JobDescription;
   tags: string[];
   userId: string;

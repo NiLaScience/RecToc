@@ -26,6 +26,12 @@ export class ParserService {
         if (typeof reader.result === 'string') {
           // Remove data URL prefix (e.g., "data:application/pdf;base64,")
           const base64 = reader.result.split(',')[1];
+          // Check if the base64 string is too large (Gemini has a 4MB limit)
+          const sizeInBytes = Math.ceil((base64.length * 3) / 4);
+          if (sizeInBytes > 4 * 1024 * 1024) {
+            reject(new Error('PDF file is too large. Maximum size is 4MB.'));
+            return;
+          }
           resolve(base64);
         } else {
           reject(new Error('Failed to convert file to base64'));
@@ -36,14 +42,36 @@ export class ParserService {
     });
   }
 
-  private async parseWithSchema<T>(content: string | File, schema: typeof CVSchemaObj | typeof JobDescriptionSchemaObj, parseInstructions: string): Promise<T> {
+  private async parseWithSchema<T extends JobDescriptionSchema | CVSchema>(
+    content: string | File,
+    schema: typeof CVSchemaObj | typeof JobDescriptionSchemaObj,
+    parseInstructions: string
+  ): Promise<T> {
     try {
-      // First get the text content
       let extractedText: string;
       if (content instanceof File) {
-        const base64 = await this.fileToBase64(content);
+        // Upload the PDF first
+        const docId = uuidv4();
+        const storagePath = `pdfs-to-parse/${docId}.pdf`;
+
+        // Upload to Firebase Storage
+        await new Promise<void>((resolve, reject) => {
+          FirebaseStorage.uploadFile({
+            path: storagePath,
+            blob: content,
+            metadata: { contentType: 'application/pdf' }
+          }, (progress, error) => {
+            if (error) reject(error);
+            if (progress?.completed) resolve();
+          });
+        });
+
+        // Get the download URL
+        const downloadUrlResult = await FirebaseStorage.getDownloadUrl({
+          path: storagePath
+        });
         
-        // Call Cloud Function to extract text from PDF
+        // Call Cloud Function to extract text from PDF using the URL
         const extractionResult = await CloudFunctionService.callFunction<
           {
             payload: {
@@ -72,11 +100,11 @@ export class ParserService {
             contents: [{
               parts: [{
                 inlineData: {
-                  data: base64,
+                  data: downloadUrlResult.downloadUrl,
                   mimeType: "application/pdf",
                 },
               }, {
-                text: 'Extract all text content from this document and maintain its structure. Include all text content without any formatting or interpretation.',
+                text: 'Extract all text content from this document. Include all text content without any formatting or interpretation. If the document is too large, focus on the most important sections like job title, company, requirements, and responsibilities.',
               }],
             }],
           },
@@ -119,7 +147,14 @@ export class ParserService {
 
       const response = parseResult.candidates[0].content.parts[0].text;
       const cleanedResponse = cleanJsonResponse(response);
-      return JSON.parse(cleanedResponse);
+      const parsed = JSON.parse(cleanedResponse);
+      
+      // Validate that the parsed result matches the expected type
+      if (schema === JobDescriptionSchemaObj) {
+        return parsed as JobDescriptionSchema as T;
+      } else {
+        return parsed as CVSchema as T;
+      }
     } catch (error) {
       console.error('Error parsing document:', error);
       throw error;
@@ -184,7 +219,7 @@ Rules:
   async uploadAndParsePDF<T extends JobDescriptionSchema | CVSchema>(
     file: File,
     collection: 'parsedPDFs' | 'parsedCVs'
-  ): Promise<T> {
+  ): Promise<{ parsed: T; pdfUrl: string }> {
     try {
       // Check authentication first
       const result = await FirebaseAuthentication.getCurrentUser();
@@ -193,7 +228,9 @@ Rules:
       }
 
       const docId = uuidv4();
-      const storagePath = `${collection}/${docId}.pdf`;
+      const storagePath = collection === 'parsedPDFs' 
+        ? `pdfs-to-parse/${docId}.pdf`
+        : `cvs-to-parse/${docId}.pdf`;
 
       // Upload file to Firebase Storage
       if (Capacitor.isNativePlatform()) {
@@ -242,23 +279,35 @@ Rules:
         });
       }
 
-      // Parse the file based on collection type
-      const parsed = collection === 'parsedCVs' 
-        ? await this.parseCV(file)
-        : await this.parseJobDescription(file);
+      // Get the download URL for the PDF
+      const downloadUrlResult = await FirebaseStorage.getDownloadUrl({
+        path: storagePath
+      });
+
+      // Parse the file based on collection type and ensure correct type
+      let parsed: T;
+      if (collection === 'parsedCVs') {
+        parsed = await this.parseCV(file) as T;
+      } else {
+        parsed = await this.parseJobDescription(file) as T;
+      }
 
       // Store the parsed result
       await FirebaseFirestore.setDocument({
         reference: `${collection}/${docId}`,
         data: {
           parsed,
+          pdfUrl: downloadUrlResult.downloadUrl,
           status: 'completed',
           createdAt: new Date().toISOString(),
           userId: result.user.uid
         }
       });
 
-      return parsed as T;
+      return { 
+        parsed,
+        pdfUrl: downloadUrlResult.downloadUrl 
+      };
     } catch (error) {
       console.error('Error uploading and parsing document:', error);
       throw error;

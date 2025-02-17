@@ -16,12 +16,38 @@ export interface JobDescription {
   };
 }
 
+export interface Slide {
+  title: string;
+  heading: string;
+  bullets: string[];
+  backgroundImageUrl?: string;
+}
+
+export interface Transcript {
+  text: string;
+  segments: {
+    id: number | string;
+    start: number;
+    end: number;
+    text: string;
+  }[];
+}
+
 export interface JobOpening {
   id: string;
   title: string;
+  videoUrl?: string;
+  slides: Slide[];
+  voiceoverUrl?: string;
   jobDescription?: JobDescription;
+  pdfUrl?: string;
   userId: string;
   createdAt: string;
+  views?: number;
+  likes?: number;
+  transcript?: Transcript | null;
+  sourceVideo?: string;
+  applicationUrl?: string;
 }
 
 export interface CVSchema {

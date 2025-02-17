@@ -12,12 +12,11 @@ import {
   IonSpinner,
   IonButton,
   IonIcon,
-  IonToast
+  IonToast,
+  IonModal
 } from '@ionic/react';
 import { notificationsOutline, gridOutline, videocamOutline, filterOutline } from 'ionicons/icons';
 import Notifications from './Notifications';
-import VideoPlayer from './VideoPlayer';
-import VideoTile from './VideoTile';
 import ApplicationModal from './ApplicationModal';
 import type { JobOpening } from '../types/job_opening';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
@@ -28,6 +27,9 @@ import FilterPopover from './FilterHeader';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../config/firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import JobTile from './JobTile';
+import JobPresentation from './JobPresentation';
+import JobDetails from './JobDetails';
 
 const HEADER_HEIGHT = 56; // Fixed header height
 
@@ -55,7 +57,7 @@ const fullscreenVideoStyle: React.CSSProperties = {
   overflow: 'hidden'
 };
 
-type FeedMode = 'grid' | 'fullscreen' | 'details';
+type FeedMode = 'grid' | 'feed' | 'details';
 
 const Feed = () => {
   const { user } = useAuth();
@@ -64,6 +66,7 @@ const Feed = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [mode, setMode] = useState<FeedMode>('grid');
   const [selectedJob, setSelectedJob] = useState<JobOpening | null>(null);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [showApplication, setShowApplication] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [rejectedJobIds, setRejectedJobIds] = useState<Set<string>>(new Set());
@@ -137,6 +140,8 @@ const Feed = () => {
 
   const handleJobClick = (job: JobOpening) => {
     setSelectedJob(job);
+    setMode('feed');
+    setCurrentSlideIndex(0); // Reset slide index for new job
   };
 
   const handleApply = (jobId: string) => {
@@ -149,70 +154,79 @@ const Feed = () => {
     setSelectedJobId(null);
   };
 
-  const handleSwipe = async (direction: 'up' | 'down' | 'left' | 'right', job: JobOpening) => {
-    if (direction === 'up') {
-      // Previous video
-      const currentIndex = jobs.findIndex(v => v.id === job.id);
-      if (currentIndex > 0) {
-        // Find the previous non-rejected video if we're not showing rejected videos
-        if (!showRejected) {
-          for (let i = currentIndex - 1; i >= 0; i--) {
-            const videoId = jobs[i].id;
-            if (videoId && !rejectedJobIds.has(videoId)) {
-              setSelectedJob(jobs[i]);
-              break;
-            }
+  const handleNextJob = () => {
+    if (!selectedJob) return;
+    const currentIndex = jobs.findIndex(v => v.id === selectedJob.id);
+    if (currentIndex < jobs.length - 1) {
+      if (!showRejected) {
+        for (let i = currentIndex + 1; i < jobs.length; i++) {
+          if (!rejectedJobIds.has(jobs[i].id)) {
+            setSelectedJob(jobs[i]);
+            setCurrentSlideIndex(0); // Reset slide index for new job
+            break;
           }
-        } else {
-          setSelectedJob(jobs[currentIndex - 1]);
         }
-      }
-    } else if (direction === 'down') {
-      // Next video
-      const currentIndex = jobs.findIndex(v => v.id === job.id);
-      if (currentIndex < jobs.length - 1) {
-        // Find the next non-rejected video if we're not showing rejected videos
-        if (!showRejected) {
-          for (let i = currentIndex + 1; i < jobs.length; i++) {
-            if (!rejectedJobIds.has(jobs[i].id)) {
-              setSelectedJob(jobs[i]);
-              break;
-            }
-          }
-        } else {
-          setSelectedJob(jobs[currentIndex + 1]);
-        }
-      }
-    } else if (direction === 'right') {
-      // Reject job
-      const newRejectedJobIds = new Set(rejectedJobIds);
-      newRejectedJobIds.add(job.id);
-      setRejectedJobIds(newRejectedJobIds);
-      setShowToast(true);
-
-      // Find next non-rejected video
-      const currentIndex = jobs.findIndex(v => v.id === job.id);
-      const nextJob = jobs.slice(currentIndex + 1).find(v => !newRejectedJobIds.has(v.id));
-      if (nextJob) {
-        setSelectedJob(nextJob);
       } else {
-        setMode('grid');
+        setSelectedJob(jobs[currentIndex + 1]);
+        setCurrentSlideIndex(0); // Reset slide index for new job
       }
-
-      // Update rejection in Firestore
-      try {
-        const userRef = doc(db, 'users', user?.uid || '');
-        await updateDoc(userRef, {
-          [`rejectedJobs.${job.id}`]: serverTimestamp()
-        });
-      } catch (error) {
-        console.error('Error updating rejected jobs:', error);
-      }
-    } else if (direction === 'left') {
-      // Show details
-      setMode('details');
-      setSelectedJobId(job.id);
     }
+  };
+
+  const handlePreviousJob = () => {
+    if (!selectedJob) return;
+    const currentIndex = jobs.findIndex(v => v.id === selectedJob.id);
+    if (currentIndex > 0) {
+      if (!showRejected) {
+        for (let i = currentIndex - 1; i >= 0; i--) {
+          const jobId = jobs[i].id;
+          if (jobId && !rejectedJobIds.has(jobId)) {
+            setSelectedJob(jobs[i]);
+            setCurrentSlideIndex(0); // Reset slide index for new job
+            break;
+          }
+        }
+      } else {
+        setSelectedJob(jobs[currentIndex - 1]);
+        setCurrentSlideIndex(0); // Reset slide index for new job
+      }
+    }
+  };
+
+  const handleRejectJob = async () => {
+    if (!selectedJob) return;
+    
+    // Reject job
+    const newRejectedJobIds = new Set(rejectedJobIds);
+    newRejectedJobIds.add(selectedJob.id);
+    setRejectedJobIds(newRejectedJobIds);
+    setShowToast(true);
+
+    // Find next non-rejected job
+    const currentIndex = jobs.findIndex(v => v.id === selectedJob.id);
+    const nextJob = jobs.slice(currentIndex + 1).find(v => !newRejectedJobIds.has(v.id));
+    if (nextJob) {
+      setSelectedJob(nextJob);
+      setCurrentSlideIndex(0); // Reset slide index for new job
+    } else {
+      setMode('grid');
+    }
+
+    // Update rejection in Firestore
+    try {
+      const userRef = doc(db, 'users', user?.uid || '');
+      await updateDoc(userRef, {
+        [`rejectedJobs.${selectedJob.id}`]: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating rejected jobs:', error);
+    }
+  };
+
+  const handleShowDetails = () => {
+    if (!selectedJob) return;
+    setMode('details');
+    setSelectedJobId(selectedJob.id);
   };
 
   const handleResetFilters = async () => {
@@ -252,11 +266,13 @@ const Feed = () => {
                   : jobs[0];
                 if (firstJob) {
                   setSelectedJob(firstJob);
+                  setCurrentSlideIndex(0); // Reset slide index for new job
                 }
               }
-              setMode('fullscreen');
+              setMode('feed');
             } else {
               setMode('grid');
+              setCurrentSlideIndex(0); // Reset slide index when returning to grid
             }
           }}
           onNotifications={() => setShowNotifications(true)}
@@ -293,7 +309,7 @@ const Feed = () => {
           </div>
         ) : jobs.length === 0 ? (
           <div style={emptyStateStyle}>
-            <p>No videos available</p>
+            <p>No jobs available</p>
           </div>
         ) : mode === 'grid' ? (
           <div style={{ paddingTop: '56px', backgroundColor: '#000' }}>
@@ -302,9 +318,9 @@ const Feed = () => {
               marginTop: '-56px'
             }}>
               {filteredJobs.map((job) => (
-                <VideoTile
+                <JobTile
                   key={job.id}
-                  video={job}
+                  job={job}
                   onClick={() => handleJobClick(job)}
                 />
               ))}
@@ -313,21 +329,27 @@ const Feed = () => {
         ) : (
           <div style={fullscreenVideoStyle}>
             {selectedJob && (
-              <VideoPlayer
-                video={selectedJob}
-                autoPlay
+              <JobPresentation
+                job={selectedJob}
                 mode="feed"
+                currentSlideIndex={currentSlideIndex}
+                onSlideChange={setCurrentSlideIndex}
+                onNextJob={handleNextJob}
+                onPreviousJob={handlePreviousJob}
+                onReject={handleRejectJob}
+                onShowDetails={handleShowDetails}
+                autoPlay
                 onEnded={() => {
-                  // Find next video
+                  // Find next job
                   const currentIndex = jobs.findIndex(v => v.id === selectedJob.id);
                   const nextJob = jobs[currentIndex + 1];
                   if (nextJob) {
                     setSelectedJob(nextJob);
+                    setCurrentSlideIndex(0); // Reset slide index for new job
                   } else {
                     setMode('grid');
                   }
                 }}
-                onSwipe={(direction) => handleSwipe(direction, selectedJob)}
               />
             )}
           </div>
@@ -345,6 +367,25 @@ const Feed = () => {
           onClose={handleCloseApplication}
           jobId={selectedJobId}
         />
+      )}
+
+      {/* Job Details Modal */}
+      {mode === 'details' && selectedJob && (
+        <IonModal
+          isOpen={mode === 'details'}
+          onDidDismiss={() => {
+            setMode('feed');
+            setSelectedJobId(null);
+          }}
+        >
+          <JobDetails
+            job={selectedJob}
+            onClose={() => {
+              setMode('feed');
+              setSelectedJobId(null);
+            }}
+          />
+        </IonModal>
       )}
 
       <IonToast
