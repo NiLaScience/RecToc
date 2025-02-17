@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useBaseRealtimeConnection, ServerEvent, SessionStatus } from './useBaseRealtimeConnection';
-import type { CVSchema } from '../types/cv';
+import type { CVSchema } from '../types/user';
 import type { JobDescription } from '../types/job_opening';
 
 export type onboardingStage = 'intro' | 'technical' | 'behavioral' | 'problemSolving' | 'cultureFit' | 'closing';

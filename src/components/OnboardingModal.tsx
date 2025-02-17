@@ -23,6 +23,7 @@ import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import type { UserProfile } from '../types/user';
 import type { JobOpening } from '../types/job_opening';
+import { DEFAULT_JOB_DESCRIPTION } from '../types/job_opening';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent } from './shared/AccordionContent';
@@ -59,6 +60,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose }) =>
       education: [],
       skills: [],
     },
+    jobDescription: jobPost?.jobDescription || DEFAULT_JOB_DESCRIPTION,
     onProgressUpdate: (stage, progress, title) => {
       console.log('onboarding progress updated:', { stage, progress, title });
     },

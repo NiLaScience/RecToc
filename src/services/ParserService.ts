@@ -5,13 +5,10 @@ import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import CloudFunctionService from './CloudFunctionService';
-import type { CVSchema } from '../types/cv';
-import { CVSchemaObj } from '../types/cv';
+import type { CVSchema } from '../types/user';
+import { CVSchemaObj } from '../types/user';
 import type { JobDescription } from '../types/job_opening';
 import { JobDescriptionSchemaObj } from '../types/job_opening';
-import { callGeminiAPI } from '../config/firebase';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { storage } from '../config/firebase';
 
 function cleanJsonResponse(text: string): string {
   // Remove markdown code block markers and any language identifier
@@ -179,31 +176,14 @@ export class ParserService {
   }
 
   async parseCV(content: string | File): Promise<CVSchema> {
-    const instructions = `This is a CV/resume. Please analyze it carefully and structure it according to the schema. Return ONLY a valid JSON object matching the schema exactly, with no additional text or markdown formatting.
-
-Key points to extract:
-- Personal info should include name and contact details if provided
-- Experience entries should be in reverse chronological order
-- For each experience:
-  * Extract company name, title, and dates
-  * Convert dates to YYYY-MM format
-  * Highlight key achievements and responsibilities
-- Education should include degree, field, and institution
-- Skills should be grouped into logical categories like:
-  * Programming Languages
-  * Frameworks & Tools
-  * Soft Skills
-  * Domain Knowledge
-- Languages should include proficiency level if mentioned
-- Certifications should include issuing organization and date
-
-Rules:
-1. If any field is not explicitly mentioned in the text, omit it from the JSON response
-2. Do not add any explanatory text or markdown formatting
-3. Ensure the response is a single, valid JSON object
-4. All array fields should contain properly structured objects as per schema
-5. Dates must be in YYYY-MM format (use YYYY-01 if only year is provided)
-6. Follow the schema types exactly (strings for text, arrays for lists, objects for structured data)`;
+    const instructions = `
+      Parse the text into a CV/resume with the following schema.
+      Return ONLY the JSON object, no markdown formatting or explanation.
+      
+      If a field is not found in the text, omit it from the output.
+      Do not make up or infer missing information.
+      Convert all dates to YYYY-MM format (use YYYY-01 if only year is provided).
+    `;
 
     return this.parseWithSchema<CVSchema>(content, CVSchemaObj, instructions);
   }

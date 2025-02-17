@@ -29,8 +29,7 @@ import { useAuth } from '../context/AuthContext';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { useRouter } from 'next/navigation';
-import type { UserProfile } from '../types/user';
-import type { CVSchema } from '../types/cv';
+import type { UserProfile, CVSchema } from '../types/user';
 import { 
   uploadFile, 
   addSnapshotListener, 
