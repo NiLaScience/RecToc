@@ -277,6 +277,13 @@ const Upload: React.FC<UploadProps> = ({ onClose }) => {
     const pdfFile = event.target.files?.[0];
     if (!pdfFile) return;
 
+    // Check authentication first
+    if (!user) {
+      setError('You must be signed in to upload a job description');
+      return;
+    }
+
+    console.log('Current auth state:', user);
     setParsingPDF(true);
     try {
       const result = await parser.uploadAndParsePDF<JobDescription>(pdfFile, 'pdfs-to-parse');
@@ -292,8 +299,16 @@ const Upload: React.FC<UploadProps> = ({ onClose }) => {
           result.location || '',
         ].filter(Boolean));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error parsing PDF:', error);
+      // More specific error messages based on the error type
+      if (error.code === 'permission-denied') {
+        setError('You don\'t have permission to upload job descriptions. Please check your account permissions.');
+      } else if (error.code === 'unauthenticated') {
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError(error.message || 'Failed to parse PDF. Please try again.');
+      }
       setShowAlert(true);
     } finally {
       setParsingPDF(false);

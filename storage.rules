@@ -10,6 +10,19 @@ service firebase.storage {
       return request.auth != null && request.auth.token.agent == true;
     }
 
+    // Job description uploads
+    match /jobs/{userId}/job-descriptions/{allPaths=**} {
+      allow read: if true;  // Anyone can read job descriptions
+      allow write: if isOwner(userId);  // Only owner can upload their job descriptions
+    }
+
+    // CV uploads
+    match /users/{userId}/cv-uploads/{allPaths=**} {
+      allow read: if isOwner(userId) || isAgent();  // Only owner and agents can read CVs
+      allow write: if isOwner(userId);  // Only owner can upload their CV
+    }
+
+    // Keep existing rules for other paths
     match /videos/{userId}/{allPaths=**} {
       allow read: if true;
       allow write: if isOwner(userId);
@@ -56,10 +69,6 @@ service firebase.storage {
     match /job_slides/{jobId}/{allPaths=**} {
       allow read: if true;
       allow write: if request.auth != null;
-    }
-
-    match /{allPaths=**} {
-      allow read, write: if request.auth != null;
     }
   }
 }

@@ -52,9 +52,18 @@ export class ParserService {
     try {
       let extractedText: string;
       if (content instanceof File) {
+        // Get auth result first
+        const authResult = await FirebaseAuthentication.getCurrentUser();
+        if (!authResult.user) {
+          throw new Error('User must be authenticated to parse documents');
+        }
+
         // Upload the PDF first
         const docId = uuidv4();
-        const storagePath = `pdfs-to-parse/${docId}.pdf`;
+        const isCV = schema === CVSchemaObj;
+        const storagePath = isCV 
+          ? `users/${authResult.user.uid}/cv-uploads/${docId}.pdf`
+          : `jobs/${authResult.user.uid}/job-descriptions/${docId}.pdf`;
 
         // Upload to Firebase Storage
         await new Promise<void>((resolve, reject) => {
@@ -202,7 +211,10 @@ export class ParserService {
       }
 
       const docId = uuidv4();
-      const storagePath = `${storageFolder}/${docId}.pdf`;
+      const isCV = storageFolder === 'cvs-to-parse';
+      const storagePath = isCV 
+        ? `users/${result.user.uid}/cv-uploads/${docId}.pdf`
+        : `jobs/${result.user.uid}/job-descriptions/${docId}.pdf`;
 
       // Upload file to Firebase Storage
       if (Capacitor.isNativePlatform()) {
@@ -258,15 +270,17 @@ export class ParserService {
 
       // Parse the file based on collection type and ensure correct type
       let parsed: T;
-      if (storageFolder === 'cvs-to-parse') {
+      const firestoreCollection = isCV ? 'parsedCVs' : 'parsedPDFs';
+      
+      if (isCV) {
         parsed = await this.parseCV(file) as T;
       } else {
         parsed = await this.parseJobDescription(file) as T;
       }
 
-      // Store the parsed result
+      // Store the parsed result in the correct collection
       await FirebaseFirestore.setDocument({
-        reference: `${storageFolder}/${docId}`,
+        reference: `${firestoreCollection}/${docId}`,
         data: {
           parsed,
           pdfUrl: downloadUrlResult.downloadUrl,
