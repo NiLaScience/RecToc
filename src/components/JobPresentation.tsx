@@ -52,6 +52,10 @@ const JobPresentation: React.FC<JobPresentationProps> = ({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
 
+  // Add new state for audio loading
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+
   // When job changes, reset playback and mute states
   useEffect(() => {
     setIsPlaying(autoPlay);
@@ -109,26 +113,99 @@ const JobPresentation: React.FC<JobPresentationProps> = ({
 
   // Reset audio when job changes
   useEffect(() => {
-    if (audioRef.current && !job.videoUrl) {
-      audioRef.current.currentTime = 0;
+    if (audioRef.current && job.voiceoverUrl && !job.videoUrl) {
+      console.log('Initializing audio for job:', job.id);
+      
+      setIsAudioLoading(true);
+      setAudioError(null);
       setAudioEnded(false);
-      if (autoPlay) {
-        audioRef.current.play().catch(console.error);
-        setIsPlaying(true);
-      }
+      setIsPlaying(false);
+
+      const getAudioUrl = async () => {
+        try {
+          const audio = audioRef.current;
+          if (!audio || !job.voiceoverUrl) {
+            throw new Error('Audio element or URL not available');
+          }
+
+          // If the URL is already a full URL, use it directly
+          if (job.voiceoverUrl.startsWith('http')) {
+            audio.src = job.voiceoverUrl;
+          } else {
+            // Otherwise, get an authenticated URL from Firebase Storage
+            const result = await FirebaseStorage.getDownloadUrl({
+              path: job.voiceoverUrl
+            });
+            audio.src = result.downloadUrl;
+          }
+          audio.load();
+        } catch (error) {
+          console.error('Error getting audio URL:', error);
+          setAudioError('Failed to load audio');
+          setIsAudioLoading(false);
+        }
+      };
+
+      getAudioUrl();
+
+      const handleCanPlay = () => {
+        console.log('Audio ready to play');
+        setIsAudioLoading(false);
+        setAudioError(null);
+        if (autoPlay) {
+          audioRef.current?.play().catch(error => {
+            console.error('Autoplay failed:', error);
+            setIsPlaying(false);
+          });
+        }
+      };
+
+      const handleError = () => {
+        console.error('Audio failed to load');
+        setIsPlaying(false);
+        setAudioEnded(true);
+        setIsAudioLoading(false);
+        setAudioError('Failed to load audio');
+      };
+
+      const audio = audioRef.current;
+      audio.addEventListener('canplay', handleCanPlay);
+      audio.addEventListener('error', handleError);
+      
+      return () => {
+        audio.removeEventListener('canplay', handleCanPlay);
+        audio.removeEventListener('error', handleError);
+        audio.src = '';
+        audio.load();
+      };
     }
-  }, [job.id, autoPlay]);
+  }, [job.id, job.voiceoverUrl, autoPlay]);
 
   // Handle play/pause
   useEffect(() => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.play().catch(console.error);
+    if (audioRef.current && job.voiceoverUrl && !job.videoUrl) {
+      if (isPlaying && !isAudioLoading && !audioError) {
+        console.log('Attempting to play audio...');
+        const playPromise = audioRef.current.play();
+        if (playPromise) {
+          playPromise.catch(error => {
+            console.error('Play failed:', {
+              error,
+              readyState: audioRef.current?.readyState,
+              currentTime: audioRef.current?.currentTime,
+              paused: audioRef.current?.paused,
+              ended: audioRef.current?.ended
+            });
+            setIsPlaying(false);
+            setAudioError(error.message);
+          });
+        }
       } else {
+        console.log('Pausing audio');
         audioRef.current.pause();
       }
     }
-  }, [isPlaying]);
+  }, [isPlaying, job.voiceoverUrl, isAudioLoading, audioError]);
 
   // Handle audio end
   const handleAudioEnd = () => {
@@ -361,7 +438,8 @@ const JobPresentation: React.FC<JobPresentationProps> = ({
   const currentSlide = job.slides[currentSlideIndex];
   const backgroundImage = job.videoUrl ? undefined : 
     (slideImageUrls[currentSlideIndex] || 
-     `https://via.placeholder.com/1024x1024?text=Loading+Slide+${currentSlideIndex + 1}`);
+     // Use a more reliable placeholder service
+     `https://placehold.co/1024x1024/000000/FFFFFF/png?text=Loading+Slide+${currentSlideIndex + 1}`);
 
   return (
     <div
@@ -436,29 +514,40 @@ const JobPresentation: React.FC<JobPresentationProps> = ({
             backgroundColor: '#000'
           }}
         >
-          {/* Slide Text Content */}
+          {/* Slide Content */}
           <div
             style={{
-              backgroundColor: 'rgba(0, 0, 0, 0.85)',
+              backgroundColor: 'rgba(0, 0, 0, 0.75)',
               padding: '2rem',
               borderRadius: '16px',
               maxWidth: '95%',
               boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
             }}
           >
-            <h2
+            <h2 style={{
+              color: '#fff',
+              margin: 0,
+              marginBottom: '1rem',
+              fontSize: '2.2rem',
+              fontWeight: '800',
+              lineHeight: 1.3,
+              textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
+            }}>
+              {currentSlide.title}
+            </h2>
+            <h3
               style={{
                 color: '#fff',
                 margin: 0,
                 marginBottom: '1.2rem',
-                fontSize: '2.5rem',
-                fontWeight: '800',
+                fontSize: '1.8rem',
+                fontWeight: '700',
                 lineHeight: 1.3,
                 textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
               }}
             >
               {currentSlide.heading}
-            </h2>
+            </h3>
             <ul
               style={{
                 color: '#fff',
@@ -492,8 +581,8 @@ const JobPresentation: React.FC<JobPresentationProps> = ({
               zIndex: 10
             }}
           >
-            {/* Media controls */}
-            {(job.videoUrl || (job.voiceoverUrl && !job.videoUrl)) && (
+            {/* Media controls - Only show if we have a valid voiceover URL */}
+            {job.voiceoverUrl && !job.videoUrl && (
               <div
                 style={{
                   display: 'flex',
@@ -511,28 +600,45 @@ const JobPresentation: React.FC<JobPresentationProps> = ({
                       setIsPlaying(!isPlaying);
                     }
                   }}
+                  disabled={isAudioLoading || !!audioError}
                   style={{
                     background: 'rgba(0, 0, 0, 0.5)',
                     border: '2px solid rgba(255, 255, 255, 0.5)',
                     borderRadius: '50%',
                     padding: '12px',
-                    cursor: 'pointer',
+                    cursor: isAudioLoading || !!audioError ? 'not-allowed' : 'pointer',
                     width: '48px',
                     height: '48px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    opacity: isAudioLoading || !!audioError ? 0.5 : 1
                   }}
                 >
                   <IonIcon
-                    icon={audioEnded ? playCircleOutline : (isPlaying ? pauseCircleOutline : playCircleOutline)}
+                    icon={isAudioLoading ? undefined : (audioEnded ? playCircleOutline : (isPlaying ? pauseCircleOutline : playCircleOutline))}
                     style={{ 
                       color: '#fff', 
                       fontSize: '24px',
                       transform: audioEnded ? 'rotate(-45deg)' : 'none' // Rotate for restart
                     }}
                   />
+                  {isAudioLoading && (
+                    <div style={{ width: '24px', height: '24px', border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                  )}
                 </button>
+                {audioError && (
+                  <div style={{
+                    color: '#ff4444',
+                    fontSize: '0.8rem',
+                    position: 'absolute',
+                    bottom: '-20px',
+                    textAlign: 'center',
+                    width: '100%'
+                  }}>
+                    Failed to load audio
+                  </div>
+                )}
               </div>
             )}
 
@@ -568,13 +674,15 @@ const JobPresentation: React.FC<JobPresentationProps> = ({
         </div>
       )}
 
-      {/* Voiceover Audio: only present if job.voiceoverUrl && no job.videoUrl */}
+      {/* Voiceover Audio: only create if we have a valid voiceover URL */}
       {job.voiceoverUrl && !job.videoUrl && (
         <audio
           ref={audioRef}
-          src={job.voiceoverUrl}
           onEnded={handleAudioEnd}
           style={{ display: 'none' }}
+          preload="auto"
+          crossOrigin="anonymous"
+          onError={(e) => console.error('Audio element error:', e)}
         />
       )}
     </div>

@@ -163,7 +163,7 @@ const JobTile: React.FC<JobTileProps> = ({ job, onClick }) => {
             {/* First Slide Content */}
             {firstSlide && (
               <div style={{
-                marginTop: '0.5rem',
+                marginTop: '1.5rem',
                 color: '#fff',
                 fontSize: '1.1rem'
               }}>
@@ -249,34 +249,9 @@ const JobTile: React.FC<JobTileProps> = ({ job, onClick }) => {
                   alignItems: 'center',
                   gap: '4px'
                 }}>
-                  <IonIcon icon={videocamOutline} />
-                  Video
+                  <IonIcon icon={videocamOutline} style={{ fontSize: '14px' }} />
+                  <span>Video</span>
                 </div>
-              )}
-              {job.tags?.slice(0, 2).map((tag, index) => (
-                <span
-                  key={index}
-                  style={{
-                    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                    color: '#fff',
-                    padding: '4px 8px',
-                    borderRadius: '12px',
-                    fontSize: '14px'
-                  }}
-                >
-                  {tag}
-                </span>
-              ))}
-              {(job.tags?.length || 0) > 2 && (
-                <span style={{
-                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                  color: '#fff',
-                  padding: '4px 8px',
-                  borderRadius: '12px',
-                  fontSize: '14px'
-                }}>
-                  +{job.tags!.length - 2}
-                </span>
               )}
             </div>
           </div>

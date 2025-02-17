@@ -253,8 +253,8 @@ const Upload: React.FC<UploadProps> = ({ onClose }) => {
       if (Capacitor.isNativePlatform()) {
         console.log('Showing native dialog');
         await Dialog.alert({
-          title: 'Upload Complete',
-          message: 'Your video has been successfully uploaded!',
+          title: 'Job Submitted',
+          message: 'Your job has been submitted and is being processed. The slides and voiceover will be generated automatically.',
           buttonTitle: 'OK'
         });
         console.log('Native dialog closed');
@@ -347,13 +347,8 @@ const Upload: React.FC<UploadProps> = ({ onClose }) => {
       setUploadProgress(0);
 
       try {
-        // Generate slides first
-        setGeneratingSlides(true);
-        setSlideGenerationError(null);
-        const { slides, voiceoverUrl, status } = await slideGenerationService.generateJobPresentation(
-          jobDescription,
-          `${Date.now()}-${title.replace(/\s+/g, '-').toLowerCase()}`
-        );
+        // Generate unique job ID
+        const jobId = `${Date.now()}-${title.replace(/\s+/g, '-').toLowerCase()}`;
 
         // Optional: If video is provided, handle it
         let videoUrl: string | undefined;
@@ -406,16 +401,14 @@ const Upload: React.FC<UploadProps> = ({ onClose }) => {
         
         console.log('Files uploaded to Firebase Storage successfully');
 
-        // Save job metadata to Firestore
+        // Save initial job metadata to Firestore
         const jobData = {
+          id: jobId,
           title,
           ...(videoUrl && { videoUrl }),
           ...(thumbnailUrl && { thumbnailUrl }),
           jobDescription,
-          slides,
-          voiceoverUrl,
-          slidesStatus: status,
-          pdfUrl,
+          slides: [], // Empty array initially, will be populated by Cloud Function
           tags,
           userId: currentUser.uid,
           createdAt: new Date().toISOString(),
@@ -423,8 +416,11 @@ const Upload: React.FC<UploadProps> = ({ onClose }) => {
           likes: 0,
           transcript: transcript || null,
           applicationUrl: applicationUrl || null,
+          status: 'processing', // Add status field to track processing
+          processingStartedAt: new Date().toISOString()
         };
         
+        // Add document to trigger Cloud Function
         await addDocument('job_openings', jobData);
 
         setUploading(false);
@@ -713,8 +709,8 @@ const Upload: React.FC<UploadProps> = ({ onClose }) => {
           setShowAlert(false);
           resetForm();
         }}
-        header="Upload Complete"
-        message="Your video has been successfully uploaded!"
+        header="Job Submitted"
+        message="Your job has been submitted and is being processed. The slides and voiceover will be generated automatically."
         buttons={[
           {
             text: 'OK',

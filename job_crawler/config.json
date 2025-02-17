@@ -81,7 +81,7 @@
         {
             "url": "https://headcount.ch/job/",
             "params": {
-                "limit": 25,
+                "limit": 20,
                 "maxDepth": 1,
                 "scrapeOptions": {
                     "formats": ["markdown"],
