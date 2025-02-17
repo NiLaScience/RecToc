@@ -46,28 +46,32 @@ const JobTile: React.FC<JobTileProps> = ({ job, onClick }) => {
   // Get authenticated URL for the background image
   useEffect(() => {
     const firstSlide = job.slides?.[0];
-    if (firstSlide?.backgroundImageUrl && !backgroundImageUrl && !imageError) {
-      const getAuthenticatedUrl = async () => {
-        try {
-          // If the URL is already a full URL (e.g., from DALL-E), use it directly
-          if (firstSlide.backgroundImageUrl.startsWith('http')) {
-            setBackgroundImageUrl(firstSlide.backgroundImageUrl);
-            return;
-          }
-
-          // Otherwise, get an authenticated URL from Firebase Storage
-          const result = await FirebaseStorage.getDownloadUrl({
-            path: firstSlide.backgroundImageUrl
-          });
-          setBackgroundImageUrl(result.downloadUrl);
-        } catch (error) {
-          console.error('Error getting authenticated URL:', error);
-          setImageError(true);
-        }
-      };
-
-      getAuthenticatedUrl();
+    const bgUrl = firstSlide?.backgroundImageUrl;
+    
+    if (!bgUrl || backgroundImageUrl || imageError) {
+      return;
     }
+
+    const getAuthenticatedUrl = async () => {
+      try {
+        // If the URL is already a full URL (e.g., from DALL-E), use it directly
+        if (bgUrl.startsWith('http')) {
+          setBackgroundImageUrl(bgUrl);
+          return;
+        }
+
+        // Otherwise, get an authenticated URL from Firebase Storage
+        const result = await FirebaseStorage.getDownloadUrl({
+          path: bgUrl
+        });
+        setBackgroundImageUrl(result.downloadUrl);
+      } catch (error) {
+        console.error('Error getting authenticated URL:', error);
+        setImageError(true);
+      }
+    };
+
+    getAuthenticatedUrl();
   }, [job.slides, backgroundImageUrl, imageError]);
 
   // Get the first slide or use fallbacks

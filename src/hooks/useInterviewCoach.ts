@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useBaseRealtimeConnection, ServerEvent, SessionStatus } from './useBaseRealtimeConnection';
-import type { CVSchema, JobDescriptionSchema } from '../types/parser';
+import type { CVSchema } from '../types/cv';
+import type { JobDescription } from '../types/job_opening';
 
 export type InterviewStage = 'intro' | 'technical' | 'behavioral' | 'problemSolving' | 'cultureFit' | 'closing';
 
@@ -31,7 +32,7 @@ interface InterviewCoachState {
 
 interface UseInterviewCoachProps {
   resumeData: CVSchema;
-  jobDescription: JobDescriptionSchema;
+  jobDescription: JobDescription;
   onProgressUpdate?: (stage: InterviewStage, progress: number, title: string) => void;
   onFeedback?: (feedback: InterviewFeedback) => void;
 }

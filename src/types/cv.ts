@@ -1,22 +1,6 @@
-// Type definitions for parsed data structures
-export type JobDescriptionSchema = {
-  title: string;
-  company: string;
-  location: string;
-  employmentType: string;
-  experienceLevel: string;
-  skills: string[];
-  responsibilities: string[];
-  requirements: string[];
-  benefits: string[];
-  salary?: {
-    min: number;
-    max: number;
-    currency: string;
-    period: string;
-  };
-};
-
+/**
+ * Type definitions for CV/Resume data
+ */
 export type CVSchema = {
   personalInfo: {
     name: string;
@@ -56,25 +40,9 @@ export type CVSchema = {
   }>;
 };
 
-// Schema definitions as objects for use in prompts
-export const JobDescriptionSchemaObj = {
-  title: "Job title",
-  company: "Company name",
-  location: "Job location",
-  employmentType: "Full-time/Part-time/Contract",
-  experienceLevel: "Entry/Mid/Senior level",
-  skills: ["Required skill 1", "Required skill 2"],
-  responsibilities: ["Responsibility 1", "Responsibility 2"],
-  requirements: ["Requirement 1", "Requirement 2"],
-  benefits: ["Benefit 1", "Benefit 2"],
-  salary: {
-    min: "minimum salary (number)",
-    max: "maximum salary (number)",
-    currency: "USD/EUR/etc",
-    period: "yearly/monthly"
-  }
-} as const;
-
+/**
+ * Schema object for use in prompts/parsing
+ */
 export const CVSchemaObj = {
   personalInfo: {
     name: "Full name",

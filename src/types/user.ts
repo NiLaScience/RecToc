@@ -1,4 +1,4 @@
-import type { CVSchema } from './parser';
+import type { CVSchema } from './cv';
 
 export interface UserProfile {
   id: string;

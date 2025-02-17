@@ -24,13 +24,14 @@ import VideoRecorder from './VideoRecorder';
 import type { JobApplication } from '../types/application';
 import type { UserProfile } from '../types/user';
 import type { JobOpening } from '../types/job_opening';
+import { DEFAULT_JOB_DESCRIPTION } from '../types/job_opening';
 import ApplicationService from '../services/ApplicationService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import { Capacitor } from '@capacitor/core';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent, ExperienceContent, EducationContent } from './shared/AccordionContent';
-import type { CVSchema, JobDescriptionSchema } from '../types/parser';
+import type { CVSchema } from '../types/cv';
 import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
 import CVAccordion from './shared/CVAccordion';
 import { FirebaseFirestore } from '@capacitor-firebase/firestore';
@@ -55,37 +56,13 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
   const [uploadMode, setUploadMode] = useState<'record' | 'file'>('record');
   const [error, setError] = useState<string | null>(null);
 
-  const defaultJobDescription: JobDescriptionSchema = {
-    title: 'Untitled Position',
-    company: 'Unknown Company',
-    location: 'Remote',
-    employmentType: 'Full-time',
-    experienceLevel: 'Not specified',
-    skills: [],
-    responsibilities: [],
-    requirements: [],
-    benefits: [],
-  };
-
   useEffect(() => {
-    let jobUnsubscribeId: string | null = null;
     let profileUnsubscribeId: string | null = null;
 
     const loadData = async () => {
       if (!user) return;
 
       try {
-        // Listen to job post updates
-        jobUnsubscribeId = await addSnapshotListener(
-          `videos/${jobId}`,
-          (data) => {
-            if (data) {
-              setJobPost(data as JobOpening);
-              setLoading(false);
-            }
-          }
-        );
-
         // Listen to user profile updates
         profileUnsubscribeId = await addSnapshotListener(
           `users/${user.uid}`,
@@ -121,7 +98,6 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
     }
 
     return () => {
-      if (jobUnsubscribeId) removeSnapshotListener(jobUnsubscribeId);
       if (profileUnsubscribeId) removeSnapshotListener(profileUnsubscribeId);
     };
   }, [user, jobId, isOpen, presentToast]);
@@ -144,9 +120,11 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
         }
 
         setJobPost({ id: jobId, ...response.snapshot.data } as JobOpening);
+        setLoading(false);
       } catch (error) {
         console.error('Error fetching job post:', error);
         setError('Failed to load job post');
+        setLoading(false);
       }
     };
 

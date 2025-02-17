@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useBaseRealtimeConnection, ServerEvent, SessionStatus } from './useBaseRealtimeConnection';
-import type { CVSchema, JobDescriptionSchema } from '../types/parser';
+import type { CVSchema } from '../types/cv';
+import type { JobDescription } from '../types/job_opening';
 
 export type onboardingStage = 'intro' | 'technical' | 'behavioral' | 'problemSolving' | 'cultureFit' | 'closing';
 
@@ -31,12 +32,14 @@ interface onboardingCoachState {
 
 interface UseOnboardingCoachProps {
   resumeData: CVSchema;
+  jobDescription: JobDescription;
   onProgressUpdate?: (stage: onboardingStage, progress: number, title: string) => void;
   onFeedback?: (feedback: onboardingFeedback) => void;
 }
 
 export const useOnboardingInterview = ({
   resumeData,
+  jobDescription,
   onProgressUpdate,
   onFeedback,
 }: UseOnboardingCoachProps) => {

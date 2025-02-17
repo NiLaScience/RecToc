@@ -24,6 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import type { JobApplication } from '../types/application';
 import type { UserProfile } from '../types/user';
 import type { JobOpening } from '../types/job_opening';
+import { DEFAULT_JOB_DESCRIPTION } from '../types/job_opening';
 import AccordionGroup from './shared/AccordionGroup';
 import AccordionSection from './shared/AccordionSection';
 import { ListContent, ChipsContent } from './shared/AccordionContent';
@@ -33,7 +34,6 @@ import CVAccordion from './shared/CVAccordion';
 import ApplicationService from '../services/ApplicationService';
 import { addSnapshotListener, removeSnapshotListener } from '../config/firebase';
 import { useInterviewCoach } from '../hooks/useInterviewCoach';
-import type { JobDescriptionSchema } from '../types/parser';
 import '../styles/chat.css';
 
 interface InterviewTrainingModalProps {
@@ -41,18 +41,6 @@ interface InterviewTrainingModalProps {
   onClose: () => void;
   jobId: string;
 }
-
-const defaultJobDescription: JobDescriptionSchema = {
-  title: 'Untitled Position',
-  company: 'Unknown Company',
-  location: 'Remote',
-  employmentType: 'Full-time',
-  experienceLevel: 'Not specified',
-  skills: [],
-  responsibilities: [],
-  requirements: [],
-  benefits: [],
-};
 
 const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen, onClose, jobId }) => {
   const { user } = useAuth();
@@ -77,8 +65,8 @@ const InterviewTrainingModal: React.FC<InterviewTrainingModalProps> = ({ isOpen,
       skills: [],
     },
     jobDescription: jobPost?.jobDescription
-      ? { ...defaultJobDescription, ...jobPost.jobDescription }
-      : defaultJobDescription,
+      ? { ...DEFAULT_JOB_DESCRIPTION, ...jobPost.jobDescription }
+      : DEFAULT_JOB_DESCRIPTION,
     onProgressUpdate: (stage, progress, title) => {
       console.log('Interview progress updated:', { stage, progress, title });
     },

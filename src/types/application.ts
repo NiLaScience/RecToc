@@ -1,4 +1,4 @@
-import type { CVSchema } from './parser';
+import type { CVSchema } from './cv';
 
 export type ApplicationStatus = 'draft' | 'submitted' | 'withdrawn' | 'rejected' | 'accepted';
 export type AgentStatus = 'queued' | 'processing' | 'completed' | 'failed';

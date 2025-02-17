@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import type { JobDescriptionSchema } from '../src/types/parser';
-import { JobDescriptionSchemaObj } from '../src/types/parser';
+import type { JobDescription } from '../src/types/job_opening';
+import { JobDescriptionSchemaObj } from '../src/types/job_opening';
 
 function cleanJsonResponse(text: string): string {
   // Remove markdown code block markers and any language identifier
@@ -127,7 +127,7 @@ export class NodeGeminiParserService {
     });
   }
 
-  async parseJobDescription(text: string): Promise<JobDescriptionSchema> {
+  async parseJobDescription(text: string): Promise<JobDescription> {
     try {
       const prompt = `Parse the following job description into structured data according to this schema:
 ${JSON.stringify(JobDescriptionSchemaObj, null, 2)}
@@ -146,4 +146,6 @@ ${text}`;
       throw error;
     }
   }
-} 
+}
+
+export default new NodeGeminiParserService(); 

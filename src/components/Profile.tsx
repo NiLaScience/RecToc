@@ -23,7 +23,6 @@ import {
   IonIcon,
   IonAccordionGroup,
   IonAccordion,
-  IonToggle,
 } from '@ionic/react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -31,7 +30,7 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { useRouter } from 'next/navigation';
 import type { UserProfile } from '../types/user';
-import type { CVSchema } from '../types/parser';
+import type { CVSchema } from '../types/cv';
 import { 
   uploadFile, 
   addSnapshotListener, 
@@ -75,7 +74,6 @@ const Profile = () => {
   const [showDeleteAppsAlert, setShowDeleteAppsAlert] = useState(false);
   const [deletingApps, setDeletingApps] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [useGemini, setUseGemini] = useState(true);
   const [isRealtimeModalOpen, setIsRealtimeModalOpen] = useState(false);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const parser = new ParserService();
@@ -655,19 +653,6 @@ const Profile = () => {
               className={description ? 'has-value' : ''}
               disabled={!editMode}
             />
-          </div>
-
-          <div className="input-container">
-
-          <IonItem lines="none">
-              <IonLabel>Use Gemini for parsing</IonLabel>
-              <IonToggle 
-                checked={useGemini}
-                onIonChange={e => setUseGemini(e.detail.checked)}
-                style={{ '--background': 'black', '--background-checked': 'black', '--handle-background': 'white', '--handle-background-checked': 'white' }}
-              />
-            </IonItem>
-
           </div>
 
           <div style={{ 

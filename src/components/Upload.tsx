@@ -28,7 +28,7 @@ import { Dialog } from '@capacitor/dialog';
 import { alertController } from '@ionic/core';
 import ThumbnailService from '../services/ThumbnailService';
 import { ParserService } from '../services/ParserService';
-import type { JobDescriptionSchema } from '../types/parser';
+import type { JobDescription } from '../types/job_opening';
 import { uploadFile, addDocument } from '../config/firebase';
 import AppHeader from './AppHeader';
 import AccordionGroup from './shared/AccordionGroup';
@@ -43,7 +43,11 @@ interface User {
   email: string | null;
 }
 
-const Upload = () => {
+interface UploadProps {
+  onClose: () => void;
+}
+
+const Upload: React.FC<UploadProps> = ({ onClose }) => {
   const [title, setTitle] = useState('');
   const [applicationUrl, setApplicationUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -62,7 +66,7 @@ const Upload = () => {
   } | null>(null);
   const [showAlert, setShowAlert] = useState(false);
   const [webSuccess, setWebSuccess] = useState(false);
-  const [jobDescription, setJobDescription] = useState<JobDescriptionSchema | null>(null);
+  const [jobDescription, setJobDescription] = useState<JobDescription | null>(null);
   const [parsingPDF, setParsingPDF] = useState(false);
   const [generatingSlides, setGeneratingSlides] = useState(false);
   const [slideGenerationError, setSlideGenerationError] = useState<string | null>(null);
@@ -269,31 +273,28 @@ const Upload = () => {
     }
   };
 
-  const handlePDFChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0]) return;
-
-    const pdfFile = e.target.files[0];
-    if (pdfFile.type !== 'application/pdf') {
-      setError('Please select a PDF file');
-      return;
-    }
+  const handlePDFChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const pdfFile = event.target.files?.[0];
+    if (!pdfFile) return;
 
     setParsingPDF(true);
-    setError('');
-
     try {
-      const result = await parser.uploadAndParsePDF<JobDescriptionSchema>(pdfFile, 'parsedPDFs');
-      setJobDescription(result.parsed);
+      const result = await parser.uploadAndParsePDF<JobDescription>(pdfFile, 'pdfs-to-parse');
+      setJobDescription(result);
       
-      // Auto-populate title and tags if available
-      if (result.parsed.title) setTitle(result.parsed.title);
-      if (result.parsed.skills && Array.isArray(result.parsed.skills)) setTags(result.parsed.skills);
-
-      // Store the PDF URL for later use in handleUpload
-      setPdfUrl(result.pdfUrl);
+      // Auto-populate fields from parsed job description
+      if (result) {
+        setTitle(result.title || '');
+        setTags([
+          ...(result.skills || []),
+          result.employmentType || '',
+          result.experienceLevel || '',
+          result.location || '',
+        ].filter(Boolean));
+      }
     } catch (error) {
       console.error('Error parsing PDF:', error);
-      setError('Failed to parse PDF. Please try again.');
+      setShowAlert(true);
     } finally {
       setParsingPDF(false);
     }

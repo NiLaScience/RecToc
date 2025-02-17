@@ -12,7 +12,7 @@ import { File } from '@web-std/file';
 import { ParserService } from '../src/services/ParserService';
 import NodeThumbnailService from './NodeThumbnailService';
 import NodeTranscriptionService from './NodeTranscriptionService';
-import type { JobDescriptionSchema } from '../src/types/parser';
+import type { JobDescription } from '../src/types/job_opening';
 
 //
 // 1) Initialize Firebase Admin
@@ -120,7 +120,7 @@ async function uploadVideo(
 //
 // 5) Parse a job description with Gemini
 //
-async function parseJobDescription(text: string): Promise<JobDescriptionSchema> {
+async function parseJobDescription(text: string): Promise<JobDescription> {
   const parser = new ParserService();
   return await parser.parseJobDescription(text);
 }
@@ -135,7 +135,7 @@ async function transcribeVideo(videoPath: string): Promise<TranscriptionResult> 
 //
 // 7) Generate tags from job data + parsed fields
 //
-function generateTags(job: JobRecord, parsed: JobDescriptionSchema): string[] {
+function generateTags(job: JobRecord, parsed: JobDescription): string[] {
   const tags = new Set<string>();
 
   if (job.company) tags.add(job.company.trim());

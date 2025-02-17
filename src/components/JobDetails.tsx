@@ -11,7 +11,7 @@ import {
   IonToast,
 } from '@ionic/react';
 import { closeOutline, paperPlaneOutline, chatbubbleOutline } from 'ionicons/icons';
-import type { JobOpening } from '../types/job_opening';
+import type { JobOpening, JobDescription } from '../types/job_opening';
 import { useState } from 'react';
 import ApplicationModal from './ApplicationModal';
 import AppHeader from './AppHeader';
@@ -23,19 +23,6 @@ interface JobDetailsProps {
   job: JobOpening;
   onClose?: () => void;
   mode?: 'modal' | 'page' | 'details';
-}
-
-interface JobDescription {
-  title?: string;
-  company?: string;
-  location?: string;
-  employmentType?: string;
-  experienceLevel?: string;
-  responsibilities?: string[];
-  requirements?: string[];
-  skills?: string[];
-  benefits?: string[];
-  applicationUrl?: string;
 }
 
 const JobDetails: React.FC<JobDetailsProps> = ({ job, onClose, mode = 'modal' }) => {

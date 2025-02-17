@@ -5,8 +5,13 @@ import { FirebaseFirestore } from '@capacitor-firebase/firestore';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import CloudFunctionService from './CloudFunctionService';
-import type { CVSchema, JobDescriptionSchema } from '../types/parser';
-import { CVSchemaObj, JobDescriptionSchemaObj } from '../types/parser';
+import type { CVSchema } from '../types/cv';
+import { CVSchemaObj } from '../types/cv';
+import type { JobDescription } from '../types/job_opening';
+import { JobDescriptionSchemaObj } from '../types/job_opening';
+import { callGeminiAPI } from '../config/firebase';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { storage } from '../config/firebase';
 
 function cleanJsonResponse(text: string): string {
   // Remove markdown code block markers and any language identifier
@@ -42,10 +47,10 @@ export class ParserService {
     });
   }
 
-  private async parseWithSchema<T extends JobDescriptionSchema | CVSchema>(
+  private async parseWithSchema<T extends JobDescription | CVSchema>(
     content: string | File,
     schema: typeof CVSchemaObj | typeof JobDescriptionSchemaObj,
-    parseInstructions: string
+    instructions?: string
   ): Promise<T> {
     try {
       let extractedText: string;
@@ -104,7 +109,7 @@ export class ParserService {
                   mimeType: "application/pdf",
                 },
               }, {
-                text: 'Extract all text content from this document. Include all text content without any formatting or interpretation. If the document is too large, focus on the most important sections like job title, company, requirements, and responsibilities.',
+                text: 'Extract all text content from this document. Include all text content without any formatting or interpretation.',
               }],
             }],
           },
@@ -139,7 +144,7 @@ export class ParserService {
         payload: {
           contents: [{
             parts: [{
-              text: `${parseInstructions}\n\nSchema:\n${JSON.stringify(schema, null, 2)}\n\nDocument text:\n${extractedText}`,
+              text: `${instructions}\n\nSchema:\n${JSON.stringify(schema, null, 2)}\n\nDocument text:\n${extractedText}`,
             }],
           }],
         },
@@ -151,7 +156,7 @@ export class ParserService {
       
       // Validate that the parsed result matches the expected type
       if (schema === JobDescriptionSchemaObj) {
-        return parsed as JobDescriptionSchema as T;
+        return parsed as JobDescription as T;
       } else {
         return parsed as CVSchema as T;
       }
@@ -161,28 +166,16 @@ export class ParserService {
     }
   }
 
-  async parseJobDescription(content: string | File): Promise<JobDescriptionSchema> {
-    const instructions = `This is a job description. Please analyze it carefully and structure it according to the schema. Return ONLY a valid JSON object matching the schema exactly, with no additional text or markdown formatting.
-
-Key points to extract:
-- Title should be the main job title/role
-- Company name and location should be extracted if mentioned
-- Employment type (e.g., Full-time, Part-time, Contract)
-- Experience level (e.g., Entry, Mid, Senior)
-- Skills should be a list of technical and soft skills required
-- Responsibilities should be key duties and tasks
-- Requirements should be must-have qualifications
-- Benefits should include perks and compensation details
-- For salary, ONLY include if specific numbers are mentioned with currency and period (e.g., "$100,000-$120,000 USD/year")
-
-Rules:
-1. If any field is not explicitly mentioned in the text, omit it from the JSON response
-2. Do not add any explanatory text or markdown formatting
-3. Ensure the response is a single, valid JSON object
-4. All array fields (skills, responsibilities, etc.) should be string arrays
-5. Follow the schema types exactly (strings for text, arrays for lists, etc.)`;
-
-    return this.parseWithSchema<JobDescriptionSchema>(content, JobDescriptionSchemaObj, instructions);
+  async parseJobDescription(content: string | File): Promise<JobDescription> {
+    const instructions = `
+      Parse the text into a job description with the following schema.
+      Return ONLY the JSON object, no markdown formatting or explanation.
+      
+      If a field is not found in the text, omit it from the output.
+      Do not make up or infer missing information.
+    `;
+    
+    return this.parseWithSchema<JobDescription>(content, JobDescriptionSchemaObj, instructions);
   }
 
   async parseCV(content: string | File): Promise<CVSchema> {
@@ -216,10 +209,11 @@ Rules:
   }
 
   // Firebase integration methods
-  async uploadAndParsePDF<T extends JobDescriptionSchema | CVSchema>(
+  async uploadAndParsePDF<T extends JobDescription | CVSchema>(
     file: File,
-    collection: 'parsedPDFs' | 'parsedCVs'
-  ): Promise<{ parsed: T; pdfUrl: string }> {
+    storageFolder: string,
+    instructions?: string
+  ): Promise<T> {
     try {
       // Check authentication first
       const result = await FirebaseAuthentication.getCurrentUser();
@@ -228,9 +222,7 @@ Rules:
       }
 
       const docId = uuidv4();
-      const storagePath = collection === 'parsedPDFs' 
-        ? `pdfs-to-parse/${docId}.pdf`
-        : `cvs-to-parse/${docId}.pdf`;
+      const storagePath = `${storageFolder}/${docId}.pdf`;
 
       // Upload file to Firebase Storage
       if (Capacitor.isNativePlatform()) {
@@ -286,7 +278,7 @@ Rules:
 
       // Parse the file based on collection type and ensure correct type
       let parsed: T;
-      if (collection === 'parsedCVs') {
+      if (storageFolder === 'cvs-to-parse') {
         parsed = await this.parseCV(file) as T;
       } else {
         parsed = await this.parseJobDescription(file) as T;
@@ -294,7 +286,7 @@ Rules:
 
       // Store the parsed result
       await FirebaseFirestore.setDocument({
-        reference: `${collection}/${docId}`,
+        reference: `${storageFolder}/${docId}`,
         data: {
           parsed,
           pdfUrl: downloadUrlResult.downloadUrl,
@@ -304,13 +296,12 @@ Rules:
         }
       });
 
-      return { 
-        parsed,
-        pdfUrl: downloadUrlResult.downloadUrl 
-      };
+      return parsed;
     } catch (error) {
       console.error('Error uploading and parsing document:', error);
       throw error;
     }
   }
 }
+
+export default new ParserService();
