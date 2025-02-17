@@ -280,12 +280,22 @@ const Profile = () => {
       }
 
       // Parse the CV
-      const parsedCV = await parser.uploadAndParsePDF<CVSchema>(file, 'parsedCVs');
+      const parsedCV = await parser.uploadAndParsePDF(file, 'cvs-to-parse');
+
+      // Validate the parsed CV
+      if (!parsedCV || !('personalInfo' in parsedCV) || !parsedCV.personalInfo?.name) {
+        presentToast({
+          message: 'Could not parse CV properly. Please ensure your CV is in a standard format and try again.',
+          duration: 5000,
+          color: 'warning'
+        });
+        return;
+      }
 
       // Update the profile document
       await updateDocument(`users/${user.uid}`, {
         cvFileUrl,
-        cv: parsedCV,
+        cv: parsedCV as CVSchema,
         updatedAt: new Date().toISOString()
       });
 
@@ -296,9 +306,21 @@ const Profile = () => {
       });
     } catch (error) {
       console.error('Error uploading CV:', error);
+      let errorMessage = 'Failed to upload CV';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('authentication') || error.message.includes('auth')) {
+          errorMessage = 'Authentication error. Please sign in again.';
+        } else if (error.message.includes('parse')) {
+          errorMessage = 'Could not parse CV. Please ensure your CV is in a standard format.';
+        } else if (error.message.includes('network') || error.message.includes('connection')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        }
+      }
+      
       presentToast({
-        message: 'Failed to upload CV',
-        duration: 3000,
+        message: errorMessage,
+        duration: 5000,
         color: 'warning'
       });
     } finally {
@@ -722,15 +744,7 @@ const Profile = () => {
 
           {profile?.cv && (
             <div style={{ margin: '1rem 0' }}>
-              <CVAccordion
-                personalInfo={profile.cv.personalInfo}
-                experience={profile.cv.experience}
-                education={profile.cv.education}
-                skills={profile.cv.skills}
-                certifications={profile.cv.certifications}
-                languages={profile.cv.languages}
-                displayName={profile.displayName}
-              />
+              <CVAccordion {...profile.cv} displayName={profile.displayName} />
             </div>
           )}
 

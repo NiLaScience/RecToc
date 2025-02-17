@@ -18,6 +18,9 @@ import AppHeader from './AppHeader';
 import JobDescriptionAccordion from './shared/JobDescriptionAccordion';
 import InterviewTrainingModal from './InterviewTrainingModal';
 import { useAuth } from '../context/AuthContext';
+import AccordionGroup from './shared/AccordionGroup';
+import AccordionSection from './shared/AccordionSection';
+import { ListContent, ChipsContent } from './shared/AccordionContent';
 
 interface JobDetailsProps {
   job: JobOpening;
@@ -151,13 +154,59 @@ const JobDetails: React.FC<JobDetailsProps> = ({ job, onClose, mode = 'modal' })
                     </div>
                   )}
 
-                  <JobDescriptionAccordion
-                    responsibilities={jobDescription?.responsibilities}
-                    requirements={jobDescription?.requirements}
-                    skills={jobDescription?.skills}
-                    benefits={jobDescription?.benefits}
-                    transcript={job.transcript}
-                  />
+                  <AccordionGroup>
+                    {jobDescription?.responsibilities && jobDescription.responsibilities.length > 0 && (
+                      <AccordionSection
+                        value="responsibilities"
+                        label="Responsibilities"
+                      >
+                        <ListContent items={jobDescription.responsibilities} />
+                      </AccordionSection>
+                    )}
+
+                    {jobDescription?.requirements && jobDescription.requirements.length > 0 && (
+                      <AccordionSection
+                        value="requirements"
+                        label="Requirements"
+                      >
+                        <ListContent items={jobDescription.requirements} />
+                      </AccordionSection>
+                    )}
+
+                    {jobDescription?.skills && jobDescription.skills.length > 0 && (
+                      <AccordionSection
+                        value="skills"
+                        label="Skills"
+                      >
+                        <ChipsContent items={jobDescription.skills} />
+                      </AccordionSection>
+                    )}
+
+                    {jobDescription?.benefits && jobDescription.benefits.length > 0 && (
+                      <AccordionSection
+                        value="benefits"
+                        label="Benefits"
+                      >
+                        <ListContent items={jobDescription.benefits} />
+                      </AccordionSection>
+                    )}
+
+                    {job.transcript && (
+                      <AccordionSection
+                        value="transcript"
+                        label="Video Transcript"
+                      >
+                        <div style={{ 
+                          whiteSpace: 'pre-wrap',
+                          color: 'rgba(255, 255, 255, 0.8)',
+                          fontSize: '0.9rem',
+                          lineHeight: '1.5'
+                        }}>
+                          {job.transcript.text}
+                        </div>
+                      </AccordionSection>
+                    )}
+                  </AccordionGroup>
                 </IonCardContent>
               </IonCard>
 

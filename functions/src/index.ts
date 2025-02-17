@@ -314,23 +314,11 @@ export const callGeminiAPI = functions.https.onCall(async (data, context) => {
 
     // If we're getting a PDF URL, fetch it first
     if (data.payload.contents?.[0]?.parts?.[0]?.inlineData?.mimeType === "application/pdf") {
-      const fetch = await getFetch();
-      const pdfUrl = data.payload.contents[0].parts[0].inlineData.data;
+      const pdfBase64 = data.payload.contents[0].parts[0].inlineData.data;
       
-      console.log("Fetching PDF from URL:", pdfUrl);
-      
-      // Fetch the PDF
-      const pdfResponse = await fetch(pdfUrl);
-      if (!pdfResponse.ok) {
-        throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`);
-      }
-      
-      const pdfBuffer = await pdfResponse.arrayBuffer();
-      const pdfBase64 = Buffer.from(pdfBuffer).toString("base64");
-      
-      console.log("PDF converted to base64, length:", pdfBase64.length);
+      console.log("Received PDF base64 data, length:", pdfBase64.length);
 
-      // First extract text from PDF
+      // Extract text from PDF
       console.log("Extracting text from PDF...");
       const extractionResult = await model.generateContent({
         contents: [{
@@ -343,7 +331,12 @@ export const callGeminiAPI = functions.https.onCall(async (data, context) => {
           }, {
             text: "Extract all text from this document"
           }]
-        }]
+        }],
+        generationConfig: data.payload.schema ? {
+          temperature: 0.0,
+          topK: 1,
+          topP: 1
+        } : undefined
       });
 
       if (!extractionResult.response) {
@@ -353,7 +346,7 @@ export const callGeminiAPI = functions.https.onCall(async (data, context) => {
       const extractedText = extractionResult.response.text();
       console.log("Extracted text length:", extractedText.length);
 
-      // Then process the extracted text with the provided instructions
+      // Then process the extracted text with schema if provided
       const instructions = data.payload.contents[0].parts[1]?.text || "";
       console.log("Processing text with instructions:", instructions);
       
@@ -365,7 +358,12 @@ export const callGeminiAPI = functions.https.onCall(async (data, context) => {
           }, {
             text: instructions
           }]
-        }]
+        }],
+        generationConfig: data.payload.schema ? {
+          temperature: 0.0,
+          topK: 1,
+          topP: 1
+        } : undefined
       });
 
       if (!processingResult.response) {
@@ -386,10 +384,15 @@ export const callGeminiAPI = functions.https.onCall(async (data, context) => {
       };
     }
 
-    // For non-PDF requests, just pass through to Gemini
-    console.log("Processing non-PDF request");
+    // For non-PDF requests, pass through to Gemini with schema if provided
+    console.log("Processing request with schema:", data.payload.schema ? "yes" : "no");
     const result = await model.generateContent({
-      contents: data.payload.contents
+      contents: data.payload.contents,
+      generationConfig: data.payload.schema ? {
+        temperature: 0.0,
+        topK: 1,
+        topP: 1
+      } : undefined
     });
     
     if (!result.response) {

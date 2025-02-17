@@ -1,177 +1,133 @@
 import React, { useState } from 'react';
-import { IonCard, IonCardHeader, IonCardTitle, IonCardSubtitle, IonCardContent } from '@ionic/react';
+import {
+  IonCard,
+  IonCardHeader,
+  IonCardTitle,
+  IonCardSubtitle,
+  IonCardContent,
+} from '@ionic/react';
 import AccordionGroup from './AccordionGroup';
 import AccordionSection from './AccordionSection';
 import { ExperienceContent, EducationContent, ChipsContent } from './AccordionContent';
+import type { CVSchema } from '../../types/user';
 
-interface Experience {
-  title: string;
-  company: string;
-  location?: string;
-  startDate: string;
-  endDate?: string;
-  current?: boolean;
-  highlights: string[];
-}
-
-interface Education {
-  institution: string;
-  degree: string;
-  field: string;
-  graduationDate?: string;
-  gpa?: number;
-}
-
-interface Skill {
-  category: string;
-  items: string[];
-}
-
-interface Certification {
-  name: string;
-  issuer: string;
-  date?: string;
-}
-
-interface Language {
-  language: string;
-  proficiency: string;
-}
-
-interface PersonalInfo {
-  summary?: string;
-  location?: string;
-}
-
-interface CVAccordionProps {
-  personalInfo?: PersonalInfo;
-  experience?: Experience[];
-  education?: Education[];
-  skills?: Skill[];
-  certifications?: Certification[];
-  languages?: Language[];
+interface CVAccordionProps extends Partial<CVSchema> {
   displayName?: string;
   showCard?: boolean;
 }
 
-const CVAccordion: React.FC<CVAccordionProps> = ({
-  personalInfo,
-  experience,
-  education,
-  skills,
-  certifications,
-  languages,
-  displayName,
-  showCard = true
-}) => {
-  const [openSections, setOpenSections] = useState<string[]>([]);
+export const CVAccordion: React.FC<CVAccordionProps> = (props) => {
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const { displayName, personalInfo, showCard = true } = props;
 
-  const handleAccordionChange = (value: string) => {
-    setOpenSections(prev => {
-      if (prev.includes(value)) {
-        return prev.filter(v => v !== value);
-      } else {
-        return [...prev, value];
-      }
-    });
+  const handleAccordionChange = (section: string) => {
+    const newOpenSections = new Set(openSections);
+    if (newOpenSections.has(section)) {
+      newOpenSections.delete(section);
+    } else {
+      newOpenSections.add(section);
+    }
+    setOpenSections(newOpenSections);
+  };
+
+  const formatSectionTitle = (key: string): string => {
+    // Skip displayName from being rendered as a section
+    if (key === 'displayName') return '';
+    
+    // Add space before capital letters and capitalize first letter
+    return key
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, str => str.toUpperCase());
+  };
+
+  const renderSectionContent = (key: string, value: unknown): React.ReactNode => {
+    if (!value || typeof value === 'boolean') return null;
+
+    if (key === 'personalInfo') {
+      const info = value as CVSchema['personalInfo'];
+      return (
+        <div>
+          {info.name && <p><strong>Name:</strong> {info.name}</p>}
+          {info.email && <p><strong>Email:</strong> {info.email}</p>}
+          {info.phone && <p><strong>Phone:</strong> {info.phone}</p>}
+          {info.location && <p><strong>Location:</strong> {info.location}</p>}
+          {info.summary && <p style={{ marginTop: '1rem' }}>{info.summary}</p>}
+        </div>
+      );
+    }
+
+    if (Array.isArray(value)) {
+      return (
+        <div>
+          {value.map((item, index) => {
+            if (typeof item === 'string') {
+              return <p key={index}>{item}</p>;
+            }
+            
+            if (typeof item === 'object' && item !== null) {
+              return (
+                <div key={index} style={{ marginBottom: '1rem' }}>
+                  {Object.entries(item).map(([itemKey, itemValue]) => {
+                    if (itemValue && typeof itemValue !== 'boolean') {
+                      return (
+                        <p key={itemKey}>
+                          <strong>{itemKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</strong>{' '}
+                          {Array.isArray(itemValue) ? itemValue.join(', ') : itemValue.toString()}
+                        </p>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              );
+            }
+            return null;
+          })}
+        </div>
+      );
+    }
+
+    if (typeof value === 'object' && value !== null) {
+      return (
+        <div>
+          {Object.entries(value).map(([key, val]) => {
+            if (val && typeof val !== 'boolean') {
+              return (
+                <p key={key}>
+                  <strong>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</strong>{' '}
+                  {Array.isArray(val) ? val.join(', ') : val.toString()}
+                </p>
+              );
+            }
+            return null;
+          })}
+        </div>
+      );
+    }
+
+    return <p>{value.toString()}</p>;
   };
 
   const accordionContent = (
-    <AccordionGroup value={openSections.join(',')}>
-      {personalInfo?.summary && (
-        <AccordionSection 
-          value="summary" 
-          label="Professional Summary"
-          onClick={() => handleAccordionChange('summary')}
-        >
-          <p style={{ color: '#fff' }}>{personalInfo.summary}</p>
-        </AccordionSection>
-      )}
+    <AccordionGroup value={Array.from(openSections).join(',')}>
+      {Object.entries(props).map(([key, value]) => {
+        const title = formatSectionTitle(key);
+        if (!title) return null;
 
-      {experience && experience.length > 0 && (
-        <AccordionSection 
-          value="experience" 
-          label="Experience"
-          onClick={() => handleAccordionChange('experience')}
-        >
-          {experience.map((exp, index) => (
-            <ExperienceContent
-              key={index}
-              title={exp.title}
-              company={exp.company}
-              startDate={exp.startDate}
-              endDate={exp.endDate}
-              current={exp.current}
-              location={exp.location}
-              highlights={exp.highlights}
-            />
-          ))}
-        </AccordionSection>
-      )}
+        const content = renderSectionContent(key, value);
+        if (!content) return null;
 
-      {education && education.length > 0 && (
-        <AccordionSection 
-          value="education" 
-          label="Education"
-          onClick={() => handleAccordionChange('education')}
-        >
-          {education.map((edu, index) => (
-            <EducationContent
-              key={index}
-              degree={edu.degree}
-              field={edu.field}
-              institution={edu.institution}
-              graduationDate={edu.graduationDate}
-              gpa={edu.gpa?.toString()}
-            />
-          ))}
-        </AccordionSection>
-      )}
-
-      {skills && skills.length > 0 && (
-        <AccordionSection 
-          value="skills" 
-          label="Skills"
-          onClick={() => handleAccordionChange('skills')}
-        >
-          {skills.map((skillGroup, index) => (
-            <div key={index} style={{ marginBottom: index < skills.length - 1 ? '1rem' : 0 }}>
-              <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{skillGroup.category}</h4>
-              <ChipsContent items={skillGroup.items} />
-            </div>
-          ))}
-        </AccordionSection>
-      )}
-
-      {certifications && certifications.length > 0 && (
-        <AccordionSection 
-          value="certifications" 
-          label="Certifications"
-          onClick={() => handleAccordionChange('certifications')}
-        >
-          {certifications.map((cert, index) => (
-            <div key={index} style={{ marginBottom: index < certifications.length - 1 ? '1rem' : 0 }}>
-              <h4 style={{ color: '#fff', marginBottom: '0.5rem' }}>{cert.name}</h4>
-              <p style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                {cert.issuer}
-                {cert.date && ` • ${cert.date}`}
-              </p>
-            </div>
-          ))}
-        </AccordionSection>
-      )}
-
-      {languages && languages.length > 0 && (
-        <AccordionSection 
-          value="languages" 
-          label="Languages"
-          onClick={() => handleAccordionChange('languages')}
-        >
-          <ChipsContent 
-            items={languages.map(lang => `${lang.language} - ${lang.proficiency}`)} 
-          />
-        </AccordionSection>
-      )}
+        return (
+          <AccordionSection
+            key={key}
+            value={key}
+            label={title}
+            onClick={() => handleAccordionChange(key)}
+          >
+            {content}
+          </AccordionSection>
+        );
+      })}
     </AccordionGroup>
   );
 
@@ -188,6 +144,7 @@ const CVAccordion: React.FC<CVAccordionProps> = ({
       border: '2px solid rgba(255, 255, 255, 0.1)'
     }}>
       <IonCardHeader>
+        <IonCardTitle>Resume</IonCardTitle>
         {(displayName || personalInfo?.location) && (
           <IonCardSubtitle style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
             {displayName}
@@ -196,6 +153,20 @@ const CVAccordion: React.FC<CVAccordionProps> = ({
         )}
       </IonCardHeader>
       <IonCardContent>
+        {personalInfo && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            {personalInfo.summary && (
+              <p style={{ 
+                color: 'rgba(255, 255, 255, 0.8)',
+                fontSize: '1rem',
+                lineHeight: '1.5',
+                margin: 0
+              }}>
+                {personalInfo.summary}
+              </p>
+            )}
+          </div>
+        )}
         {accordionContent}
       </IonCardContent>
     </IonCard>

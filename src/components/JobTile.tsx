@@ -128,8 +128,8 @@ const JobTile: React.FC<JobTileProps> = ({ job, onClick }) => {
         }}>
           {/* Top Section */}
           <div style={{
-            background: 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.6) 70%, rgba(0,0,0,0) 100%)',
-            padding: '1rem',
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.8) 70%, rgba(0,0,0,0.4) 100%)',
+            padding: '1.2rem',
             borderRadius: '8px',
             width: '100%'
           }}>
@@ -138,9 +138,9 @@ const JobTile: React.FC<JobTileProps> = ({ job, onClick }) => {
               margin: 0,
               marginBottom: '0.5rem',
               color: '#fff',
-              fontSize: '1.1rem',
-              fontWeight: 'bold',
-              textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
+              fontSize: '1.5rem',
+              fontWeight: '800',
+              textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
             }}>
               {job.title}
             </h3>
@@ -150,8 +150,10 @@ const JobTile: React.FC<JobTileProps> = ({ job, onClick }) => {
               <p style={{
                 margin: 0,
                 marginBottom: '0.5rem',
-                color: 'rgba(255,255,255,0.9)',
-                fontSize: '0.9rem'
+                color: '#fff',
+                fontSize: '1.1rem',
+                fontWeight: '600',
+                textShadow: '1px 1px 2px rgba(0,0,0,0.8)'
               }}>
                 {job.jobDescription.company}
                 {job.jobDescription.location && ` • ${job.jobDescription.location}`}
@@ -162,13 +164,14 @@ const JobTile: React.FC<JobTileProps> = ({ job, onClick }) => {
             {firstSlide && (
               <div style={{
                 marginTop: '0.5rem',
-                color: 'rgba(255,255,255,0.85)',
-                fontSize: '0.85rem'
+                color: '#fff',
+                fontSize: '1.1rem'
               }}>
                 <p style={{
                   margin: 0,
                   marginBottom: '0.25rem',
-                  fontWeight: 'bold'
+                  fontWeight: '700',
+                  textShadow: '1px 1px 2px rgba(0,0,0,0.8)'
                 }}>
                   {firstSlide.heading}
                 </p>
@@ -181,7 +184,9 @@ const JobTile: React.FC<JobTileProps> = ({ job, onClick }) => {
                   {firstSlide.bullets.slice(0, 2).map((bullet, index) => (
                     <li key={index} style={{
                       marginBottom: '0.25rem',
-                      lineHeight: 1.2
+                      lineHeight: 1.4,
+                      fontWeight: '500',
+                      textShadow: '1px 1px 2px rgba(0,0,0,0.8)'
                     }}>
                       {bullet}
                     </li>
@@ -196,8 +201,8 @@ const JobTile: React.FC<JobTileProps> = ({ job, onClick }) => {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'flex-end',
-            background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.6) 70%, rgba(0,0,0,0) 100%)',
-            padding: '1rem',
+            background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.8) 70%, rgba(0,0,0,0.4) 100%)',
+            padding: '1.2rem',
             borderRadius: '8px'
           }}>
             {/* Profile Info */}
@@ -219,8 +224,9 @@ const JobTile: React.FC<JobTileProps> = ({ job, onClick }) => {
               />
               <span style={{
                 color: '#fff',
-                fontSize: '0.8rem',
-                fontWeight: 'bold'
+                fontSize: '1rem',
+                fontWeight: '600',
+                textShadow: '1px 1px 2px rgba(0,0,0,0.8)'
               }}>
                 {userProfile?.displayName || 'User'}
               </span>
@@ -255,7 +261,7 @@ const JobTile: React.FC<JobTileProps> = ({ job, onClick }) => {
                     color: '#fff',
                     padding: '4px 8px',
                     borderRadius: '12px',
-                    fontSize: '12px'
+                    fontSize: '14px'
                   }}
                 >
                   {tag}
@@ -267,7 +273,7 @@ const JobTile: React.FC<JobTileProps> = ({ job, onClick }) => {
                   color: '#fff',
                   padding: '4px 8px',
                   borderRadius: '12px',
-                  fontSize: '12px'
+                  fontSize: '14px'
                 }}>
                   +{job.tags!.length - 2}
                 </span>

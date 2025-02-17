@@ -10,7 +10,8 @@
     "static": "next build",
     "predeploy": "npm run build && cp -r public/install out/",
     "deploy": "firebase deploy",
-    "upload-jobs": "ts-node --project scripts/tsconfig.json scripts/upload_jobs.ts"
+    "upload-jobs": "ts-node --project scripts/tsconfig.json scripts/upload_jobs.ts",
+    "generate-schemas": "ts-node scripts/generate-schemas.ts"
   },
   "dependencies": {
     "@capacitor-firebase/app": "^7.0.0",
@@ -54,6 +55,7 @@
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
     "swiper": "^11.2.2",
+    "typescript-json-schema": "^0.65.1",
     "uuid": "^11.0.5",
     "zod": "^3.24.1",
     "zustand": "^4.5.0"

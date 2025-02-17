@@ -286,18 +286,30 @@ const Upload: React.FC<UploadProps> = ({ onClose }) => {
     console.log('Current auth state:', user);
     setParsingPDF(true);
     try {
-      const result = await parser.uploadAndParsePDF<JobDescription>(pdfFile, 'pdfs-to-parse');
-      setJobDescription(result);
+      const result = await parser.uploadAndParsePDF(pdfFile, 'pdfs-to-parse');
       
-      // Auto-populate fields from parsed job description
-      if (result) {
+      // Type guard to check if the result is a JobDescription
+      if ('title' in result) {
+        setJobDescription(result as JobDescription);
+        
+        // Auto-populate fields from parsed job description
         setTitle(result.title || '');
-        setTags([
+        
+        // Collect all relevant tags
+        const newTags = [
           ...(result.skills || []),
-          result.employmentType || '',
-          result.experienceLevel || '',
-          result.location || '',
-        ].filter(Boolean));
+          result.employmentType,
+          result.experienceLevel,
+          result.location,
+          result.company
+        ].filter((tag): tag is string => 
+          typeof tag === 'string' && tag.trim().length > 0
+        );
+        
+        // Remove duplicates and set tags
+        setTags(Array.from(new Set(newTags)));
+      } else {
+        throw new Error('Invalid job description format');
       }
     } catch (error: any) {
       console.error('Error parsing PDF:', error);
@@ -520,37 +532,8 @@ const Upload: React.FC<UploadProps> = ({ onClose }) => {
           </IonButton>
 
           {jobDescription && (
-            <div className="ion-margin-top">
-              <div style={{ 
-                backgroundColor: '#2a2a2a',
-                padding: '1rem',
-                borderRadius: '8px',
-                color: '#fff',
-                border: '2px solid rgba(255, 255, 255, 0.2)'
-              }}>
-                <div style={{ marginBottom: '1rem' }}>
-                  <h2 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '0.5rem' }}>{jobDescription.title}</h2>
-                  <p style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.875rem' }}>
-                    {jobDescription.company} • {jobDescription.location}
-                  </p>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                    <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
-                      {jobDescription.employmentType}
-                    </IonChip>
-                    <IonChip style={{ '--background': '#333', '--color': '#fff' }}>
-                      {jobDescription.experienceLevel}
-                    </IonChip>
-                  </div>
-                </div>
-
-                <JobDescriptionAccordion
-                  responsibilities={jobDescription.responsibilities}
-                  requirements={jobDescription.requirements}
-                  skills={jobDescription.skills}
-                  benefits={jobDescription.benefits}
-                  salary={jobDescription.salary}
-                />
-              </div>
+            <div style={{ marginTop: '1rem' }}>
+              <JobDescriptionAccordion {...jobDescription} />
             </div>
           )}
 

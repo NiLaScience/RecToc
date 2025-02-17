@@ -439,19 +439,22 @@ const JobPresentation: React.FC<JobPresentationProps> = ({
           {/* Slide Text Content */}
           <div
             style={{
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              padding: '1rem',
-              borderRadius: '8px',
-              maxWidth: '80%'
+              backgroundColor: 'rgba(0, 0, 0, 0.85)',
+              padding: '2rem',
+              borderRadius: '16px',
+              maxWidth: '95%',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
             }}
           >
             <h2
               style={{
                 color: '#fff',
                 margin: 0,
-                marginBottom: '0.5rem',
-                fontSize: '1.5rem',
-                fontWeight: 'bold'
+                marginBottom: '1.2rem',
+                fontSize: '2.5rem',
+                fontWeight: '800',
+                lineHeight: 1.3,
+                textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
               }}
             >
               {currentSlide.heading}
@@ -461,11 +464,17 @@ const JobPresentation: React.FC<JobPresentationProps> = ({
                 color: '#fff',
                 margin: 0,
                 padding: 0,
-                paddingLeft: '1.5rem'
+                paddingLeft: '2rem',
+                fontSize: '1.4rem',
+                fontWeight: '500'
               }}
             >
               {currentSlide.bullets.map((bullet, index) => (
-                <li key={index} style={{ marginBottom: '0.5rem' }}>
+                <li key={index} style={{ 
+                  marginBottom: '1rem',
+                  lineHeight: 1.5,
+                  textShadow: '1px 1px 2px rgba(0,0,0,0.8)'
+                }}>
                   {bullet}
                 </li>
               ))}

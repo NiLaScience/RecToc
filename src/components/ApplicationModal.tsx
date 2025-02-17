@@ -384,13 +384,59 @@ const ApplicationModal: React.FC<ApplicationModalProps> = ({ isOpen, onClose, jo
 
                     <div style={{ marginBottom: '2rem' }}>
                       <h3 style={{ color: '#fff', marginBottom: '1rem' }}>Job Details</h3>
-                      <JobDescriptionAccordion
-                        responsibilities={jobPost.jobDescription?.responsibilities}
-                        requirements={jobPost.jobDescription?.requirements}
-                        skills={jobPost.jobDescription?.skills}
-                        benefits={jobPost.jobDescription?.benefits}
-                        transcript={jobPost.transcript}
-                      />
+                      <AccordionGroup>
+                        {jobPost.jobDescription?.responsibilities && jobPost.jobDescription.responsibilities.length > 0 && (
+                          <AccordionSection
+                            value="responsibilities"
+                            label="Responsibilities"
+                          >
+                            <ListContent items={jobPost.jobDescription.responsibilities} />
+                          </AccordionSection>
+                        )}
+
+                        {jobPost.jobDescription?.requirements && jobPost.jobDescription.requirements.length > 0 && (
+                          <AccordionSection
+                            value="requirements"
+                            label="Requirements"
+                          >
+                            <ListContent items={jobPost.jobDescription.requirements} />
+                          </AccordionSection>
+                        )}
+
+                        {jobPost.jobDescription?.skills && jobPost.jobDescription.skills.length > 0 && (
+                          <AccordionSection
+                            value="skills"
+                            label="Skills"
+                          >
+                            <ChipsContent items={jobPost.jobDescription.skills} />
+                          </AccordionSection>
+                        )}
+
+                        {jobPost.jobDescription?.benefits && jobPost.jobDescription.benefits.length > 0 && (
+                          <AccordionSection
+                            value="benefits"
+                            label="Benefits"
+                          >
+                            <ListContent items={jobPost.jobDescription.benefits} />
+                          </AccordionSection>
+                        )}
+
+                        {jobPost.transcript && (
+                          <AccordionSection
+                            value="transcript"
+                            label="Video Transcript"
+                          >
+                            <div style={{ 
+                              whiteSpace: 'pre-wrap',
+                              color: 'rgba(255, 255, 255, 0.8)',
+                              fontSize: '0.9rem',
+                              lineHeight: '1.5'
+                            }}>
+                              {jobPost.transcript.text}
+                            </div>
+                          </AccordionSection>
+                        )}
+                      </AccordionGroup>
                       
                       {/* Debug Info */}
                       {jobPost.applicationUrl && (
