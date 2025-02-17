@@ -37,7 +37,7 @@ const feedContainerStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(2, 1fr)',
   gap: '1px',
-  backgroundColor: 'silver'
+  backgroundColor: '#1a1a1a'
 };
 
 const emptyStateStyle: React.CSSProperties = {
