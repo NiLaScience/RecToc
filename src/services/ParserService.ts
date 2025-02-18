@@ -420,7 +420,7 @@ Important:
   async uploadAndParsePDF(
     file: File,
     storageFolder: string
-  ): Promise<CVSchema | JobDescription> {
+  ): Promise<{ parsed: CVSchema | JobDescription; raw_text: string }> {
     try {
       // Check authentication first
       const result = await FirebaseAuthentication.getCurrentUser();
@@ -470,7 +470,7 @@ Important:
         }
       });
 
-      return parsed;
+      return { parsed, raw_text: extractedText };
     } catch (error) {
       console.error('Error uploading and parsing document:', error);
       throw error;

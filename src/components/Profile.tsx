@@ -280,10 +280,10 @@ const Profile = () => {
       }
 
       // Parse the CV
-      const parsedCV = await parser.uploadAndParsePDF(file, 'cvs-to-parse');
+      const parsedResult = await parser.uploadAndParsePDF(file, 'cvs-to-parse');
 
       // Validate the parsed CV
-      if (!parsedCV || !('personalInfo' in parsedCV) || !parsedCV.personalInfo?.name) {
+      if (!parsedResult.parsed || !('personalInfo' in parsedResult.parsed) || !parsedResult.parsed.personalInfo?.name) {
         presentToast({
           message: 'Could not parse CV properly. Please ensure your CV is in a standard format and try again.',
           duration: 5000,
@@ -295,7 +295,8 @@ const Profile = () => {
       // Update the profile document
       await updateDocument(`users/${user.uid}`, {
         cvFileUrl,
-        cv: parsedCV as CVSchema,
+        cv: parsedResult.parsed as CVSchema,
+        cv_raw: parsedResult.raw_text,
         updatedAt: new Date().toISOString()
       });
 

@@ -311,7 +311,7 @@ export const callGeminiAPI = functions.https.onCall(async (data, context) => {
 
   try {
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // If we're getting a PDF URL, fetch it first
     if (data.payload.contents?.[0]?.parts?.[0]?.inlineData?.mimeType === "application/pdf") {
@@ -886,7 +886,7 @@ export const onCrawledJobCreate = functions.firestore
     try {
       // First, parse the raw content into a structured JobDescription
       const genAI = new GoogleGenerativeAI(functions.config().gemini?.key);
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
       // Parse raw content into JobDescription using Gemini
       const parseResult = await model.generateContent({
