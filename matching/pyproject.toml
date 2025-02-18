@@ -1,0 +1,55 @@
+[tool.poetry]
+name = "reag"
+version = "0.0.6"
+description = "ReAG SDK - Reasoning Augmented Generation framework for Python"
+authors = ["Ismail Pelaseyed <ismail@superagent.sh>"]
+readme = "README.md"
+packages = [{include = "reag", from = "src"}]
+license = "MIT"
+homepage = "https://github.com/superagent-ai/reag"
+repository = "https://github.com/superagent-ai/reag"
+documentation = "https://github.com/superagent-ai/reag#readme"
+keywords = ["llm", "ai", "reasoning", "generation", "nlp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.13"
+pydantic = "^2.0.0"
+httpx = "^0.25.0"
+litellm = "^1.60.0"
+google-cloud-firestore = {version = "^2.20.0", allow-prereleases = true}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-asyncio = "^0.21.0"
+black = "^23.7.0"
+isort = "^5.12.0"
+mypy = "^1.5.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3 
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "src"
+]

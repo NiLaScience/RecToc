@@ -746,14 +746,29 @@ export const generateVoiceover = functions.https.onCall(async (data: {
 
   try {
     const script = await generateVoiceoverScript(data.jobData);
-    const voiceoverPath = await generateVoiceoverAudio(script, data.jobId);
+    const audioData = await generateVoiceoverAudio(script, data.jobId);
     
-    // Update job with voiceover path (not URL)
-    await admin.firestore().collection('job_openings').doc(data.jobId).update({
-      voiceoverUrl: voiceoverPath
+    // Upload audio to Firebase Storage
+    const bucket = admin.storage().bucket();
+    const audioFileName = `voiceovers/${data.jobId}.mp3`;
+    const file = bucket.file(audioFileName);
+    
+    await file.save(Buffer.from(audioData, 'base64'), {
+      metadata: {
+        contentType: 'audio/mp3'
+      }
     });
 
-    return { voiceoverUrl: voiceoverPath };
+    // Get the public URL
+    const bucketName = bucket.name;
+    const voiceoverUrl = `https://storage.googleapis.com/${bucketName}/${audioFileName}`;
+
+    // Update job with voiceover URL
+    await admin.firestore().collection('job_openings').doc(data.jobId).update({
+      voiceoverUrl: voiceoverUrl
+    });
+
+    return { voiceoverUrl };
   } catch (error) {
     console.error('Error in generateVoiceover:', error);
     if (error instanceof Error) {
@@ -838,8 +853,11 @@ async function generateVoiceoverAudio(script: string, jobId: string): Promise<st
       }
     });
 
-    // Return just the storage path instead of the full URL
-    return audioFileName;
+    // Get the public URL
+    const bucketName = bucket.name;
+    const voiceoverUrl = `https://storage.googleapis.com/${bucketName}/${audioFileName}`;
+    
+    return voiceoverUrl;
   } catch (error) {
     console.error('Error in generateVoiceoverAudio:', error);
     if (error instanceof Error) {
@@ -1056,11 +1074,11 @@ export const onJobProcessingVoiceover = functions.firestore
       
       // Generate voiceover
       const script = await generateVoiceoverScript(afterData.jobDescription);
-      const voiceoverPath = await generateVoiceoverAudio(script, afterData.id);
+      const voiceoverUrl = await generateVoiceoverAudio(script, afterData.id);
       
       // Update the job document with voiceover and complete status
       await change.after.ref.update({
-        voiceoverUrl: voiceoverPath,
+        voiceoverUrl,
         status: 'complete',
         processingCompletedAt: new Date().toISOString(),
         lastUpdated: admin.firestore.FieldValue.serverTimestamp()
